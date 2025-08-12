@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Class Marks Report - {{ report.subject.name }} - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Class Marks Report</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.export_class_marks_report', subject_id=report.subject.id) }}{% if report.assessment_type %}?assessment_type={{ report.assessment_type }}{% endif %}" 
+                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                        📥 Export Excel
+                    </a>
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Subject Info -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{{ report.subject.name }} ({{ report.subject.code }})</h2>
+                <p class="text-sm text-gray-600">{{ report.subject.course }} - Year {{ report.subject.year }}, Semester {{ report.subject.semester }}</p>
+                {% if report.assessment_type %}
+                <p class="text-sm text-blue-600">Assessment Type: {{ report.assessment_type|title }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Class Statistics</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ report.statistics.total_students }}</div>
+                        <div class="text-sm text-gray-500">Total Students</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">{{ report.statistics.class_average }}%</div>
+                        <div class="text-sm text-gray-500">Class Average</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600">{{ report.statistics.passing_students }}</div>
+                        <div class="text-sm text-gray-500">Passing Students</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-600">{{ report.statistics.failing_students }}</div>
+                        <div class="text-sm text-gray-500">Failing Students</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Marks -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Student Performance</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assessment Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marks</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for student_data in report.student_marks %}
+                            {% for mark in student_data.marks %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ student_data.student.name }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ student_data.student.roll_number }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ mark.assessment_type|title }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ mark.marks_obtained }}/{{ mark.total_marks }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ mark.percentage }}%
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if mark.percentage >= 35 %}
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Pass</span>
+                                    {% else %}
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Fail</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if not report.student_marks %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-8 text-center">
+                <p class="text-gray-500">No marks data found for this subject.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Lecturer Dashboard - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Mobile-Friendly Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-lg sm:text-xl font-semibold text-gray-900">Lecturer Portal</h1>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-black focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Desktop menu -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">Welcome, {{ current_user.username }}</span>
+                    <a href="{{ url_for('auth.change_password') }}" class="text-sm text-gray-600 hover:text-black">Change Password</a>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
+                <div class="space-y-2">
+                    <div class="text-sm text-gray-700 px-2">Welcome, {{ current_user.username }}</div>
+                    <a href="{{ url_for('auth.change_password') }}" class="block px-2 py-2 text-sm text-gray-600 hover:text-black hover:bg-gray-50 rounded">Change Password</a>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="w-full text-left py-2 text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Assigned Subjects</dt>
+                                <dd class="text-lg font-medium text-gray-900">{{ stats.total_subjects or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Students</dt>
+                                <dd class="text-lg font-medium text-gray-900">{{ stats.total_students or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions - Mobile Optimized -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+            <a href="{{ url_for('lecturer.subjects') }}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow active:bg-gray-50">
+                <div class="p-4 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3 sm:ml-4 min-w-0 flex-1">
+                            <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">My Subjects</h3>
+                            <p class="text-xs sm:text-sm text-gray-500">View assigned subjects</p>
+                        </div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{{ url_for('lecturer.attendance_shortage_report') }}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow active:bg-gray-50">
+                <div class="p-4 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3 sm:ml-4 min-w-0 flex-1">
+                            <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">Attendance</h3>
+                            <p class="text-xs sm:text-sm text-gray-500">View shortage reports</p>
+                        </div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{{ url_for('lecturer.marks_deficiency_report') }}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow active:bg-gray-50">
+                <div class="p-4 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3 sm:ml-4 min-w-0 flex-1">
+                            <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">Marks</h3>
+                            <p class="text-xs sm:text-sm text-gray-500">View deficiency reports</p>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Assigned Subjects - Mobile Optimized -->
+        {% if stats.assigned_subjects %}
+        <div class="bg-white shadow overflow-hidden sm:rounded-md mb-8">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Your Assigned Subjects</h3>
+            </div>
+            <ul class="divide-y divide-gray-200">
+                {% for subject in stats.assigned_subjects %}
+                <li class="px-4 py-4 sm:px-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-900 truncate">{{ subject.name }}</p>
+                            <p class="text-xs sm:text-sm text-gray-500">{{ subject.code }} | {{ subject.course.name if subject.course else 'N/A' }}</p>
+                            <p class="text-xs sm:text-sm text-gray-500">Year {{ subject.year }}, Semester {{ subject.semester }}</p>
+                        </div>
+                        <div class="flex items-center justify-between sm:justify-end sm:space-x-4">
+                            <span class="text-xs sm:text-sm text-gray-500">{{ subject.get_enrolled_students_count() }} students</span>
+                            <div class="flex space-x-2">
+                                <a href="{{ url_for('lecturer.attendance_management', subject_id=subject.id) }}" 
+                                   class="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100">
+                                    Attendance
+                                </a>
+                                <a href="{{ url_for('lecturer.marks_management', subject_id=subject.id) }}" 
+                                   class="inline-flex items-center px-2 py-1 border border-gray-300 rounded text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100">
+                                    Marks
+                                </a>
+                                <a href="{{ url_for('lecturer.subject_students', subject_id=subject.id) }}" 
+                                   class="inline-flex items-center px-2 py-1 bg-black text-white rounded text-xs font-medium hover:bg-gray-800 active:bg-gray-900">
+                                    Manage
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Recent Activity -->
+        {% if stats.recent_attendance %}
+        <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Attendance Records</h3>
+            </div>
+            <ul class="divide-y divide-gray-200">
+                {% for record in stats.recent_attendance %}
+                <li class="px-4 py-4 sm:px-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-900">{{ record.student.name if record.student else 'Unknown Student' }}</p>
+                            <p class="text-sm text-gray-500">{{ record.subject.name if record.subject else 'Unknown Subject' }} | {{ record.date.strftime('%Y-%m-%d') if record.date else 'N/A' }}</p>
+                        </div>
+                        <div>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if record.status == 'present' %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ record.status.title() }}
+                            </span>
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    menu.classList.toggle('hidden');
+}
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', function(event) {
+    const menu = document.getElementById('mobile-menu');
+    const button = event.target.closest('button[onclick="toggleMobileMenu()"]');
+    
+    if (!button && !menu.contains(event.target)) {
+        menu.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %}

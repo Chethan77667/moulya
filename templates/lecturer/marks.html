@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+
+{% block title %}{{ subject.name }} - Marks - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Mobile-Friendly Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-1">
+                    <a href="{{ url_for('lecturer.subjects') }}" class="text-sm text-gray-600 hover:text-black flex-shrink-0">← Subjects</a>
+                    <h1 class="text-sm sm:text-xl font-semibold text-gray-900 truncate">{{ subject.name }} - Marks</h1>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-black focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Desktop menu -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
+                <div class="space-y-2">
+                    <div class="text-sm text-gray-700 px-2">{{ current_user.username }}</div>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="w-full text-left py-2 text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Subject Info - Mobile Optimized -->
+        <div class="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div class="px-4 py-4 sm:p-6">
+                <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">{{ subject.name }}</h3>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">{{ subject.code }} | {{ subject.course.name if subject.course else 'N/A' }}</p>
+                <div class="mt-2 flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
+                    <span class="bg-gray-100 px-2 py-1 rounded">Students: {{ students|length }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assessment Type Selection - Mobile Optimized -->
+        <div class="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div class="px-4 py-4 sm:p-6">
+                <h3 class="text-base sm:text-lg font-medium text-gray-900 mb-4">Add/Update Marks</h3>
+                
+                <form method="POST" action="{{ url_for('lecturer.add_marks', subject_id=subject.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label for="assessment_type" class="block text-sm font-medium text-gray-700">Assessment Type</label>
+                            <select name="assessment_type" id="assessment_type" required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                                <option value="">Select Assessment</option>
+                                <option value="internal1">Internal 1</option>
+                                <option value="internal2">Internal 2</option>
+                                <option value="assignment">Assignment</option>
+                                <option value="project">Project</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="max_marks" class="block text-sm font-medium text-gray-700">Maximum Marks</label>
+                            <input type="number" name="max_marks" id="max_marks" min="1" max="100" required
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                        </div>
+                    </div>
+
+                    {% if students %}
+                    <div class="space-y-4 mb-6">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-md font-medium text-gray-900">Student Marks</h4>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="marks-student-search" placeholder="Search students..." 
+                                       class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
+                                <button type="button" onclick="fillAllMarks()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                                    Fill All
+                                </button>
+                                <button type="button" onclick="clearAllMarks()" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">
+                                    Clear All
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto" id="marks-students-container">
+                            {% for student in students %}
+                            <div class="marks-student-row flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50" 
+                                 data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-gray-900 truncate">{{ student.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
+                                </div>
+                                <div class="w-20">
+                                    <input type="number" name="marks_{{ student.id }}" 
+                                           placeholder="0" min="0" step="0.5"
+                                           class="block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm marks-input">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                        Save Marks
+                    </button>
+                    {% else %}
+                    <div class="text-center py-8">
+                        <p class="text-gray-500">No students enrolled in this subject.</p>
+                        <a href="{{ url_for('lecturer.subject_students', subject_id=subject.id) }}" class="mt-2 inline-block text-blue-600 hover:text-blue-800">
+                            Add students to this subject →
+                        </a>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <!-- Existing Marks Overview - Mobile Optimized -->
+        {% if students and existing_marks %}
+        <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <div class="px-4 py-4 sm:py-5 sm:px-6">
+                <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Marks Overview</h3>
+            </div>
+            
+            <!-- Mobile Cards View -->
+            <div class="block lg:hidden">
+                <div class="px-4 pb-4">
+                    <input type="text" id="overview-search" placeholder="Search students..." 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
+                </div>
+                <div class="space-y-3 px-4 pb-4 max-h-96 overflow-y-auto">
+                    {% for student in students %}
+                    {% set student_marks = existing_marks.get(student.id, {}) %}
+                    <div class="overview-card border rounded-lg p-3 hover:bg-gray-50" 
+                         data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-medium text-gray-900 truncate">{{ student.name }}</p>
+                                <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
+                            </div>
+                            <div class="ml-2 text-right">
+                                <div class="text-sm font-medium text-gray-900">{{ student.get_overall_marks_percentage() }}%</div>
+                                <div class="text-xs text-gray-500">Overall</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="bg-gray-50 p-2 rounded">
+                                <div class="font-medium text-gray-700">Internal 1</div>
+                                <div class="text-gray-900">
+                                    {% if student_marks.get('internal1') %}
+                                    {{ student_marks['internal1'].marks_obtained }}/{{ student_marks['internal1'].max_marks }}
+                                    <span class="text-gray-500">({{ student_marks['internal1'].percentage }}%)</span>
+                                    {% else %}
+                                    <span class="text-gray-400">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <div class="font-medium text-gray-700">Internal 2</div>
+                                <div class="text-gray-900">
+                                    {% if student_marks.get('internal2') %}
+                                    {{ student_marks['internal2'].marks_obtained }}/{{ student_marks['internal2'].max_marks }}
+                                    <span class="text-gray-500">({{ student_marks['internal2'].percentage }}%)</span>
+                                    {% else %}
+                                    <span class="text-gray-400">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <div class="font-medium text-gray-700">Assignment</div>
+                                <div class="text-gray-900">
+                                    {% if student_marks.get('assignment') %}
+                                    {{ student_marks['assignment'].marks_obtained }}/{{ student_marks['assignment'].max_marks }}
+                                    <span class="text-gray-500">({{ student_marks['assignment'].percentage }}%)</span>
+                                    {% else %}
+                                    <span class="text-gray-400">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <div class="font-medium text-gray-700">Project</div>
+                                <div class="text-gray-900">
+                                    {% if student_marks.get('project') %}
+                                    {{ student_marks['project'].marks_obtained }}/{{ student_marks['project'].max_marks }}
+                                    <span class="text-gray-500">({{ student_marks['project'].percentage }}%)</span>
+                                    {% else %}
+                                    <span class="text-gray-400">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Desktop Table View -->
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal 1</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal 2</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignment</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall %</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for student in students %}
+                        {% set student_marks = existing_marks.get(student.id, {}) %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ student.name }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ student.roll_number }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {% if student_marks.get('internal1') %}
+                                {{ student_marks['internal1'].marks_obtained }}/{{ student_marks['internal1'].max_marks }}
+                                <span class="text-xs text-gray-500">({{ student_marks['internal1'].percentage }}%)</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {% if student_marks.get('internal2') %}
+                                {{ student_marks['internal2'].marks_obtained }}/{{ student_marks['internal2'].max_marks }}
+                                <span class="text-xs text-gray-500">({{ student_marks['internal2'].percentage }}%)</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {% if student_marks.get('assignment') %}
+                                {{ student_marks['assignment'].marks_obtained }}/{{ student_marks['assignment'].max_marks }}
+                                <span class="text-xs text-gray-500">({{ student_marks['assignment'].percentage }}%)</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {% if student_marks.get('project') %}
+                                {{ student_marks['project'].marks_obtained }}/{{ student_marks['project'].max_marks }}
+                                <span class="text-xs text-gray-500">({{ student_marks['project'].percentage }}%)</span>
+                                {% else %}
+                                <span class="text-gray-400">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                <span class="font-medium">{{ student.get_overall_marks_percentage() }}%</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions - Mobile Optimized -->
+        <div class="mt-6">
+            <div class="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4">
+                <a href="{{ url_for('lecturer.attendance_management', subject_id=subject.id) }}" 
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                    Manage Attendance
+                </a>
+                <a href="{{ url_for('lecturer.subject_reports', subject_id=subject.id) }}" 
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                    View Reports
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    menu.classList.toggle('hidden');
+}
+
+// Auto-calculate and validate marks
+document.getElementById('max_marks').addEventListener('input', function() {
+    const maxMarks = parseFloat(this.value) || 0;
+    const marksInputs = document.querySelectorAll('input[name^="marks_"]');
+    
+    marksInputs.forEach(input => {
+        input.max = maxMarks;
+        if (parseFloat(input.value) > maxMarks) {
+            input.value = maxMarks;
+        }
+    });
+});
+
+// Search functionality for marks entry
+document.getElementById('marks-student-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const studentRows = document.querySelectorAll('.marks-student-row');
+    
+    studentRows.forEach(row => {
+        const name = row.dataset.name;
+        const roll = row.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Search functionality for marks overview
+document.getElementById('overview-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const cards = document.querySelectorAll('.overview-card');
+    
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const roll = card.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+});
+
+// Fill all marks with max marks
+function fillAllMarks() {
+    const maxMarks = parseFloat(document.getElementById('max_marks').value) || 0;
+    if (maxMarks === 0) {
+        alert('Please enter maximum marks first');
+        return;
+    }
+    
+    const marksInputs = document.querySelectorAll('.marks-input');
+    marksInputs.forEach(input => {
+        input.value = maxMarks;
+    });
+}
+
+// Clear all marks
+function clearAllMarks() {
+    const marksInputs = document.querySelectorAll('.marks-input');
+    marksInputs.forEach(input => {
+        input.value = '';
+    });
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl+A to fill all marks
+    if (e.ctrlKey && e.key === 'a' && document.activeElement.classList.contains('marks-input')) {
+        e.preventDefault();
+        fillAllMarks();
+    }
+    
+    // Ctrl+D to clear all marks
+    if (e.ctrlKey && e.key === 'd' && document.activeElement.classList.contains('marks-input')) {
+        e.preventDefault();
+        clearAllMarks();
+    }
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', function(event) {
+    const menu = document.getElementById('mobile-menu');
+    const button = event.target.closest('button[onclick="toggleMobileMenu()"]');
+    
+    if (!button && !menu.contains(event.target)) {
+        menu.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %}

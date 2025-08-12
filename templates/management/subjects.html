@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Subjects - Moulya College Management{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script defer>
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    function initSubjectForm() {
+        return {
+            showAddSubjectModal: false,
+            errors: {},
+            formData: {
+                name: '',
+                code: '',
+                course_id: '',
+                year: '',
+                semester: '',
+                description: ''
+            },
+            validateForm() {
+                this.errors = {};
+                if (!this.formData.name) {
+                    this.errors.name = 'Subject Name is required';
+                }
+                if (!this.formData.code) {
+                    this.errors.code = 'Subject Code is required';
+                }
+                if (!this.formData.course_id) {
+                    this.errors.course_id = 'Course is required';
+                }
+                if (!this.formData.year) {
+                    this.errors.year = 'Academic Year is required';
+                }
+                if (!this.formData.semester) {
+                    this.errors.semester = 'Semester is required';
+                }
+                return Object.keys(this.errors).length === 0;
+            },
+            handleSubmit(event) {
+                if (!this.validateForm()) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const form = event.target;
+                const formData = new FormData(form);
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': csrfToken
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Success!',
+                            text: data.message,
+                            icon: 'success'
+                        }).then(() => {
+                            this.resetForm();
+                            this.showAddSubjectModal = false;
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Error!',
+                            text: data.message,
+                            icon: 'error'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        title: 'Error!',
+                        text: 'An unexpected error occurred. Please try again.',
+                        icon: 'error'
+                    });
+                });
+
+                event.preventDefault();
+            },
+            resetForm() {
+                this.formData = {
+                    name: '',
+                    code: '',
+                    course_id: '',
+                    year: '',
+                    semester: '',
+                    description: ''
+                };
+                this.errors = {};
+            },
+            toggleSubjectStatus(subjectId, subjectName, isActive) {
+                const action = isActive ? 'deactivate' : 'activate';
+                Swal.fire({
+                    title: `${action.charAt(0).toUpperCase() + action.slice(1)} Subject?`,
+                    text: `Are you sure you want to ${action} ${subjectName}?`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#000000',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: `Yes, ${action}!`
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch(`/management/subjects/${subjectId}/toggle-status`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-Token': csrfToken,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire({
+                                    title: 'Success!',
+                                    text: data.message,
+                                    icon: 'success'
+                                }).then(() => {
+                                    window.location.reload();
+                                });
+                            } else {
+                                Swal.fire('Error!', data.message, 'error');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            Swal.fire('Error!', 'An unexpected error occurred.', 'error');
+                        });
+                    }
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="initSubjectForm()">
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Manage Subjects</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Table Header with Action Buttons -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-4 sm:px-6 flex justify-between items-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Subjects List</h3>
+                <div class="space-x-2">
+                    <!-- Add Subject Modal Trigger -->
+                    <button @click="showAddSubjectModal = true" type="button" 
+                            class="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                        Add Subject
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Subject Modal -->
+        <div x-show="showAddSubjectModal" 
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4" 
+             x-cloak
+             @click.away="showAddSubjectModal = false">
+            <div class="bg-white rounded-lg w-full max-w-2xl">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Add New Subject</h3>
+                    <form method="POST" action="{{ url_for('management.add_subject') }}" class="space-y-4" @submit.prevent="handleSubmit">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-gray-700">Subject Name *</label>
+                                <input type="text" name="name" id="name" required
+                                       x-model="formData.name"
+                                       :class="{'border-red-300': errors.name}"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <p x-show="errors.name" x-text="errors.name" class="mt-1 text-sm text-red-600"></p>
+                            </div>
+                            <div>
+                                <label for="code" class="block text-sm font-medium text-gray-700">Subject Code *</label>
+                                <input type="text" name="code" id="code" required
+                                       x-model="formData.code"
+                                       :class="{'border-red-300': errors.code}"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <p x-show="errors.code" x-text="errors.code" class="mt-1 text-sm text-red-600"></p>
+                            </div>
+                            <div>
+                                <label for="course_id" class="block text-sm font-medium text-gray-700">Course *</label>
+                                <select name="course_id" id="course_id" required
+                                        x-model="formData.course_id"
+                                        :class="{'border-red-300': errors.course_id}"
+                                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <option value="">Select Course</option>
+                                    {% for course in courses %}
+                                    <option value="{{ course.id }}">{{ course.name }} ({{ course.code }})</option>
+                                    {% endfor %}
+                                </select>
+                                <p x-show="errors.course_id" x-text="errors.course_id" class="mt-1 text-sm text-red-600"></p>
+                            </div>
+                            <div>
+                                <label for="year" class="block text-sm font-medium text-gray-700">Academic Year *</label>
+                                <select name="year" id="year" required
+                                        x-model="formData.year"
+                                        :class="{'border-red-300': errors.year}"
+                                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <option value="">Select Year</option>
+                                    <option value="1">1st Year</option>
+                                    <option value="2">2nd Year</option>
+                                    <option value="3">3rd Year</option>
+                                </select>
+                                <p x-show="errors.year" x-text="errors.year" class="mt-1 text-sm text-red-600"></p>
+                            </div>
+                            <div>
+                                <label for="semester" class="block text-sm font-medium text-gray-700">Semester *</label>
+                                <select name="semester" id="semester" required
+                                        x-model="formData.semester"
+                                        :class="{'border-red-300': errors.semester}"
+                                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <option value="">Select Semester</option>
+                                    <option value="1">1st Semester</option>
+                                    <option value="2">2nd Semester</option>
+                                    <option value="3">3rd Semester</option>
+                                    <option value="4">4th Semester</option>
+                                    <option value="5">5th Semester</option>
+                                    <option value="6">6th Semester</option>
+                                </select>
+                                <p x-show="errors.semester" x-text="errors.semester" class="mt-1 text-sm text-red-600"></p>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                            <textarea name="description" id="description" rows="2"
+                                      x-model="formData.description"
+                                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm"></textarea>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="button" @click="showAddSubjectModal = false" 
+                                    class="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                    class="flex-1 bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                                Add Subject
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <form method="GET" class="flex items-center space-x-4">
+                    <div>
+                        <select name="course_id" class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            <option value="">All Courses</option>
+                            {% for course in courses %}
+                            <option value="{{ course.id }}" {% if selected_course == course.id %}selected{% endif %}>{{ course.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                        Filter
+                    </button>
+                    {% if selected_course %}
+                    <a href="{{ url_for('management.subjects') }}" class="bg-white text-black border border-black px-4 py-2 rounded-md hover:bg-gray-50">
+                        Clear
+                    </a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <!-- Subjects List -->
+        <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                    Subjects List
+                    {% if subjects %}
+                    <span class="text-sm text-gray-500">({{ subjects|length }} total)</span>
+                    {% endif %}
+                </h3>
+            </div>
+            
+            {% if subjects %}
+            <ul class="divide-y divide-gray-200">
+                {% for subject in subjects %}
+                <li class="px-4 py-4 sm:px-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                    <span class="text-sm font-medium text-gray-700">{{ subject.code[:2].upper() }}</span>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <div class="flex items-center">
+                                    <p class="text-sm font-medium text-gray-900">{{ subject.name }}</p>
+                                    {% if not subject.is_active %}
+                                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Inactive
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <p class="text-sm text-gray-500">Code: {{ subject.code }} | Course: {{ subject.course.name if subject.course else 'N/A' }}</p>
+                                <p class="text-sm text-gray-500">Year {{ subject.year }}, Semester {{ subject.semester }}</p>
+                                {% if subject.description %}
+                                <p class="text-sm text-gray-500 mt-1">{{ subject.description }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-sm text-gray-500">
+                                {{ subject.get_enrolled_students_count() }} students
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button @click="toggleSubjectStatus({{ subject.id }}, '{{ subject.name }}', {{ subject.is_active|lower }})" 
+                                        class="text-sm {% if subject.is_active %}text-red-600 hover:text-red-800{% else %}text-green-600 hover:text-green-800{% endif %}">
+                                    {% if subject.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="px-4 py-5 sm:px-6 text-center">
+                <p class="text-gray-500">No subjects found.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}

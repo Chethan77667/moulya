@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Class Attendance Report - {{ report.subject.name }} - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Class Attendance Report</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.export_class_attendance_report', subject_id=report.subject.id, month=report.month, year=report.year) }}" 
+                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                        📥 Export Excel
+                    </a>
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Subject Info -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{{ report.subject.name }} ({{ report.subject.code }})</h2>
+                <p class="text-sm text-gray-600">{{ report.subject.course }} - Year {{ report.subject.year }}, Semester {{ report.subject.semester }}</p>
+                <p class="text-sm text-blue-600">Period: {{ report.month }}/{{ report.year }}</p>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Attendance Statistics</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ report.statistics.total_students }}</div>
+                        <div class="text-sm text-gray-500">Total Students</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">{{ report.statistics.class_average_attendance }}%</div>
+                        <div class="text-sm text-gray-500">Class Average</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600">{{ report.statistics.students_with_good_attendance }}</div>
+                        <div class="text-sm text-gray-500">Good Attendance (≥75%)</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-600">{{ report.statistics.students_with_poor_attendance }}</div>
+                        <div class="text-sm text-gray-500">Poor Attendance (<50%)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Attendance -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Student Attendance Details</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Classes</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for student in report.student_attendance %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ student.student_name }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ student.roll_number }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ student.total_classes }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                                {{ student.present_classes }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                                {{ student.absent_classes }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ student.attendance_percentage }}%
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if student.status == 'Good' %}
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Good</span>
+                                {% elif student.status == 'Average' %}
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Average</span>
+                                {% else %}
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Poor</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if not report.student_attendance %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-8 text-center">
+                <p class="text-gray-500">No attendance data found for this subject and period.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

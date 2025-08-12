@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Course Overview Report - {{ report.course.name }} - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Course Overview Report</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.export_course_overview_report', course_id=report.course.id) }}" 
+                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                        📥 Export Excel
+                    </a>
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Course Info -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">{{ report.course.name }} ({{ report.course.code }})</h2>
+                <p class="text-sm text-gray-600">Duration: {{ report.course.duration_years }} years, {{ report.course.total_semesters }} semesters</p>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ report.total_students }}</div>
+                        <div class="text-sm text-gray-500">Total Students</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600">{{ report.total_subjects }}</div>
+                        <div class="text-sm text-gray-500">Total Subjects</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-600">{{ report.course.duration_years }}</div>
+                        <div class="text-sm text-gray-500">Duration (Years)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subjects Overview -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Subjects Performance Overview</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year/Sem</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Marks</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass Rate</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for subject in report.subjects %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ subject.subject_name }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ subject.subject_code }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ subject.year }}/{{ subject.semester }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ subject.enrolled_students }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {{ subject.marks_statistics.average_marks }}%
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                                    {% if subject.marks_statistics.passing_rate >= 80 %}bg-green-100 text-green-800
+                                    {% elif subject.marks_statistics.passing_rate >= 60 %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-red-100 text-red-800{% endif %}">
+                                    {{ subject.marks_statistics.passing_rate }}%
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                                    {% if subject.attendance_statistics.average_attendance >= 75 %}bg-green-100 text-green-800
+                                    {% elif subject.attendance_statistics.average_attendance >= 50 %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-red-100 text-red-800{% endif %}">
+                                    {{ subject.attendance_statistics.average_attendance }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if not report.subjects %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-8 text-center">
+                <p class="text-gray-500">No subjects found for this course.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

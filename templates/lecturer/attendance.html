@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+
+{% block title %}{{ subject.name }} - Attendance - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Mobile-Friendly Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-1">
+                    <a href="{{ url_for('lecturer.subjects') }}" class="text-sm text-gray-600 hover:text-black flex-shrink-0">← Subjects</a>
+                    <h1 class="text-sm sm:text-xl font-semibold text-gray-900 truncate">{{ subject.name }} - Attendance</h1>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-black focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Desktop menu -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
+                <div class="space-y-2">
+                    <div class="text-sm text-gray-700 px-2">{{ current_user.username }}</div>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="w-full text-left py-2 text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Subject Info - Mobile Optimized -->
+        <div class="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div class="px-4 py-4 sm:p-6">
+                <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">{{ subject.name }}</h3>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">{{ subject.code }} | {{ subject.course.name if subject.course else 'N/A' }}</p>
+                <div class="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                    <span class="bg-gray-100 px-2 py-1 rounded">Students: {{ students|length }}</span>
+                    {% if monthly_summary %}
+                    <span class="bg-gray-100 px-2 py-1 rounded">Classes: {{ monthly_summary.total_classes }}</span>
+                    <span class="bg-gray-100 px-2 py-1 rounded">Avg: {{ "%.1f"|format(monthly_summary.average_attendance) }}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation - Mobile Friendly -->
+        <div class="mb-4 sm:mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex">
+                    <button onclick="showTab('daily')" id="daily-tab" class="tab-button flex-1 border-b-2 border-black text-black py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                        Daily
+                    </button>
+                    <button onclick="showTab('monthly-mark')" id="monthly-mark-tab" class="tab-button flex-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                        Monthly
+                    </button>
+                    <button onclick="showTab('monthly-view')" id="monthly-view-tab" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 text-sm font-medium">
+                        View Reports
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Daily Attendance Tab -->
+        <div id="daily-content" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Daily Attendance Form -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Record Daily Attendance</h3>
+                            
+                            <!-- Date Selection -->
+                            <form method="GET" class="mb-4">
+                                <div class="flex items-center space-x-4">
+                                    <div>
+                                        <label for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                                        <input type="date" name="date" id="date" value="{{ selected_date.strftime('%Y-%m-%d') }}"
+                                               class="mt-1 block px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    </div>
+                                    <div class="pt-6">
+                                        <button type="submit" class="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800">
+                                            Load Date
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- Attendance Form -->
+                            {% if students %}
+                            <form method="POST" action="{{ url_for('lecturer.record_daily_attendance', subject_id=subject.id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <input type="hidden" name="attendance_date" value="{{ selected_date.strftime('%Y-%m-%d') }}">
+                                
+                                <!-- Search and Bulk Actions -->
+                                <div class="mb-4 space-y-3">
+                                    <div class="flex items-center space-x-4">
+                                        <div class="flex-1">
+                                            <input type="text" id="student-search" placeholder="Search students by name or roll number..." 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                        </div>
+                                        <div class="flex space-x-2">
+                                            <button type="button" onclick="markAll('present')" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                                                All Present
+                                            </button>
+                                            <button type="button" onclick="markAll('absent')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                                All Absent
+                                            </button>
+                                            <button type="button" onclick="markFiltered('present')" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                                                Filtered Present
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Quick Stats -->
+                                    <div class="flex items-center space-x-4 text-sm text-gray-600">
+                                        <span>Total: <span id="total-count">{{ students|length }}</span></span>
+                                        <span>Present: <span id="present-count">0</span></span>
+                                        <span>Absent: <span id="absent-count">0</span></span>
+                                        <span>Unmarked: <span id="unmarked-count">{{ students|length }}</span></span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Students Grid -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto" id="students-container">
+                                    {% for student in students %}
+                                    <div class="student-row flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50" 
+                                         data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium text-gray-900">{{ student.name }}</p>
+                                            <p class="text-sm text-gray-500">{{ student.roll_number }}</p>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <label class="flex items-center cursor-pointer">
+                                                <input type="radio" name="attendance_{{ student.id }}" value="present" 
+                                                       {% if existing_attendance.get(student.id) == 'present' %}checked{% endif %}
+                                                       class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 attendance-radio"
+                                                       onchange="updateCounts()">
+                                                <span class="ml-1 text-xs text-green-600 font-medium">P</span>
+                                            </label>
+                                            <label class="flex items-center cursor-pointer">
+                                                <input type="radio" name="attendance_{{ student.id }}" value="absent" 
+                                                       {% if existing_attendance.get(student.id) == 'absent' %}checked{% endif %}
+                                                       class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 attendance-radio"
+                                                       onchange="updateCounts()">
+                                                <span class="ml-1 text-xs text-red-600 font-medium">A</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <div class="mt-6">
+                                    <button type="submit" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                                        Save Attendance for {{ selected_date.strftime('%B %d, %Y') }}
+                                    </button>
+                                </div>
+                            </form>
+                            {% else %}
+                            <div class="text-center py-8">
+                                <p class="text-gray-500">No students enrolled in this subject.</p>
+                                <a href="{{ url_for('lecturer.subject_students', subject_id=subject.id) }}" class="mt-2 inline-block text-blue-600 hover:text-blue-800">
+                                    Add students to this subject →
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Sidebar -->
+                <div>
+                    <div class="bg-white shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
+                            <div class="space-y-2">
+                                <a href="{{ url_for('lecturer.subject_reports', subject_id=subject.id) }}" 
+                                   class="block w-full text-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50">
+                                    View Reports
+                                </a>
+                                <a href="{{ url_for('lecturer.marks_management', subject_id=subject.id) }}" 
+                                   class="block w-full text-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50">
+                                    Manage Marks
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly Summary Info -->
+                    {% if monthly_summary %}
+                    <div class="mt-6 bg-white shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Current Month Summary</h3>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Month:</span>
+                                    <span class="font-medium">{{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][monthly_summary.month] }} {{ monthly_summary.year }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Total Classes:</span>
+                                    <span class="font-medium">{{ monthly_summary.total_classes }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Average Attendance:</span>
+                                    <span class="font-medium">{{ "%.1f"|format(monthly_summary.average_attendance) }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Attendance Marking Tab -->
+        <div id="monthly-mark-content" class="tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Mark Monthly Attendance</h3>
+                    <p class="text-sm text-gray-600 mb-6">Enter the number of classes each student attended out of total classes conducted in the month.</p>
+                    
+                    <form method="POST" action="{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <!-- Month and Year Selection -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div>
+                                <label for="monthly_month" class="block text-sm font-medium text-gray-700">Month</label>
+                                <select name="month" id="monthly_month" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    {% for i in range(1, 13) %}
+                                    <option value="{{ i }}" {% if i == selected_date.month %}selected{% endif %}>
+                                        {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label for="monthly_year" class="block text-sm font-medium text-gray-700">Year</label>
+                                <input type="number" name="year" id="monthly_year" value="{{ selected_date.year }}" min="2020" max="2030" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">Total Classes</label>
+                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="50" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            </div>
+                        </div>
+
+                        {% if students %}
+                        <!-- Search and Bulk Actions for Monthly -->
+                        <div class="mb-4 space-y-3">
+                            <div class="flex items-center space-x-4">
+                                <div class="flex-1">
+                                    <input type="text" id="monthly-student-search" placeholder="Search students..." 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button type="button" onclick="setAllAttendance('full')" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                                        All Full
+                                    </button>
+                                    <button type="button" onclick="setAllAttendance('half')" class="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700">
+                                        All Half
+                                    </button>
+                                    <button type="button" onclick="setAllAttendance('zero')" class="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
+                                        All Zero
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto" id="monthly-students-container">
+                            {% for student in students %}
+                            <div class="monthly-student-row flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50" 
+                                 data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-gray-900 truncate">{{ student.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" name="attended_{{ student.id }}" min="0" max="50" 
+                                           class="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black monthly-attendance-input"
+                                           placeholder="0">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-6">
+                            <button type="submit" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                                Save Monthly Attendance
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-8">
+                            <p class="text-gray-500">No students enrolled in this subject.</p>
+                            <a href="{{ url_for('lecturer.subject_students', subject_id=subject.id) }}" class="mt-2 inline-block text-blue-600 hover:text-blue-800">
+                                Add students to this subject →
+                            </a>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly View Tab -->
+        <div id="monthly-view-content" class="tab-content hidden">
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">Monthly Attendance Reports</h3>
+                        <form method="GET" class="flex items-center space-x-2">
+                            <input type="hidden" name="view" value="monthly">
+                            <select name="view_month" onchange="this.form.submit()" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
+                                {% for i in range(1, 13) %}
+                                <option value="{{ i }}" {% if i == (request.args.get('view_month', selected_date.month)|int) %}selected{% endif %}>
+                                    {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <select name="view_year" onchange="this.form.submit()" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
+                                {% for year in range(2020, 2031) %}
+                                <option value="{{ year }}" {% if year == (request.args.get('view_year', selected_date.year)|int) %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+
+                    {% if monthly_attendance_data %}
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll Number</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Classes</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for data in monthly_attendance_data %}
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ data.student_name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ data.roll_number }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ data.total_classes }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">{{ data.present_classes }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">{{ data.absent_classes }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.1f"|format(data.attendance_percentage) }}%</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        {% if data.attendance_percentage >= 75 %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Good</span>
+                                        {% elif data.attendance_percentage >= 60 %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Warning</span>
+                                        {% else %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Shortage</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-8">
+                        <p class="text-gray-500">No attendance data available for the selected month.</p>
+                        <p class="text-sm text-gray-400 mt-2">Use the Monthly Attendance tab to record attendance.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('border-black', 'text-black');
+        button.classList.add('border-transparent', 'text-gray-500');
+    });
+    
+    // Show selected tab content
+    document.getElementById(tabName + '-content').classList.remove('hidden');
+    
+    // Add active class to selected tab
+    const activeTab = document.getElementById(tabName + '-tab');
+    activeTab.classList.remove('border-transparent', 'text-gray-500');
+    activeTab.classList.add('border-black', 'text-black');
+}
+
+// Daily Attendance Functions
+function markAll(status) {
+    const radios = document.querySelectorAll(`input[type="radio"][value="${status}"]`);
+    radios.forEach(radio => {
+        radio.checked = true;
+    });
+    updateCounts();
+}
+
+function markFiltered(status) {
+    const visibleRows = document.querySelectorAll('.student-row:not([style*="display: none"])');
+    visibleRows.forEach(row => {
+        const radio = row.querySelector(`input[type="radio"][value="${status}"]`);
+        if (radio) radio.checked = true;
+    });
+    updateCounts();
+}
+
+function updateCounts() {
+    const presentCount = document.querySelectorAll('input[type="radio"][value="present"]:checked').length;
+    const absentCount = document.querySelectorAll('input[type="radio"][value="absent"]:checked').length;
+    const totalCount = document.querySelectorAll('.student-row').length;
+    const unmarkedCount = totalCount - presentCount - absentCount;
+    
+    document.getElementById('present-count').textContent = presentCount;
+    document.getElementById('absent-count').textContent = absentCount;
+    document.getElementById('unmarked-count').textContent = unmarkedCount;
+}
+
+// Search functionality for daily attendance
+document.getElementById('student-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const studentRows = document.querySelectorAll('.student-row');
+    
+    studentRows.forEach(row => {
+        const name = row.dataset.name;
+        const roll = row.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Monthly Attendance Functions
+function setAllAttendance(type) {
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value) || 0;
+    const inputs = document.querySelectorAll('.monthly-attendance-input');
+    
+    let value = 0;
+    if (type === 'full') value = totalClasses;
+    else if (type === 'half') value = Math.floor(totalClasses / 2);
+    else if (type === 'zero') value = 0;
+    
+    inputs.forEach(input => {
+        input.value = value;
+    });
+}
+
+// Search functionality for monthly attendance
+document.getElementById('monthly-student-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const studentRows = document.querySelectorAll('.monthly-student-row');
+    
+    studentRows.forEach(row => {
+        const name = row.dataset.name;
+        const roll = row.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Auto-calculate attendance based on total classes
+document.getElementById('monthly_total_classes')?.addEventListener('input', function() {
+    const totalClasses = parseInt(this.value) || 0;
+    const attendanceInputs = document.querySelectorAll('input[name^="attended_"]');
+    
+    attendanceInputs.forEach(input => {
+        input.max = totalClasses;
+        if (parseInt(input.value) > totalClasses) {
+            input.value = totalClasses;
+        }
+    });
+});
+
+// Initialize counts on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateCounts();
+});
+</script>
+{% endblock %}

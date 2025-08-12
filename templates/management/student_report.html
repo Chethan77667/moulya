@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Student Report - {{ report.student.name }} - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Student Report</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.export_student_report', student_id=report.student.id) }}" 
+                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                        📥 Export Excel
+                    </a>
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Student Info -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Student Information</h2>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Name</label>
+                        <p class="text-sm text-gray-900">{{ report.student.name }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Roll Number</label>
+                        <p class="text-sm text-gray-900">{{ report.student.roll_number }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Course</label>
+                        <p class="text-sm text-gray-900">{{ report.student.course or 'Not Assigned' }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Academic Year</label>
+                        <p class="text-sm text-gray-900">{{ report.student.academic_year }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Current Semester</label>
+                        <p class="text-sm text-gray-900">{{ report.student.current_semester }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subjects Report -->
+        {% for subject in report.subjects %}
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">{{ subject.subject_name }} ({{ subject.subject_code }})</h3>
+                <p class="text-sm text-gray-600">Year {{ subject.year }}, Semester {{ subject.semester }}</p>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Marks Section -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 mb-3">Marks Performance</h4>
+                        {% if subject.marks %}
+                        <div class="space-y-2">
+                            {% for mark in subject.marks %}
+                            <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                <span class="text-sm font-medium">{{ mark.assessment_type|title }}</span>
+                                <span class="text-sm">{{ mark.marks_obtained }}/{{ mark.total_marks }} ({{ mark.percentage }}%)</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-3 p-3 bg-blue-50 rounded">
+                            <span class="text-sm font-medium text-blue-900">Overall: {{ subject.overall_marks_percentage }}%</span>
+                        </div>
+                        {% else %}
+                        <p class="text-sm text-gray-500">No marks recorded</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Attendance Section -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 mb-3">Attendance Summary</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm">Total Classes:</span>
+                                <span class="text-sm font-medium">{{ subject.attendance.total_classes }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm">Present:</span>
+                                <span class="text-sm font-medium text-green-600">{{ subject.attendance.present_classes }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm">Absent:</span>
+                                <span class="text-sm font-medium text-red-600">{{ subject.attendance.absent_classes }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 p-3 {% if subject.attendance.attendance_percentage >= 75 %}bg-green-50{% elif subject.attendance.attendance_percentage >= 50 %}bg-yellow-50{% else %}bg-red-50{% endif %} rounded">
+                            <span class="text-sm font-medium {% if subject.attendance.attendance_percentage >= 75 %}text-green-900{% elif subject.attendance.attendance_percentage >= 50 %}text-yellow-900{% else %}text-red-900{% endif %}">
+                                Attendance: {{ subject.attendance.attendance_percentage }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not report.subjects %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-8 text-center">
+                <p class="text-gray-500">No subjects found for this student.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

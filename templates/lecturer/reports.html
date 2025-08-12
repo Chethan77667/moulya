@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}{{ subject.name }} - Reports - Moulya College Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Mobile-Friendly Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-1">
+                    <a href="{{ url_for('lecturer.subjects') }}" class="text-sm text-gray-600 hover:text-black flex-shrink-0">← Subjects</a>
+                    <h1 class="text-sm sm:text-xl font-semibold text-gray-900 truncate">{{ subject.name }} - Reports</h1>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-black focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Desktop menu -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
+                <div class="space-y-2">
+                    <div class="text-sm text-gray-700 px-2">{{ current_user.username }}</div>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="w-full text-left py-2 text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Subject Info -->
+        <div class="bg-white shadow rounded-lg mb-4 sm:mb-6">
+            <div class="px-4 py-4 sm:p-6">
+                <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">{{ subject.name }}</h3>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">{{ subject.code }} | {{ subject.course.name if subject.course else 'N/A' }}</p>
+            </div>
+        </div>
+
+        <!-- Tab Navigation for Mobile -->
+        <div class="mb-4 sm:mb-6 no-print">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button onclick="showTab('attendance')" id="attendance-tab" class="tab-button border-b-2 border-black text-black py-2 px-1 text-sm font-medium">
+                        Attendance Report
+                    </button>
+                    <button onclick="showTab('marks')" id="marks-tab" class="tab-button border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 text-sm font-medium">
+                        Marks Report
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <div class="space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
+            <!-- Attendance Report -->
+            <div id="attendance-content" class="tab-content bg-white shadow rounded-lg">
+                <div class="px-4 py-4 sm:py-5 sm:px-6">
+                    <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Attendance Report</h3>
+                </div>
+                
+                {% if attendance_report %}
+                <!-- Mobile Cards View -->
+                <div class="block sm:hidden">
+                    <div class="px-4 pb-4">
+                        <input type="text" id="attendance-search" placeholder="Search students..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
+                    </div>
+                    <div class="space-y-3 px-4 pb-4 max-h-96 overflow-y-auto">
+                        {% for record in attendance_report %}
+                        <div class="attendance-card border rounded-lg p-3 {% if record.has_shortage %}border-red-200 bg-red-50{% else %}border-gray-200{% endif %}" 
+                             data-name="{{ record.student.name.lower() }}" data-roll="{{ record.student.roll_number.lower() }}">
+                            <div class="flex justify-between items-start">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900 truncate">{{ record.student.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ record.student.roll_number }}</p>
+                                </div>
+                                <div class="ml-2 flex-shrink-0">
+                                    {% if record.has_shortage %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Shortage
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Good
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mt-2 grid grid-cols-3 gap-2 text-xs text-gray-600">
+                                <div class="text-center">
+                                    <div class="font-medium text-gray-900">{{ record.present_classes }}</div>
+                                    <div>Present</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-medium text-gray-900">{{ record.total_classes }}</div>
+                                    <div>Total</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-medium text-gray-900">{{ record.attendance_percentage }}%</div>
+                                    <div>Percentage</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Desktop Table View -->
+                <div class="hidden sm:block overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">%</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for record in attendance_report %}
+                            <tr class="{% if record.has_shortage %}bg-red-50{% endif %}">
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900">{{ record.student.name }}</div>
+                                    <div class="text-xs text-gray-500">{{ record.student.roll_number }}</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.present_classes }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.total_classes }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.attendance_percentage }}%</td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    {% if record.has_shortage %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Shortage
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Good
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="px-4 py-8 sm:px-6 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No attendance data</h3>
+                    <p class="mt-1 text-sm text-gray-500">Start recording attendance to see reports.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Marks Report -->
+            <div id="marks-content" class="tab-content hidden lg:block bg-white shadow rounded-lg">
+                <div class="px-4 py-4 sm:py-5 sm:px-6">
+                    <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Marks Report</h3>
+                </div>
+                
+                {% if marks_report %}
+                <!-- Mobile Cards View -->
+                <div class="block sm:hidden">
+                    <div class="px-4 pb-4">
+                        <input type="text" id="marks-search" placeholder="Search students..." 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
+                    </div>
+                    <div class="space-y-3 px-4 pb-4 max-h-96 overflow-y-auto">
+                        {% for record in marks_report %}
+                        <div class="marks-card border rounded-lg p-3 {% if record.has_deficiency %}border-red-200 bg-red-50{% else %}border-gray-200{% endif %}" 
+                             data-name="{{ record.student.name.lower() }}" data-roll="{{ record.student.roll_number.lower() }}">
+                            <div class="flex justify-between items-start">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900 truncate">{{ record.student.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ record.student.roll_number }}</p>
+                                </div>
+                                <div class="ml-2 flex-shrink-0">
+                                    {% if record.has_deficiency %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Deficient
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Good
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-center">
+                                <div class="text-lg font-medium text-gray-900">{{ record.overall_percentage }}%</div>
+                                <div class="text-xs text-gray-500">Overall Percentage</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Desktop Table View -->
+                <div class="hidden sm:block overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall %</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for record in marks_report %}
+                            <tr class="{% if record.has_deficiency %}bg-red-50{% endif %}">
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900">{{ record.student.name }}</div>
+                                    <div class="text-xs text-gray-500">{{ record.student.roll_number }}</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.overall_percentage }}%</td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    {% if record.has_deficiency %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        Deficient
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        Good
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="px-4 py-8 sm:px-6 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No marks data</h3>
+                    <p class="mt-1 text-sm text-gray-500">Start recording marks to see reports.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mt-6 no-print">
+            <div class="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4">
+                <a href="{{ url_for('lecturer.attendance_management', subject_id=subject.id) }}" 
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                    Manage Attendance
+                </a>
+                <a href="{{ url_for('lecturer.marks_management', subject_id=subject.id) }}" 
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                    Manage Marks
+                </a>
+                <button onclick="window.print()" class="inline-flex items-center justify-center bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 text-sm">
+                    Print Report
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    menu.classList.toggle('hidden');
+}
+
+function showTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('border-black', 'text-black');
+        button.classList.add('border-transparent', 'text-gray-500');
+    });
+    
+    // Show selected tab content
+    document.getElementById(tabName + '-content').classList.remove('hidden');
+    
+    // Add active class to selected tab
+    const activeTab = document.getElementById(tabName + '-tab');
+    activeTab.classList.remove('border-transparent', 'text-gray-500');
+    activeTab.classList.add('border-black', 'text-black');
+}
+
+// Search functionality for attendance cards
+document.getElementById('attendance-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const cards = document.querySelectorAll('.attendance-card');
+    
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const roll = card.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+});
+
+// Search functionality for marks cards
+document.getElementById('marks-search')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const cards = document.querySelectorAll('.marks-card');
+    
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const roll = card.dataset.roll;
+        
+        if (name.includes(searchTerm) || roll.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', function(event) {
+    const menu = document.getElementById('mobile-menu');
+    const button = event.target.closest('button[onclick="toggleMobileMenu()"]');
+    
+    if (!button && !menu.contains(event.target)) {
+        menu.classList.add('hidden');
+    }
+});
+</script>
+
+<style>
+@media print {
+    nav, .no-print, .tab-button { display: none !important; }
+    body { background: white !important; }
+    .tab-content { display: block !important; }
+    .hidden { display: block !important; }
+}
+</style>
+{% endblock %}

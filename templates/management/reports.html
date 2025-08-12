@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Reports Dashboard - Moulya College Management{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script defer>
+    function initReportsForm() {
+        return {
+            selectedSubject: '',
+            selectedCourse: '',
+            selectedStudent: '',
+            selectedMonth: new Date().getMonth() + 1,
+            selectedYear: new Date().getFullYear(),
+            selectedAssessmentType: '',
+            studentSearch: '',
+            showStudentDropdown: false,
+            filteredStudents: [],
+            allStudents: {{ students|tojson if students else '[]' }},
+            selectedStudentCourse: '',
+            
+            init() {
+                this.filteredStudents = this.allStudents;
+            },
+            
+            filterStudentsByCourse() {
+                if (!this.selectedStudentCourse) {
+                    this.filteredStudents = this.allStudents;
+                    this.studentSearch = '';
+                    this.selectedStudent = '';
+                    return;
+                }
+                
+                // Filter students by selected course
+                this.filteredStudents = this.allStudents.filter(student => 
+                    student.course_id == this.selectedStudentCourse
+                );
+                this.studentSearch = '';
+                this.selectedStudent = '';
+            },
+            
+            filterStudents() {
+                let baseStudents = this.selectedStudentCourse ? 
+                    this.allStudents.filter(student => student.course_id == this.selectedStudentCourse) : 
+                    this.allStudents;
+                
+                if (!this.studentSearch) {
+                    this.filteredStudents = baseStudents;
+                    return;
+                }
+                
+                const search = this.studentSearch.toLowerCase();
+                this.filteredStudents = baseStudents.filter(student => 
+                    student.name.toLowerCase().includes(search) || 
+                    student.roll_number.toLowerCase().includes(search) ||
+                    (student.course_name && student.course_name.toLowerCase().includes(search))
+                );
+            },
+            
+            selectStudent(student) {
+                this.selectedStudent = student.id;
+                this.studentSearch = `${student.name} (${student.roll_number})`;
+                this.showStudentDropdown = false;
+            },
+            
+            generateStudentReport() {
+                if (!this.selectedStudent) {
+                    Swal.fire('Error!', 'Please select a student', 'error');
+                    return;
+                }
+                window.open(`/management/reports/student/${this.selectedStudent}`, '_blank');
+            },
+            
+            generateClassMarksReport() {
+                if (!this.selectedSubject) {
+                    Swal.fire('Error!', 'Please select a subject', 'error');
+                    return;
+                }
+                let url = `/management/reports/class/marks/${this.selectedSubject}`;
+                if (this.selectedAssessmentType) {
+                    url += `?assessment_type=${this.selectedAssessmentType}`;
+                }
+                window.open(url, '_blank');
+            },
+            
+            generateClassAttendanceReport() {
+                if (!this.selectedSubject) {
+                    Swal.fire('Error!', 'Please select a subject', 'error');
+                    return;
+                }
+                let url = `/management/reports/class/attendance/${this.selectedSubject}?month=${this.selectedMonth}&year=${this.selectedYear}`;
+                window.open(url, '_blank');
+            },
+            
+            generateCourseOverviewReport() {
+                if (!this.selectedCourse) {
+                    Swal.fire('Error!', 'Please select a course', 'error');
+                    return;
+                }
+                window.open(`/management/reports/course/${this.selectedCourse}`, '_blank');
+            }
+        }
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<div x-data="initReportsForm()">
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Reports Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Reports Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Student Report Card -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg rounded-xl border border-blue-200">
+                <div class="px-6 py-6">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold">📊</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Individual Student Report</h3>
+                            <p class="text-sm text-gray-600">Detailed marks and attendance analysis</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Filter by Course (Optional)</label>
+                            <select x-model="selectedStudentCourse" 
+                                    @change="filterStudentsByCourse()"
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">All Courses</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.name }} ({{ course.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="relative">
+                            <label class="block text-sm font-medium text-gray-700">Search Student</label>
+                            <input type="text" 
+                                   x-model="studentSearch" 
+                                   @input="filterStudents()" 
+                                   @focus="showStudentDropdown = true"
+                                   placeholder="Type student name or roll number..."
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            
+                            <!-- Searchable Dropdown -->
+                            <div x-show="showStudentDropdown && filteredStudents.length > 0" 
+                                 x-transition
+                                 class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                 @click.away="showStudentDropdown = false">
+                                <template x-for="student in filteredStudents.slice(0, 50)" :key="student.id">
+                                    <div @click="selectStudent(student)" 
+                                         class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100">
+                                        <div class="flex items-center">
+                                            <span class="font-medium" x-text="student.name"></span>
+                                            <span class="ml-2 text-gray-500" x-text="`(${student.roll_number})`"></span>
+                                        </div>
+                                        <div class="text-sm text-gray-500" x-text="student.course_name"></div>
+                                    </div>
+                                </template>
+                                <div x-show="filteredStudents.length > 50" class="px-3 py-2 text-sm text-gray-500 border-t">
+                                    Showing first 50 results. Type more to narrow down...
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button @click="generateStudentReport()" 
+                                    class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                View Report
+                            </button>
+                            <button @click="selectedStudent && (window.location.href = `/management/reports/export/student/${selectedStudent}`)" 
+                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                📥 Export Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Class Marks Report Card -->
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg rounded-xl border border-purple-200">
+                <div class="px-6 py-6">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold">📈</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Class Marks Report</h3>
+                            <p class="text-sm text-gray-600">Performance analysis for entire class</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Subject</label>
+                            <select x-model="selectedSubject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">Choose a subject...</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Assessment Type (Optional)</label>
+                            <select x-model="selectedAssessmentType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">All Assessments</option>
+                                <option value="internal1">Internal 1</option>
+                                <option value="internal2">Internal 2</option>
+                                <option value="assignment">Assignment</option>
+                                <option value="project">Project</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button @click="generateClassMarksReport()" 
+                                    class="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                View Report
+                            </button>
+                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
+                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                📥 Export Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Class Attendance Report Card -->
+            <div class="bg-gradient-to-br from-orange-50 to-orange-100 shadow-lg rounded-xl border border-orange-200">
+                <div class="px-6 py-6">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-orange-600 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold">📅</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Class Attendance Report</h3>
+                            <p class="text-sm text-gray-600">Attendance tracking and analysis</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Subject</label>
+                            <select x-model="selectedSubject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">Choose a subject...</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Month</label>
+                                <select x-model="selectedMonth" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Year</label>
+                                <select x-model="selectedYear" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <option value="2024">2024</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2026">2026</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button @click="generateClassAttendanceReport()" 
+                                    class="flex-1 bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                View Report
+                            </button>
+                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/attendance/${selectedSubject}?month=${selectedMonth}&year=${selectedYear}`)" 
+                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                📥 Export Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course Overview Report Card -->
+            <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 shadow-lg rounded-xl border border-indigo-200">
+                <div class="px-6 py-6">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold">🎓</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Course Overview Report</h3>
+                            <p class="text-sm text-gray-600">Comprehensive overview of entire course</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Course</label>
+                            <select x-model="selectedCourse" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">Choose a course...</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.name }} ({{ course.code }}) - {{ course.total_students }} students</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button @click="generateCourseOverviewReport()" 
+                                    class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                View Report
+                            </button>
+                            <button @click="selectedCourse && (window.open(`/management/reports/export/course/${selectedCourse}`, '_blank'))" 
+                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                📥 Export Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="mt-8 bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-4">📊 Quick Statistics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600">{{ courses|length if courses else 0 }}</div>
+                        <div class="text-sm text-gray-500">Active Courses</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-600">{{ subjects|length if subjects else 0 }}</div>
+                        <div class="text-sm text-gray-500">Active Subjects</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-orange-600">
+                            {% set total_enrollments = 0 %}
+                            {% if subjects %}
+                                {% for subject in subjects %}
+                                    {% set total_enrollments = total_enrollments + (subject.enrolled_students_count or 0) %}
+                                {% endfor %}
+                            {% endif %}
+                            {{ total_enrollments }}
+                        </div>
+                        <div class="text-sm text-gray-500">Total Enrollments</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-indigo-600">4</div>
+                        <div class="text-sm text-gray-500">Report Types</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
