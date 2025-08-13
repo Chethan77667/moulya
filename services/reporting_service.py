@@ -24,9 +24,10 @@ class ReportingService:
                 return None
             
             # Get all subjects the student is enrolled in
-            subjects = Subject.query.join('enrollments').filter_by(
-                student_id=student_id,
-                is_active=True
+            from models.student import StudentEnrollment
+            subjects = Subject.query.join(StudentEnrollment).filter(
+                StudentEnrollment.student_id == student_id,
+                StudentEnrollment.is_active == True
             ).all()
             
             report = {
@@ -43,6 +44,7 @@ class ReportingService:
             
             for subject in subjects:
                 # Get marks for this subject
+                from models.marks import StudentMarks
                 marks = StudentMarks.query.filter_by(
                     student_id=student_id,
                     subject_id=subject.id
@@ -58,8 +60,38 @@ class ReportingService:
                 present_classes = len([r for r in attendance_records if r.status == 'present'])
                 attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
                 
-                # Calculate overall marks percentage
-                overall_percentage = StudentMarks.get_student_overall_percentage(student_id, subject.id)
+                # Calculate overall marks percentage for this subject
+                if marks:
+                    total_obtained = sum(mark.marks_obtained for mark in marks)
+                    total_max = sum(mark.max_marks for mark in marks)
+                    overall_percentage = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0
+                else:
+                    overall_percentage = 0
+                
+                # Format marks data with proper assessment type names
+                marks_data = []
+                for mark in marks:
+                    mark_dict = mark.to_dict()
+                    # Ensure assessment_type is properly formatted
+                    assessment_type = mark.assessment_type
+                    if assessment_type == 'internal1':
+                        mark_dict['assessment_type'] = 'Internal 1'
+                    elif assessment_type == 'internal2':
+                        mark_dict['assessment_type'] = 'Internal 2'
+                    elif assessment_type == 'assignment':
+                        mark_dict['assessment_type'] = 'Assignment'
+                    elif assessment_type == 'project':
+                        mark_dict['assessment_type'] = 'Project'
+                    else:
+                        mark_dict['assessment_type'] = assessment_type.title()
+                    
+                    # Add percentage calculation
+                    if mark.max_marks > 0:
+                        mark_dict['percentage'] = round((mark.marks_obtained / mark.max_marks) * 100, 2)
+                    else:
+                        mark_dict['percentage'] = 0
+                    
+                    marks_data.append(mark_dict)
                 
                 subject_data = {
                     'subject_id': subject.id,
@@ -67,7 +99,7 @@ class ReportingService:
                     'subject_code': subject.code,
                     'year': subject.year,
                     'semester': subject.semester,
-                    'marks': [mark.to_dict() for mark in marks],
+                    'marks': marks_data,
                     'overall_marks_percentage': overall_percentage,
                     'attendance': {
                         'total_classes': total_classes,
@@ -93,6 +125,7 @@ class ReportingService:
             if not subject:
                 return None
             
+            from models.marks import StudentMarks
             query = StudentMarks.query.filter_by(subject_id=subject_id)
             if assessment_type:
                 query = query.filter_by(assessment_type=assessment_type)
@@ -106,12 +139,34 @@ class ReportingService:
                 if student_id not in student_marks:
                     student_marks[student_id] = {
                         'student': mark.student,
+                        'student_name': mark.student.name,
+                        'roll_number': mark.student.roll_number,
                         'marks': []
                     }
-                student_marks[student_id]['marks'].append(mark.to_dict())
+                
+                mark_dict = mark.to_dict()
+                # Format assessment type for display
+                assessment_type_display = mark.assessment_type
+                if assessment_type_display == 'internal1':
+                    mark_dict['assessment_type'] = 'Internal 1'
+                elif assessment_type_display == 'internal2':
+                    mark_dict['assessment_type'] = 'Internal 2'
+                elif assessment_type_display == 'assignment':
+                    mark_dict['assessment_type'] = 'Assignment'
+                elif assessment_type_display == 'project':
+                    mark_dict['assessment_type'] = 'Project'
+                else:
+                    mark_dict['assessment_type'] = assessment_type_display.title()
+                
+                student_marks[student_id]['marks'].append(mark_dict)
             
             # Calculate statistics
-            all_percentages = [mark.percentage for mark in marks]
+            all_percentages = []
+            for mark in marks:
+                if mark.max_marks > 0:
+                    percentage = round((mark.marks_obtained / mark.max_marks) * 100, 2)
+                    all_percentages.append(percentage)
+            
             statistics = {
                 'total_students': len(student_marks),
                 'total_assessments': len(marks),
@@ -122,6 +177,19 @@ class ReportingService:
                 'failing_students': len([p for p in all_percentages if p < 35])
             }
             
+            # Format assessment type for display
+            assessment_type_display = assessment_type
+            if assessment_type == 'internal1':
+                assessment_type_display = 'Internal 1'
+            elif assessment_type == 'internal2':
+                assessment_type_display = 'Internal 2'
+            elif assessment_type == 'assignment':
+                assessment_type_display = 'Assignment'
+            elif assessment_type == 'project':
+                assessment_type_display = 'Project'
+            elif assessment_type:
+                assessment_type_display = assessment_type.title()
+            
             report = {
                 'subject': {
                     'id': subject.id,
@@ -131,7 +199,7 @@ class ReportingService:
                     'year': subject.year,
                     'semester': subject.semester
                 },
-                'assessment_type': assessment_type,
+                'assessment_type': assessment_type_display,
                 'statistics': statistics,
                 'student_marks': list(student_marks.values())
             }
@@ -157,13 +225,25 @@ class ReportingService:
                 year = datetime.now().year
             
             # Get all students enrolled in this subject
-            students = Student.query.join('enrollments').filter_by(
-                subject_id=subject_id,
-                is_active=True
+            from models.student import StudentEnrollment
+            students = Student.query.join(StudentEnrollment).filter(
+                StudentEnrollment.subject_id == subject_id,
+                StudentEnrollment.is_active == True
             ).all()
             
             student_attendance = []
             total_classes_conducted = 0
+            
+            # First, get the total number of classes conducted for this subject in the month
+            all_attendance_records = AttendanceRecord.query.filter(
+                AttendanceRecord.subject_id == subject_id,
+                db.extract('month', AttendanceRecord.date) == month,
+                db.extract('year', AttendanceRecord.date) == year
+            ).all()
+            
+            # Get unique dates to count total classes
+            unique_dates = set(record.date for record in all_attendance_records)
+            total_classes_conducted = len(unique_dates)
             
             for student in students:
                 attendance_records = AttendanceRecord.query.filter(
@@ -175,18 +255,23 @@ class ReportingService:
                 
                 total_classes = len(attendance_records)
                 present_classes = len([r for r in attendance_records if r.status == 'present'])
-                attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
+                absent_classes = total_classes - present_classes
                 
-                if total_classes > total_classes_conducted:
-                    total_classes_conducted = total_classes
+                # Use total classes conducted if student has records, otherwise 0
+                if total_classes == 0:
+                    attendance_percentage = 0
+                    total_classes = total_classes_conducted
+                    absent_classes = total_classes_conducted
+                else:
+                    attendance_percentage = round((present_classes / total_classes) * 100, 2)
                 
                 student_data = {
                     'student_id': student.id,
                     'student_name': student.name,
                     'roll_number': student.roll_number,
-                    'total_classes': total_classes,
+                    'total_classes': total_classes_conducted,  # Use consistent total
                     'present_classes': present_classes,
-                    'absent_classes': total_classes - present_classes,
+                    'absent_classes': total_classes_conducted - present_classes,
                     'attendance_percentage': attendance_percentage,
                     'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
                 }
@@ -194,14 +279,21 @@ class ReportingService:
                 student_attendance.append(student_data)
             
             # Calculate class statistics
-            all_percentages = [s['attendance_percentage'] for s in student_attendance if s['total_classes'] > 0]
+            all_percentages = [s['attendance_percentage'] for s in student_attendance]
+            valid_percentages = [p for p in all_percentages if p > 0]
+            
             statistics = {
                 'total_students': len(students),
                 'total_classes_conducted': total_classes_conducted,
-                'class_average_attendance': round(sum(all_percentages) / len(all_percentages), 2) if all_percentages else 0,
+                'class_average_attendance': round(sum(valid_percentages) / len(valid_percentages), 2) if valid_percentages else 0,
                 'students_with_good_attendance': len([s for s in student_attendance if s['attendance_percentage'] >= 75]),
                 'students_with_poor_attendance': len([s for s in student_attendance if s['attendance_percentage'] < 50])
             }
+            
+            # Get month name for display
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+            month_name = month_names[month] if 1 <= month <= 12 else str(month)
             
             report = {
                 'subject': {
@@ -212,7 +304,7 @@ class ReportingService:
                     'year': subject.year,
                     'semester': subject.semester
                 },
-                'month': month,
+                'month': month_name,
                 'year': year,
                 'statistics': statistics,
                 'student_attendance': student_attendance

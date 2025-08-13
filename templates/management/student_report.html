@@ -14,7 +14,7 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     <a href="{{ url_for('management.export_student_report', student_id=report.student.id) }}" 
-                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                       class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         📥 Export Excel
                     </a>
                     <span class="text-sm text-gray-700">{{ current_user.username }}</span>
@@ -71,13 +71,27 @@
                         <div class="space-y-2">
                             {% for mark in subject.marks %}
                             <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
-                                <span class="text-sm font-medium">{{ mark.assessment_type|title }}</span>
-                                <span class="text-sm">{{ mark.marks_obtained }}/{{ mark.total_marks }} ({{ mark.percentage }}%)</span>
+                                <span class="text-sm font-medium">{{ mark.assessment_type }}</span>
+                                <div class="text-right">
+                                    <span class="text-sm">{{ mark.marks_obtained }}/{{ mark.max_marks }}</span>
+                                    <span class="text-sm text-gray-600 ml-2">({{ mark.percentage }}%)</span>
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
-                        <div class="mt-3 p-3 bg-blue-50 rounded">
-                            <span class="text-sm font-medium text-blue-900">Overall: {{ subject.overall_marks_percentage }}%</span>
+                        <div class="mt-3 p-3 bg-gray-50 rounded border">
+                            <span class="text-sm font-medium text-gray-900">
+                                Overall: {{ subject.overall_marks_percentage }}%
+                                {% if subject.overall_marks_percentage >= 75 %}
+                                    (Distinction)
+                                {% elif subject.overall_marks_percentage >= 50 %}
+                                    (Pass)
+                                {% elif subject.overall_marks_percentage >= 35 %}
+                                    (Pass)
+                                {% else %}
+                                    (Fail)
+                                {% endif %}
+                            </span>
                         </div>
                         {% else %}
                         <p class="text-sm text-gray-500">No marks recorded</p>
@@ -94,16 +108,23 @@
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm">Present:</span>
-                                <span class="text-sm font-medium text-green-600">{{ subject.attendance.present_classes }}</span>
+                                <span class="text-sm font-medium text-gray-900">{{ subject.attendance.present_classes }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm">Absent:</span>
-                                <span class="text-sm font-medium text-red-600">{{ subject.attendance.absent_classes }}</span>
+                                <span class="text-sm font-medium text-gray-900">{{ subject.attendance.absent_classes }}</span>
                             </div>
                         </div>
-                        <div class="mt-3 p-3 {% if subject.attendance.attendance_percentage >= 75 %}bg-green-50{% elif subject.attendance.attendance_percentage >= 50 %}bg-yellow-50{% else %}bg-red-50{% endif %} rounded">
-                            <span class="text-sm font-medium {% if subject.attendance.attendance_percentage >= 75 %}text-green-900{% elif subject.attendance.attendance_percentage >= 50 %}text-yellow-900{% else %}text-red-900{% endif %}">
+                        <div class="mt-3 p-3 bg-gray-50 rounded border">
+                            <span class="text-sm font-medium text-gray-900">
                                 Attendance: {{ subject.attendance.attendance_percentage }}%
+                                {% if subject.attendance.attendance_percentage >= 75 %}
+                                    (Good)
+                                {% elif subject.attendance.attendance_percentage >= 50 %}
+                                    (Average)
+                                {% else %}
+                                    (Poor)
+                                {% endif %}
                             </span>
                         </div>
                     </div>

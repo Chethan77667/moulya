@@ -13,8 +13,8 @@
                     <h1 class="text-xl font-semibold text-gray-900">Class Marks Report</h1>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <a href="{{ url_for('management.export_class_marks_report', subject_id=report.subject.id) }}{% if report.assessment_type %}?assessment_type={{ report.assessment_type }}{% endif %}" 
-                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                    <a href="{{ url_for('management.export_class_marks_report', subject_id=report.subject.id) }}{% if report.assessment_type and report.assessment_type != 'All Assessments' %}?assessment_type={{ report.assessment_type.lower().replace(' ', '') }}{% endif %}" 
+                       class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         📥 Export Excel
                     </a>
                     <span class="text-sm text-gray-700">{{ current_user.username }}</span>
@@ -43,19 +43,19 @@
             <div class="px-6 py-4">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">{{ report.statistics.total_students }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.total_students }}</div>
                         <div class="text-sm text-gray-500">Total Students</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600">{{ report.statistics.class_average }}%</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.class_average }}%</div>
                         <div class="text-sm text-gray-500">Class Average</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-purple-600">{{ report.statistics.passing_students }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.passing_students }}</div>
                         <div class="text-sm text-gray-500">Passing Students</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-red-600">{{ report.statistics.failing_students }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.failing_students }}</div>
                         <div class="text-sm text-gray-500">Failing Students</div>
                     </div>
                 </div>
@@ -84,25 +84,29 @@
                             {% for mark in student_data.marks %}
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {{ student_data.student.name }}
+                                    {{ student_data.student_name }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ student_data.student.roll_number }}
+                                    {{ student_data.roll_number }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ mark.assessment_type|title }}
+                                    {{ mark.assessment_type }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ mark.marks_obtained }}/{{ mark.total_marks }}
+                                    {{ mark.marks_obtained }}/{{ mark.max_marks }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ mark.percentage }}%
+                                    {% set percentage = (mark.marks_obtained / mark.max_marks * 100) | round(2) if mark.max_marks > 0 else 0 %}
+                                    {{ percentage }}%
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    {% if mark.percentage >= 35 %}
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Pass</span>
+                                    {% set percentage = (mark.marks_obtained / mark.max_marks * 100) | round(2) if mark.max_marks > 0 else 0 %}
+                                    {% if percentage >= 75 %}
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Distinction</span>
+                                    {% elif percentage >= 35 %}
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-800">Pass</span>
                                     {% else %}
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Fail</span>
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-300 text-gray-900">Fail</span>
                                     {% endif %}
                                 </td>
                             </tr>

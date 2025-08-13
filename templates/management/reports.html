@@ -21,21 +21,22 @@
             selectedStudentCourse: '',
             
             init() {
-                this.filteredStudents = this.allStudents;
+                this.filteredStudents = this.allStudents.slice(0, 50); // Show first 50 initially
             },
             
             filterStudentsByCourse() {
                 if (!this.selectedStudentCourse) {
-                    this.filteredStudents = this.allStudents;
+                    this.filteredStudents = this.allStudents.slice(0, 50);
                     this.studentSearch = '';
                     this.selectedStudent = '';
                     return;
                 }
                 
                 // Filter students by selected course
-                this.filteredStudents = this.allStudents.filter(student => 
+                const courseStudents = this.allStudents.filter(student => 
                     student.course_id == this.selectedStudentCourse
                 );
+                this.filteredStudents = courseStudents.slice(0, 50);
                 this.studentSearch = '';
                 this.selectedStudent = '';
             },
@@ -45,17 +46,18 @@
                     this.allStudents.filter(student => student.course_id == this.selectedStudentCourse) : 
                     this.allStudents;
                 
-                if (!this.studentSearch) {
-                    this.filteredStudents = baseStudents;
+                if (!this.studentSearch || this.studentSearch.length < 2) {
+                    this.filteredStudents = baseStudents.slice(0, 50);
                     return;
                 }
                 
                 const search = this.studentSearch.toLowerCase();
-                this.filteredStudents = baseStudents.filter(student => 
+                const filtered = baseStudents.filter(student => 
                     student.name.toLowerCase().includes(search) || 
                     student.roll_number.toLowerCase().includes(search) ||
                     (student.course_name && student.course_name.toLowerCase().includes(search))
                 );
+                this.filteredStudents = filtered.slice(0, 50);
             },
             
             selectStudent(student) {
@@ -132,11 +134,11 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             <!-- Student Report Card -->
-            <div class="bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg rounded-xl border border-blue-200">
+            <div class="bg-white shadow rounded-lg border border-gray-200">
                 <div class="px-6 py-6">
                     <div class="flex items-center mb-4">
                         <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <div class="h-10 w-10 bg-gray-900 rounded-lg flex items-center justify-center">
                                 <span class="text-white font-bold">📊</span>
                             </div>
                         </div>
@@ -165,7 +167,7 @@
                                    x-model="studentSearch" 
                                    @input="filterStudents()" 
                                    @focus="showStudentDropdown = true"
-                                   placeholder="Type student name or roll number..."
+                                   placeholder="Type at least 2 characters to search by name or roll number..."
                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                             
                             <!-- Searchable Dropdown -->
@@ -173,29 +175,38 @@
                                  x-transition
                                  class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
                                  @click.away="showStudentDropdown = false">
-                                <template x-for="student in filteredStudents.slice(0, 50)" :key="student.id">
+                                <template x-for="student in filteredStudents" :key="student.id">
                                     <div @click="selectStudent(student)" 
                                          class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100">
-                                        <div class="flex items-center">
-                                            <span class="font-medium" x-text="student.name"></span>
-                                            <span class="ml-2 text-gray-500" x-text="`(${student.roll_number})`"></span>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="font-medium" x-text="student.name"></span>
+                                                <span class="ml-2 text-blue-600 font-mono text-sm" x-text="`(${student.roll_number})`"></span>
+                                            </div>
+                                            <div class="text-xs text-gray-500" x-text="`Y${student.academic_year} S${student.current_semester}`"></div>
                                         </div>
                                         <div class="text-sm text-gray-500" x-text="student.course_name"></div>
                                     </div>
                                 </template>
-                                <div x-show="filteredStudents.length > 50" class="px-3 py-2 text-sm text-gray-500 border-t">
+                                <div x-show="filteredStudents.length === 50 && studentSearch.length >= 2" class="px-3 py-2 text-sm text-gray-500 border-t">
                                     Showing first 50 results. Type more to narrow down...
+                                </div>
+                                <div x-show="filteredStudents.length === 0 && studentSearch.length >= 2" class="px-3 py-2 text-sm text-gray-500">
+                                    No students found matching your search.
+                                </div>
+                                <div x-show="studentSearch.length < 2" class="px-3 py-2 text-sm text-gray-500">
+                                    Type at least 2 characters to search...
                                 </div>
                             </div>
                         </div>
                         
                         <div class="flex space-x-2">
                             <button @click="generateStudentReport()" 
-                                    class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                    class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
                             <button @click="selectedStudent && (window.location.href = `/management/reports/export/student/${selectedStudent}`)" 
-                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
                         </div>
@@ -204,11 +215,11 @@
             </div>
 
             <!-- Class Marks Report Card -->
-            <div class="bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg rounded-xl border border-purple-200">
+            <div class="bg-white shadow rounded-lg border border-gray-200">
                 <div class="px-6 py-6">
                     <div class="flex items-center mb-4">
                         <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-purple-600 rounded-lg flex items-center justify-center">
+                            <div class="h-10 w-10 bg-gray-900 rounded-lg flex items-center justify-center">
                                 <span class="text-white font-bold">📈</span>
                             </div>
                         </div>
@@ -242,11 +253,11 @@
                         
                         <div class="flex space-x-2">
                             <button @click="generateClassMarksReport()" 
-                                    class="flex-1 bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                    class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
                             <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
-                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
                         </div>
@@ -255,11 +266,11 @@
             </div>
 
             <!-- Class Attendance Report Card -->
-            <div class="bg-gradient-to-br from-orange-50 to-orange-100 shadow-lg rounded-xl border border-orange-200">
+            <div class="bg-white shadow rounded-lg border border-gray-200">
                 <div class="px-6 py-6">
                     <div class="flex items-center mb-4">
                         <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-orange-600 rounded-lg flex items-center justify-center">
+                            <div class="h-10 w-10 bg-gray-900 rounded-lg flex items-center justify-center">
                                 <span class="text-white font-bold">📅</span>
                             </div>
                         </div>
@@ -310,11 +321,11 @@
                         
                         <div class="flex space-x-2">
                             <button @click="generateClassAttendanceReport()" 
-                                    class="flex-1 bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                    class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
                             <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/attendance/${selectedSubject}?month=${selectedMonth}&year=${selectedYear}`)" 
-                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
                         </div>
@@ -323,11 +334,11 @@
             </div>
 
             <!-- Course Overview Report Card -->
-            <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 shadow-lg rounded-xl border border-indigo-200">
+            <div class="bg-white shadow rounded-lg border border-gray-200">
                 <div class="px-6 py-6">
                     <div class="flex items-center mb-4">
                         <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+                            <div class="h-10 w-10 bg-gray-900 rounded-lg flex items-center justify-center">
                                 <span class="text-white font-bold">🎓</span>
                             </div>
                         </div>
@@ -350,11 +361,11 @@
                         
                         <div class="flex space-x-2">
                             <button @click="generateCourseOverviewReport()" 
-                                    class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                    class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
                             <button @click="selectedCourse && (window.open(`/management/reports/export/course/${selectedCourse}`, '_blank'))" 
-                                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
                         </div>
@@ -369,15 +380,15 @@
                 <h3 class="text-lg font-medium text-gray-900 mb-4">📊 Quick Statistics</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">{{ courses|length if courses else 0 }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ courses|length if courses else 0 }}</div>
                         <div class="text-sm text-gray-500">Active Courses</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-purple-600">{{ subjects|length if subjects else 0 }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ subjects|length if subjects else 0 }}</div>
                         <div class="text-sm text-gray-500">Active Subjects</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-orange-600">
+                        <div class="text-2xl font-bold text-gray-900">
                             {% set total_enrollments = 0 %}
                             {% if subjects %}
                                 {% for subject in subjects %}
@@ -389,7 +400,7 @@
                         <div class="text-sm text-gray-500">Total Enrollments</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-indigo-600">4</div>
+                        <div class="text-2xl font-bold text-gray-900">4</div>
                         <div class="text-sm text-gray-500">Report Types</div>
                     </div>
                 </div>

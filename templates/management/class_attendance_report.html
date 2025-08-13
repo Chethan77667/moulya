@@ -14,7 +14,7 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     <a href="{{ url_for('management.export_class_attendance_report', subject_id=report.subject.id, month=report.month, year=report.year) }}" 
-                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                       class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         📥 Export Excel
                     </a>
                     <span class="text-sm text-gray-700">{{ current_user.username }}</span>
@@ -29,7 +29,7 @@
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-900">{{ report.subject.name }} ({{ report.subject.code }})</h2>
                 <p class="text-sm text-gray-600">{{ report.subject.course }} - Year {{ report.subject.year }}, Semester {{ report.subject.semester }}</p>
-                <p class="text-sm text-blue-600">Period: {{ report.month }}/{{ report.year }}</p>
+                <p class="text-sm text-blue-600">Period: {{ report.month }} {{ report.year }}</p>
             </div>
         </div>
 
@@ -41,19 +41,23 @@
             <div class="px-6 py-4">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">{{ report.statistics.total_students }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.total_students }}</div>
                         <div class="text-sm text-gray-500">Total Students</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600">{{ report.statistics.class_average_attendance }}%</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.total_classes_conducted }}</div>
+                        <div class="text-sm text-gray-500">Classes Conducted</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.class_average_attendance }}%</div>
                         <div class="text-sm text-gray-500">Class Average</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-purple-600">{{ report.statistics.students_with_good_attendance }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.students_with_good_attendance }}</div>
                         <div class="text-sm text-gray-500">Good Attendance (≥75%)</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-red-600">{{ report.statistics.students_with_poor_attendance }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.students_with_poor_attendance }}</div>
                         <div class="text-sm text-gray-500">Poor Attendance (<50%)</div>
                     </div>
                 </div>
@@ -90,10 +94,10 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {{ student.total_classes }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {{ student.present_classes }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {{ student.absent_classes }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -101,11 +105,11 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 {% if student.status == 'Good' %}
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Good</span>
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">Good</span>
                                 {% elif student.status == 'Average' %}
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Average</span>
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-800">Average</span>
                                 {% else %}
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Poor</span>
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-300 text-gray-900">Poor</span>
                                 {% endif %}
                             </td>
                         </tr>

@@ -14,7 +14,7 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     <a href="{{ url_for('management.export_course_overview_report', course_id=report.course.id) }}" 
-                       class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                       class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         📥 Export Excel
                     </a>
                     <span class="text-sm text-gray-700">{{ current_user.username }}</span>
@@ -33,15 +33,15 @@
             <div class="px-6 py-4">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">{{ report.total_students }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.total_students }}</div>
                         <div class="text-sm text-gray-500">Total Students</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-purple-600">{{ report.total_subjects }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.total_subjects }}</div>
                         <div class="text-sm text-gray-500">Total Subjects</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600">{{ report.course.duration_years }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.course.duration_years }}</div>
                         <div class="text-sm text-gray-500">Duration (Years)</div>
                     </div>
                 </div>
@@ -86,17 +86,17 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                    {% if subject.marks_statistics.passing_rate >= 80 %}bg-green-100 text-green-800
-                                    {% elif subject.marks_statistics.passing_rate >= 60 %}bg-yellow-100 text-yellow-800
-                                    {% else %}bg-red-100 text-red-800{% endif %}">
+                                    {% if subject.marks_statistics.passing_rate >= 80 %}bg-gray-100 text-gray-800
+                                    {% elif subject.marks_statistics.passing_rate >= 60 %}bg-gray-200 text-gray-800
+                                    {% else %}bg-gray-300 text-gray-900{% endif %}">
                                     {{ subject.marks_statistics.passing_rate }}%
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                    {% if subject.attendance_statistics.average_attendance >= 75 %}bg-green-100 text-green-800
-                                    {% elif subject.attendance_statistics.average_attendance >= 50 %}bg-yellow-100 text-yellow-800
-                                    {% else %}bg-red-100 text-red-800{% endif %}">
+                                    {% if subject.attendance_statistics.average_attendance >= 75 %}bg-gray-100 text-gray-800
+                                    {% elif subject.attendance_statistics.average_attendance >= 50 %}bg-gray-200 text-gray-800
+                                    {% else %}bg-gray-300 text-gray-900{% endif %}">
                                     {{ subject.attendance_statistics.average_attendance }}%
                                 </span>
                             </td>
