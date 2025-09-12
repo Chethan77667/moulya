@@ -23,6 +23,7 @@
 .installed.cfg
 *.egg
 MANIFEST
+*.pyc
 
 # IDE
 /.vscode
