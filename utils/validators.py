@@ -10,12 +10,13 @@ def validate_lecturer_id(lecturer_id):
     if not lecturer_id or len(lecturer_id.strip()) == 0:
         return False, "Lecturer ID is required"
     
+    lecturer_id = lecturer_id.strip()
     if len(lecturer_id) > 20:
         return False, "Lecturer ID must be 20 characters or less"
     
-    # Allow alphanumeric and some special characters
-    if not re.match(r'^[A-Za-z0-9_-]+$', lecturer_id):
-        return False, "Lecturer ID can only contain letters, numbers, hyphens, and underscores"
+    # Allow alphanumeric, spaces, hyphens, underscores, and dots
+    if not re.match(r'^[A-Za-z0-9\s_\-\.]+$', lecturer_id):
+        return False, "Lecturer ID can only contain letters, numbers, spaces, hyphens, underscores, and dots"
     
     return True, "Valid lecturer ID"
 
@@ -38,12 +39,13 @@ def validate_name(name, field_name="Name"):
     if not name or len(name.strip()) == 0:
         return False, f"{field_name} is required"
     
+    name = name.strip()
     if len(name) > 100:
         return False, f"{field_name} must be 100 characters or less"
     
-    # Allow letters, spaces, and common name characters
-    if not re.match(r'^[A-Za-z\s\.\-\']+$', name):
-        return False, f"{field_name} can only contain letters, spaces, periods, hyphens, and apostrophes"
+    # Allow letters, spaces, and common name characters including numbers and special chars
+    if not re.match(r'^[A-Za-z0-9\s\.\-\'\&\(\)]+$', name):
+        return False, f"{field_name} can only contain letters, numbers, spaces, periods, hyphens, apostrophes, ampersands, and parentheses"
     
     return True, f"Valid {field_name.lower()}"
 

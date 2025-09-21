@@ -8,125 +8,7 @@
 <script defer>
   // Get CSRF token from meta tag
   const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-  function initLecturerForm() {
-    return {
-      showAddLecturerModal: false,
-      showBulkUploadModal: false,
-      errors: {},
-      formData: {
-        lecturer_id: '',
-        name: '',
-        course_id: ''
-      },
-      validateForm() {
-        this.errors = {};
-        if (!this.formData.lecturer_id) {
-          this.errors.lecturer_id = 'Lecturer ID is required';
-        }
-        if (!this.formData.name) {
-          this.errors.name = 'Name is required';
-        }
-        return Object.keys(this.errors).length === 0;
-      },
-      handleSubmit(event) {
-        if (!this.validateForm()) {
-          event.preventDefault();
-          return;
-        }
-
-        const form = event.target;
-        const formData = new FormData(form);
-
-        fetch(form.action, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-Token': csrfToken
-          }
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            Swal.fire({
-              title: 'Success!',
-              text: data.message,
-              icon: 'success'
-            }).then(() => {
-              this.resetForm();
-              this.showAddLecturerModal = false;
-              window.location.reload();
-            });
-          } else {
-            Swal.fire({
-              title: 'Error!',
-              text: data.message,
-              icon: 'error'
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          Swal.fire({
-            title: 'Error!',
-            text: 'An unexpected error occurred. Please try again.',
-            icon: 'error'
-          });
-        });
-
-        event.preventDefault();
-      },
-      resetForm() {
-        this.formData = {
-          lecturer_id: '',
-          name: '',
-          course_id: ''
-        };
-        this.errors = {};
-      },
-      handleBulkUpload(event) {
-        const form = event.target;
-        const formData = new FormData(form);
-        
-        fetch(form.action, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRF-Token': csrfToken
-          }
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            Swal.fire({
-              title: 'Success!',
-              text: data.message,
-              icon: 'success'
-            }).then(() => {
-              this.showBulkUploadModal = false;
-              window.location.reload();
-            });
-          } else {
-            Swal.fire({
-              title: 'Error!',
-              text: data.message || 'Failed to upload file. Please try again.',
-              icon: 'error'
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          Swal.fire({
-            title: 'Error!',
-            text: 'An unexpected error occurred. Please try again.',
-            icon: 'error'
-          });
-        });
-      }
-    }
-  }
-
+  
   // Toggle lecturer status with SweetAlert
   function toggleLecturerStatus(lecturerId, lecturerName, isActive) {
     const action = isActive ? 'deactivate' : 'activate';
@@ -253,11 +135,117 @@
       Swal.fire('Error!', 'Failed to retrieve password.', 'error');
     });
   }
+
+  // Open subject assignment modal
+  function openSubjectAssignmentModal(lecturerId, lecturerName) {
+    // Get the Alpine.js component instance
+    const component = document.querySelector('[x-data]')._x_dataStack[0];
+    component.selectedLecturer = { id: lecturerId, name: lecturerName };
+    component.showSubjectAssignmentModal = true;
+  }
 </script>
 {% endblock %}
 
 {% block content %}
-<div x-data="initLecturerForm()">
+<div x-data="{ 
+  showAddLecturerModal: false, 
+  showBulkUploadModal: false, 
+  showSubjectAssignmentModal: false,
+  selectedLecturer: null,
+  errors: {},
+  formData: { lecturer_id: '', name: '', subject_ids: [] },
+  validateForm() {
+    this.errors = {};
+    if (!this.formData.lecturer_id) this.errors.lecturer_id = 'Lecturer ID is required';
+    if (!this.formData.name) this.errors.name = 'Name is required';
+    return Object.keys(this.errors).length === 0;
+  },
+  handleSubmit(event) {
+    if (!this.validateForm()) { event.preventDefault(); return; }
+    const form = event.target;
+    const formData = new FormData(form);
+    fetch(form.action, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        Swal.fire('Success!', data.message, 'success').then(() => {
+          this.resetForm();
+          this.showAddLecturerModal = false;
+          window.location.reload();
+        });
+      } else {
+        Swal.fire('Error!', data.message, 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire('Error!', 'An unexpected error occurred. Please try again.', 'error');
+    });
+    event.preventDefault();
+  },
+  resetForm() {
+    this.formData = { lecturer_id: '', name: '', subject_ids: [] };
+    this.errors = {};
+  },
+  handleBulkUpload(event) {
+    const form = event.target;
+    const formData = new FormData(form);
+    fetch(form.action, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        Swal.fire('Success!', data.message, 'success').then(() => {
+          this.showBulkUploadModal = false;
+          window.location.reload();
+        });
+      } else {
+        Swal.fire('Error!', data.message || 'Failed to upload file. Please try again.', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire('Error!', 'An unexpected error occurred. Please try again.', 'error');
+    });
+  },
+  handleSubjectAssignment(event) {
+    const form = event.target;
+    const formData = new FormData(form);
+    const subjectIds = formData.getAll('subject_ids');
+    if (!this.selectedLecturer || subjectIds.length === 0) {
+      Swal.fire('Error!', 'Please select at least one subject.', 'error');
+      return;
+    }
+    fetch(`/management/lecturers/${this.selectedLecturer.id}/assign-subjects`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        Swal.fire('Success!', data.message, 'success').then(() => {
+          this.showSubjectAssignmentModal = false;
+          this.selectedLecturer = null;
+          window.location.reload();
+        });
+      } else {
+        Swal.fire('Error!', data.message, 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      Swal.fire('Error!', 'An unexpected error occurred. Please try again.', 'error');
+    });
+  }
+}">
 <div class="min-h-screen bg-gray-50">
     <!-- Navigation -->
     <nav class="bg-white shadow-sm border-b border-gray-200">
@@ -334,15 +322,15 @@
                             </div>
                         </div>
                         <div>
-                            <label for="course_id" class="block text-sm font-medium text-gray-700">Course</label>
-                            <select name="course_id" id="course_id"
-                                    x-model="formData.course_id"
+                            <label for="subject_ids" class="block text-sm font-medium text-gray-700">Assign Subjects</label>
+                            <select name="subject_ids" id="subject_ids" multiple
+                                    x-model="formData.subject_ids"
                                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
-                                <option value="">Select Course</option>
-                                {% for course in courses %}
-                                <option value="{{ course.id }}">{{ course.name }} ({{ course.code }})</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course.name }}</option>
                                 {% endfor %}
                             </select>
+                            <p class="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple subjects</p>
                         </div>
                         <div class="flex space-x-2">
                             <button type="button" @click="showAddLecturerModal = false" 
@@ -383,7 +371,7 @@
                             <ul class="list-disc list-inside mt-1 space-y-1">
                                 <li>Column A: Lecturer ID (required)</li>
                                 <li>Column B: Full Name (required)</li>
-                                <li>Column C: Course Code (optional)</li>
+                                <li>Column C: Subject Code (optional)</li>
                             </ul>
                         </div>
                         <div class="flex space-x-2">
@@ -394,6 +382,47 @@
                             <button type="submit" 
                                     class="flex-1 bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 Upload
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject Assignment Modal -->
+        <div x-show="showSubjectAssignmentModal" 
+             x-transition.opacity
+             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+             x-cloak
+             @click.away="showSubjectAssignmentModal = false">
+            <div class="bg-white rounded-lg w-full max-w-md">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Assign Subjects to Lecturer</h3>
+                    <div x-show="selectedLecturer" class="mb-4">
+                        <p class="text-sm text-gray-600">
+                            Assigning subjects to: <span class="font-medium" x-text="selectedLecturer.name"></span>
+                        </p>
+                    </div>
+                    <form method="POST" action="#" class="space-y-4" @submit.prevent="handleSubjectAssignment">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                        <div>
+                            <label for="assignment_subject_ids" class="block text-sm font-medium text-gray-700">Select Subjects</label>
+                            <select name="subject_ids" id="assignment_subject_ids" multiple required
+                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <p class="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple subjects</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="button" @click="showSubjectAssignmentModal = false" 
+                                    class="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">
+                                Cancel
+                            </button>
+                            <button type="submit" 
+                                    class="flex-1 bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                                Assign Subjects
                             </button>
                         </div>
                     </form>
@@ -442,7 +471,7 @@
                     <tr>
                         <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lecturer Info</th>
                         <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Login Credentials</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Subjects</th>
                         <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -471,7 +500,23 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {{ lecturer.course.name if lecturer.course else 'Not Assigned' }}
+                            {% set assigned_subjects = lecturer.get_assigned_subjects() %}
+                            {% if assigned_subjects %}
+                                <div class="space-y-1">
+                                    {% for subject in assigned_subjects[:2] %}
+                                    <div class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                        {{ subject.name }} ({{ subject.code }})
+                                    </div>
+                                    {% endfor %}
+                                    {% if assigned_subjects|length > 2 %}
+                                    <div class="text-xs text-gray-500">
+                                        +{{ assigned_subjects|length - 2 }} more
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-gray-400">No subjects assigned</span>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if lecturer.is_active %}
@@ -486,6 +531,11 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div class="flex space-x-2">
+                                <button onclick="openSubjectAssignmentModal({{ lecturer.id }}, '{{ lecturer.name }}')" 
+                                        class="text-green-600 hover:text-green-800">
+                                    Assign Subjects
+                                </button>
+                                <span class="text-gray-400">|</span>
                                 <button onclick="toggleLecturerStatus({{ lecturer.id }}, '{{ lecturer.name }}', {{ lecturer.is_active|lower }})" 
                                         class="{% if lecturer.is_active %}text-red-600 hover:text-red-800{% else %}text-green-600 hover:text-green-800{% endif %}">
                                     {% if lecturer.is_active %}Deactivate{% else %}Activate{% endif %}

@@ -45,7 +45,6 @@ class Lecturer(db.Model):
     password_hash = db.Column(db.String(120), nullable=False)
     password_encrypted = db.Column(db.Text, nullable=True)  # Encrypted password for management access
     email = db.Column(db.String(120), unique=True, nullable=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
@@ -110,8 +109,7 @@ class Lecturer(db.Model):
             'lecturer_id': self.lecturer_id,
             'name': self.name,
             'username': self.username,
-            'course_id': self.course_id,
-            'course_name': self.course.name if self.course else None,
+            'assigned_subjects': [subject.name for subject in self.get_assigned_subjects()],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
             'is_active': self.is_active

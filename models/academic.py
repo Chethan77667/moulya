@@ -22,7 +22,6 @@ class Course(db.Model):
     # Relationships
     students = db.relationship('Student', backref='course', lazy='dynamic')
     subjects = db.relationship('Subject', backref='course', lazy='dynamic')
-    lecturers = db.relationship('Lecturer', backref='course', lazy='dynamic')
     
     def get_subjects_by_year_semester(self, year, semester):
         """Get subjects for a specific year and semester"""
