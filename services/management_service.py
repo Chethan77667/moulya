@@ -238,6 +238,9 @@ class ManagementService:
                     # Check if there's an inactive lecturer with the same ID - if so, we'll replace it
                     existing_inactive_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=False).first()
                     if existing_inactive_lecturer:
+                        # Delete all subject assignments for this lecturer first to avoid foreign key constraint violations
+                        from models.assignments import SubjectAssignment
+                        SubjectAssignment.query.filter_by(lecturer_id=existing_inactive_lecturer.id).delete()
                         # Delete the inactive lecturer so we can create a new one with the same ID
                         db.session.delete(existing_inactive_lecturer)
                     

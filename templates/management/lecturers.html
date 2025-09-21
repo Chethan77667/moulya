@@ -141,6 +141,7 @@
     // Get the Alpine.js component instance
     const component = document.querySelector('[x-data]')._x_dataStack[0];
     component.selectedLecturer = { id: lecturerId, name: lecturerName };
+    component.resetSubjectAssignment();
     component.showSubjectAssignmentModal = true;
   }
 </script>
@@ -152,6 +153,14 @@
   showBulkUploadModal: false, 
   showSubjectAssignmentModal: false,
   selectedLecturer: null,
+  selectedSubjects: [],
+  searchQuery: '',
+  showDropdown: false,
+  allSubjects: [
+    {% for subject in subjects %}
+    { id: {{ subject.id }}, name: '{{ subject.name }}', code: '{{ subject.code }}', course_name: '{{ subject.course.name }}' }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ],
   errors: {},
   formData: { lecturer_id: '', name: '', subject_ids: [] },
   validateForm() {
@@ -190,6 +199,11 @@
   resetForm() {
     this.formData = { lecturer_id: '', name: '', subject_ids: [] };
     this.errors = {};
+  },
+  resetSubjectAssignment() {
+    this.selectedSubjects = [];
+    this.searchQuery = '';
+    this.showDropdown = false;
   },
   handleBulkUpload(event) {
     const form = event.target;
@@ -234,6 +248,8 @@
         Swal.fire('Success!', data.message, 'success').then(() => {
           this.showSubjectAssignmentModal = false;
           this.selectedLecturer = null;
+          this.selectedSubjects = [];
+          this.searchQuery = '';
           window.location.reload();
         });
       } else {
@@ -243,6 +259,34 @@
     .catch(error => {
       console.error('Error:', error);
       Swal.fire('Error!', 'An unexpected error occurred. Please try again.', 'error');
+    });
+  },
+  toggleSubject(subjectId) {
+    const index = this.selectedSubjects.indexOf(subjectId);
+    if (index > -1) {
+      this.selectedSubjects.splice(index, 1);
+    } else {
+      this.selectedSubjects.push(subjectId);
+    }
+  },
+  removeSubject(subjectId) {
+    const index = this.selectedSubjects.indexOf(subjectId);
+    if (index > -1) {
+      this.selectedSubjects.splice(index, 1);
+    }
+  },
+  getFilteredSubjects() {
+    if (!this.searchQuery) return this.allSubjects;
+    return this.allSubjects.filter(subject => 
+      subject.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+      subject.code.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+      subject.course_name.toLowerCase().includes(this.searchQuery.toLowerCase())
+    );
+  },
+  getSelectedSubjectNames() {
+    return this.selectedSubjects.map(id => {
+      const subject = this.allSubjects.find(s => s.id == id);
+      return subject ? `${subject.name} (${subject.code})` : '';
     });
   }
 }">
@@ -405,15 +449,87 @@
                     </div>
                     <form method="POST" action="#" class="space-y-4" @submit.prevent="handleSubjectAssignment">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                        
+                        <!-- Hidden inputs for selected subjects -->
+                        <template x-for="subjectId in selectedSubjects">
+                            <input type="hidden" name="subject_ids" :value="subjectId">
+                        </template>
+                        
                         <div>
                             <label for="assignment_subject_ids" class="block text-sm font-medium text-gray-700">Select Subjects</label>
-                            <select name="subject_ids" id="assignment_subject_ids" multiple required
-                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
-                                {% for subject in subjects %}
-                                <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course.name }}</option>
-                                {% endfor %}
-                            </select>
-                            <p class="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple subjects</p>
+                            
+                            <!-- Selected subjects tags -->
+                            <div x-show="selectedSubjects.length > 0" class="mb-2 flex flex-wrap gap-1">
+                                <template x-for="subjectId in selectedSubjects">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                        <span x-text="getSelectedSubjectNames()[selectedSubjects.indexOf(subjectId)]"></span>
+                                        <button type="button" @click="removeSubject(subjectId)" class="ml-1 text-blue-600 hover:text-blue-800">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </span>
+                                </template>
+                            </div>
+                            
+                            <!-- Custom multi-select dropdown -->
+                            <div class="relative">
+                                <div @click="showDropdown = !showDropdown" 
+                                     class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white cursor-pointer focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span x-text="selectedSubjects.length > 0 ? `${selectedSubjects.length} subject(s) selected` : 'Select subjects...'" 
+                                              class="text-gray-500"></span>
+                                        <svg class="w-5 h-5 text-gray-400 transform transition-transform" 
+                                             :class="{'rotate-180': showDropdown}" 
+                                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                
+                                <!-- Dropdown menu -->
+                                <div x-show="showDropdown" 
+                                     x-transition:enter="transition ease-out duration-100"
+                                     x-transition:enter-start="transform opacity-0 scale-95"
+                                     x-transition:enter-end="transform opacity-100 scale-100"
+                                     x-transition:leave="transition ease-in duration-75"
+                                     x-transition:leave-start="transform opacity-100 scale-100"
+                                     x-transition:leave-end="transform opacity-0 scale-95"
+                                     class="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
+                                     @click.away="showDropdown = false">
+                                    
+                                    <!-- Search input -->
+                                    <div class="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2">
+                                        <input type="text" 
+                                               x-model="searchQuery"
+                                               placeholder="Search subjects..."
+                                               class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black">
+                                    </div>
+                                    
+                                    <!-- Subject options -->
+                                    <div class="py-1">
+                                        <template x-for="subject in getFilteredSubjects()" :key="subject.id">
+                                            <div @click="toggleSubject(subject.id)" 
+                                                 class="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer">
+                                                <input type="checkbox" 
+                                                       :checked="selectedSubjects.includes(subject.id)"
+                                                       class="h-4 w-4 text-black focus:ring-black border-gray-300 rounded mr-3">
+                                                <div class="flex-1">
+                                                    <div class="text-sm font-medium text-gray-900" x-text="subject.name"></div>
+                                                    <div class="text-xs text-gray-500" x-text="`${subject.code} - ${subject.course_name}`"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        
+                                        <!-- No results message -->
+                                        <div x-show="getFilteredSubjects().length === 0" class="px-3 py-2 text-sm text-gray-500">
+                                            No subjects found
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <p class="mt-1 text-sm text-gray-500">Search and select multiple subjects</p>
                         </div>
                         <div class="flex space-x-2">
                             <button type="button" @click="showSubjectAssignmentModal = false" 

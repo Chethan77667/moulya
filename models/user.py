@@ -6,6 +6,7 @@ Management and Lecturer user models
 from database import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+import re
 
 class Management(db.Model):
     """Management user model for administrative access"""
@@ -90,7 +91,9 @@ class Lecturer(db.Model):
         """Generate username from name and lecturer ID in BBHC format"""
         # Take first name and add BBHC format
         first_name = name.split()[0].lower()
-        return f"bbhc_{first_name}_{lecturer_id.lower()}"
+        # Sanitize lecturer_id to only contain valid username characters (letters, numbers, underscores)
+        sanitized_lecturer_id = re.sub(r'[^A-Za-z0-9_]', '_', lecturer_id.lower())
+        return f"bbhc_{first_name}_{sanitized_lecturer_id}"
     
     @staticmethod
     def generate_password():
@@ -117,3 +120,52 @@ class Lecturer(db.Model):
     
     def __repr__(self):
         return f'<Lecturer {self.lecturer_id}: {self.name}>'
+
+
+class Administrator(db.Model):
+    """Administrator model for high-level system control"""
+    __tablename__ = 'administrator'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(120), nullable=False)
+    secret_path = db.Column(db.String(36), unique=True, nullable=False)  # UUID for secret access
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime)
+    is_active = db.Column(db.Boolean, default=True)
+    permissions = db.Column(db.Text, default='all')  # JSON string of permissions
+
+    def set_password(self, password):
+        """Set password hash"""
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Check password against hash"""
+        return check_password_hash(self.password_hash, password)
+
+    def update_last_login(self):
+        """Update last login timestamp"""
+        self.last_login = datetime.utcnow()
+        db.session.commit()
+
+    def has_permission(self, permission):
+        """Check if admin has specific permission"""
+        if self.permissions == 'all':
+            return True
+        permissions = self.permissions.split(',') if self.permissions else []
+        return permission in permissions
+
+    def get_permissions_list(self):
+        """Get list of permissions"""
+        if self.permissions == 'all':
+            return ['all']
+        return self.permissions.split(',') if self.permissions else []
+
+    @staticmethod
+    def generate_secret_path():
+        """Generate a random UUID for secret path access"""
+        import uuid
+        return str(uuid.uuid4())
+
+    def __repr__(self):
+        return f'<Administrator {self.username}>'
