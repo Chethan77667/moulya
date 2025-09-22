@@ -1,9 +1,55 @@
 /.kiro
 /.vscode
-/AJAX_FIXES_SUMMARY.md
+/__pycache__/
+/*.pyc
+/*.pyo
+/*.pyd
+/.Python
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+/share/python-wheels/
+/pip-wheel-metadata/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+
+# IDE
+/.vscode
+/.idea
+
+# Logs
+*.log
+
+# Database
+instance/moulya_college.db
+instance/*.db
+
+# Temp files
+*.tmp
+*.temp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+AJAX_FIXES_SUMMARY.md
 /CSRF_FIXES_SUMMARY.md
 /CSRF_TOKEN_FIXES.md
 /PASSWORD_ENCRYPTION_SUMMARY.md
 /REPORTING_SYSTEM_SUMMARY.md
 /SYSTEM_SUMMARY.md
 /VERIFICATION_REPORT.md
+__pycache__

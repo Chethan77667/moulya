@@ -43,16 +43,16 @@ def lecturers():
         search = request.args.get('search', '', type=str)
         
         lecturers_data = ManagementService.get_lecturers_paginated(page, search)
-        courses = Course.query.filter_by(is_active=True).all()
+        subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
         return render_template('management/lecturers.html', 
                              lecturers=lecturers_data['lecturers'],
                              pagination=lecturers_data['pagination'],
                              search=search,
-                             courses=courses)
+                             subjects=subjects)
     except Exception as e:
         flash(f'Error loading lecturers: {str(e)}', 'error')
-        courses = Course.query.filter_by(is_active=True).all()
-        return render_template('management/lecturers.html', lecturers=[], pagination=None, courses=courses)
+        subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+        return render_template('management/lecturers.html', lecturers=[], pagination=None, subjects=subjects)
 
 @management_bp.route('/students')
 @login_required('management')
@@ -133,7 +133,7 @@ def add_lecturer():
         lecturer_data = {
             'lecturer_id': request.form.get('lecturer_id', '').strip(),
             'name': request.form.get('name', '').strip(),
-            'course_id': int(request.form.get('course_id')) if request.form.get('course_id') else None
+            'subject_ids': request.form.getlist('subject_ids')
         }
         
         success, message = ManagementService.add_lecturer(lecturer_data)
@@ -161,19 +161,32 @@ def bulk_add_lecturers():
     """Bulk add lecturers from Excel file"""
     try:
         if 'file' not in request.files:
-            flash('No file selected', 'error')
+            error_msg = 'No file selected'
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': error_msg})
+            flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
         
         file = request.files['file']
         if file.filename == '':
-            flash('No file selected', 'error')
+            error_msg = 'No file selected'
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': error_msg})
+            flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
         
         if not file.filename.lower().endswith(('.xlsx', '.xls')):
-            flash('Please upload an Excel file (.xlsx or .xls)', 'error')
+            error_msg = 'Please upload an Excel file (.xlsx or .xls)'
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': error_msg})
+            flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
         
         success, message, credentials, errors = ManagementService.bulk_add_lecturers(file.read())
+        
+        # Handle AJAX requests
+        if is_ajax_request():
+            return jsonify({'success': success, 'message': message})
         
         if success:
             flash(message, 'success')
@@ -187,7 +200,10 @@ def bulk_add_lecturers():
                 flash(f'Errors: {"; ".join(errors[:5])}', 'error')
                 
     except Exception as e:
-        flash(f'Error processing file: {str(e)}', 'error')
+        error_msg = f'Error processing file: {str(e)}'
+        if is_ajax_request():
+            return jsonify({'success': False, 'message': error_msg})
+        flash(error_msg, 'error')
     
     return redirect(url_for('management.lecturers'))
 
@@ -265,6 +281,38 @@ def get_lecturer_password(lecturer_id):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error retrieving password: {str(e)}'})
 
+@management_bp.route('/lecturers/<int:lecturer_id>/assign-subjects', methods=['POST'])
+@login_required('management')
+def assign_subjects_to_lecturer(lecturer_id):
+    """Assign subjects to a lecturer"""
+    try:
+        subject_ids = request.form.getlist('subject_ids')
+        
+        if not subject_ids:
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': 'Please select at least one subject'})
+            flash('Please select at least one subject', 'error')
+            return redirect(url_for('management.lecturers'))
+        
+        success, message = ManagementService.assign_subjects_to_lecturer(lecturer_id, subject_ids)
+        
+        if is_ajax_request():
+            return jsonify({'success': success, 'message': message})
+        
+        if success:
+            flash(message, 'success')
+        else:
+            flash(message, 'error')
+        
+        return redirect(url_for('management.lecturers'))
+        
+    except Exception as e:
+        error_msg = f'Error assigning subjects: {str(e)}'
+        if is_ajax_request():
+            return jsonify({'success': False, 'message': error_msg})
+        flash(error_msg, 'error')
+        return redirect(url_for('management.lecturers'))
+
 @management_bp.route('/lecturers/credentials/export')
 @login_required('management')
 def export_lecturer_credentials():
@@ -284,7 +332,7 @@ def export_lecturer_credentials():
         ws.title = "Lecturer Credentials"
         
         # Headers
-        headers = ['Lecturer ID', 'Name', 'Username', 'Password', 'Course', 'Created Date']
+        headers = ['Lecturer ID', 'Name', 'Username', 'Password', 'Assigned Subjects', 'Created Date']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
             cell.font = Font(bold=True)
@@ -296,7 +344,8 @@ def export_lecturer_credentials():
             ws.cell(row=row, column=2, value=lecturer.name)
             ws.cell(row=row, column=3, value=lecturer.username)
             ws.cell(row=row, column=4, value=lecturer.get_decrypted_password() or 'N/A')
-            ws.cell(row=row, column=5, value=lecturer.course.name if lecturer.course else 'Not Assigned')
+            assigned_subjects = [subject.name for subject in lecturer.get_assigned_subjects()]
+            ws.cell(row=row, column=5, value=', '.join(assigned_subjects) if assigned_subjects else 'No subjects assigned')
             ws.cell(row=row, column=6, value=lecturer.created_at.strftime('%Y-%m-%d') if lecturer.created_at else '')
         
         # Auto-adjust column widths

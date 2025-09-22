@@ -85,39 +85,126 @@
 
                     {% if students %}
                     <div class="space-y-4 mb-6">
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                             <h4 class="text-md font-medium text-gray-900">Student Marks</h4>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex flex-col sm:flex-row gap-2 sm:gap-2">
                                 <input type="text" id="marks-student-search" placeholder="Search students..." 
-                                       class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
-                                <button type="button" onclick="fillAllMarks()" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
-                                    Fill All
-                                </button>
-                                <button type="button" onclick="clearAllMarks()" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">
-                                    Clear All
-                                </button>
+                                       class="px-4 py-2 sm:px-3 sm:py-1 border border-gray-300 rounded-md text-sm sm:text-sm focus:outline-none focus:ring-black focus:border-black touch-manipulation">
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="selectAllStudents()" 
+                                            class="bg-gray-600 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-700 active:bg-gray-800 transition-colors touch-manipulation">
+                                        Select All
+                                    </button>
+                                    <button type="button" onclick="fillAllMarks()" 
+                                            class="bg-blue-600 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-blue-700 active:bg-blue-800 transition-colors touch-manipulation">
+                                        Fill All
+                                    </button>
+                                    <button type="button" onclick="clearAllMarks()" 
+                                            class="bg-gray-600 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-700 active:bg-gray-800 transition-colors touch-manipulation">
+                                        Clear All
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto" id="marks-students-container">
-                            {% for student in students %}
-                            <div class="marks-student-row flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50" 
-                                 data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-gray-900 truncate">{{ student.name }}</p>
-                                    <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
+                        <!-- Bulk Actions Bar - Mobile Optimized -->
+                        <div id="bulk-actions" class="hidden bg-gray-100 p-4 sm:p-3 rounded-md mb-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                                <div class="text-sm font-medium text-gray-700" id="selected-count">0 students selected</div>
+                                <div class="flex flex-col sm:flex-row gap-2 sm:gap-2">
+                                    <!-- Quick Actions Row -->
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" onclick="applyMarksToSelected(0)" 
+                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
+                                            Set 0
+                                        </button>
+                                        <button type="button" onclick="applyMarksToSelected('half')" 
+                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
+                                            Half Marks
+                                        </button>
+                                        <button type="button" onclick="applyMarksToSelected('full')" 
+                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
+                                            Full Marks
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Custom Input and Actions Row -->
+                                    <div class="flex gap-2">
+                                        <input type="number" id="bulk-marks-value" placeholder="Custom marks" min="0" step="0.5"
+                                               class="flex-1 sm:w-24 px-3 py-2 sm:px-2 sm:py-1 border border-gray-300 rounded text-sm sm:text-sm focus:outline-none focus:ring-black focus:border-black touch-manipulation">
+                                        <button type="button" onclick="applyCustomMarksToSelected()" 
+                                                class="bg-black text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-800 active:bg-gray-900 transition-colors touch-manipulation">
+                                            Apply
+                                        </button>
+                                        <button type="button" onclick="clearSelectedMarks()" 
+                                                class="bg-gray-600 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-700 active:bg-gray-800 transition-colors touch-manipulation">
+                                            Clear
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="w-20">
-                                    <input type="number" name="marks_{{ student.id }}" 
-                                           placeholder="0" min="0" step="0.5"
-                                           class="block w-full px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm marks-input">
+                            </div>
+                        </div>
+                        
+                        <!-- Progress Indicator - Mobile Optimized -->
+                        <div class="mb-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 text-sm text-gray-600 mb-2">
+                                <span class="font-medium">Progress</span>
+                                <span id="progress-text" class="font-medium">0/{{ students|length }} students</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3 sm:h-2">
+                                <div id="progress-bar" class="bg-black h-3 sm:h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto" id="marks-students-container">
+                            {% for student in students %}
+                            <div class="marks-student-row bg-white border border-gray-200 rounded-lg p-3 sm:p-4 hover:bg-gray-50 transition-colors" 
+                                 data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
+                                <!-- Mobile: Vertical layout, Desktop: Horizontal layout -->
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                                    <!-- Student Info Section -->
+                                    <div class="flex items-start space-x-3 sm:space-x-4 flex-1 min-w-0">
+                                        <input type="checkbox" class="student-checkbox w-5 h-5 sm:w-4 sm:h-4 text-black border-gray-300 rounded focus:ring-black mt-0.5" 
+                                               data-student-id="{{ student.id }}">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm sm:text-sm font-medium text-gray-900 truncate">{{ student.name }}</p>
+                                            <p class="text-xs sm:text-xs text-gray-500">{{ student.roll_number }}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Marks Input Section -->
+                                    <div class="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+                                        <!-- Preset Buttons - Mobile: Larger, Desktop: Compact -->
+                                        <div class="flex space-x-1 sm:space-x-1">
+                                            <button type="button" onclick="setStudentMark({{ student.id }}, 0)" 
+                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                0
+                                            </button>
+                                            <button type="button" onclick="setStudentMark({{ student.id }}, 'half')" 
+                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                ½
+                                            </button>
+                                            <button type="button" onclick="setStudentMark({{ student.id }}, 'full')" 
+                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                ✓
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Marks Input - Mobile: Larger -->
+                                        <div class="w-24 sm:w-20">
+                                            <input type="number" name="marks_{{ student.id }}" 
+                                                   placeholder="0" min="0" step="0.5"
+                                                   class="block w-full px-3 py-2 sm:px-2 sm:py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm sm:text-sm marks-input touch-manipulation"
+                                                   data-student-id="{{ student.id }}">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
                     </div>
                     
-                    <button type="submit" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                    <button type="submit" class="w-full bg-black text-white py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black text-sm sm:text-sm transition-colors touch-manipulation">
                         Save Marks
                     </button>
                     {% else %}
@@ -276,13 +363,13 @@
 
         <!-- Quick Actions - Mobile Optimized -->
         <div class="mt-6">
-            <div class="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4">
+            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <a href="{{ url_for('lecturer.attendance_management', subject_id=subject.id) }}" 
-                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm sm:text-sm transition-colors touch-manipulation">
                     Manage Attendance
                 </a>
                 <a href="{{ url_for('lecturer.subject_reports', subject_id=subject.id) }}" 
-                   class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
+                   class="inline-flex items-center justify-center bg-white text-black border border-black py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm sm:text-sm transition-colors touch-manipulation">
                     View Reports
                 </a>
             </div>
@@ -307,6 +394,7 @@ document.getElementById('max_marks').addEventListener('input', function() {
             input.value = maxMarks;
         }
     });
+    updateProgress();
 });
 
 // Search functionality for marks entry
@@ -355,6 +443,7 @@ function fillAllMarks() {
     marksInputs.forEach(input => {
         input.value = maxMarks;
     });
+    updateProgress();
 }
 
 // Clear all marks
@@ -363,7 +452,115 @@ function clearAllMarks() {
     marksInputs.forEach(input => {
         input.value = '';
     });
+    updateProgress();
 }
+
+// Select all students
+function selectAllStudents() {
+    const checkboxes = document.querySelectorAll('.student-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+    updateBulkActions();
+}
+
+// Update bulk actions visibility
+function updateBulkActions() {
+    const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+    const bulkActions = document.getElementById('bulk-actions');
+    const selectedCount = document.getElementById('selected-count');
+    
+    if (checkedBoxes.length > 0) {
+        bulkActions.classList.remove('hidden');
+        selectedCount.textContent = `${checkedBoxes.length} student${checkedBoxes.length > 1 ? 's' : ''} selected`;
+    } else {
+        bulkActions.classList.add('hidden');
+    }
+}
+
+// Apply marks to selected students
+function applyMarksToSelected(value) {
+    const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+    const maxMarks = parseFloat(document.getElementById('max_marks').value) || 0;
+    
+    checkedBoxes.forEach(cb => {
+        const studentId = cb.dataset.studentId;
+        const input = document.querySelector(`input[name="marks_${studentId}"]`);
+        
+        if (value === 'half') {
+            input.value = (maxMarks / 2).toFixed(1);
+        } else if (value === 'full') {
+            input.value = maxMarks;
+        } else {
+            input.value = value;
+        }
+    });
+    updateProgress();
+}
+
+// Apply custom marks to selected students
+function applyCustomMarksToSelected() {
+    const customValue = parseFloat(document.getElementById('bulk-marks-value').value);
+    if (isNaN(customValue)) {
+        alert('Please enter a valid number');
+        return;
+    }
+    applyMarksToSelected(customValue);
+}
+
+// Clear marks for selected students
+function clearSelectedMarks() {
+    const checkedBoxes = document.querySelectorAll('.student-checkbox:checked');
+    
+    checkedBoxes.forEach(cb => {
+        const studentId = cb.dataset.studentId;
+        const input = document.querySelector(`input[name="marks_${studentId}"]`);
+        input.value = '';
+    });
+    updateProgress();
+}
+
+// Set mark for individual student
+function setStudentMark(studentId, value) {
+    const input = document.querySelector(`input[name="marks_${studentId}"]`);
+    const maxMarks = parseFloat(document.getElementById('max_marks').value) || 0;
+    
+    if (value === 'half') {
+        input.value = (maxMarks / 2).toFixed(1);
+    } else if (value === 'full') {
+        input.value = maxMarks;
+    } else {
+        input.value = value;
+    }
+    input.focus();
+    updateProgress();
+}
+
+// Update progress bar
+function updateProgress() {
+    const marksInputs = document.querySelectorAll('.marks-input');
+    const filledInputs = Array.from(marksInputs).filter(input => input.value.trim() !== '');
+    const progress = (filledInputs.length / marksInputs.length) * 100;
+    
+    document.getElementById('progress-bar').style.width = `${progress}%`;
+    document.getElementById('progress-text').textContent = `${filledInputs.length}/${marksInputs.length} students`;
+}
+
+// Event listeners for checkboxes
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('student-checkbox')) {
+        updateBulkActions();
+    }
+});
+
+// Event listeners for marks inputs
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('marks-input')) {
+        updateProgress();
+    }
+});
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
@@ -378,6 +575,52 @@ document.addEventListener('keydown', function(e) {
         e.preventDefault();
         clearAllMarks();
     }
+    
+    // Enter key to move to next input
+    if (e.key === 'Enter' && document.activeElement.classList.contains('marks-input')) {
+        e.preventDefault();
+        const inputs = Array.from(document.querySelectorAll('.marks-input'));
+        const currentIndex = inputs.indexOf(document.activeElement);
+        const nextInput = inputs[currentIndex + 1];
+        if (nextInput) {
+            nextInput.focus();
+        }
+    }
+    
+    // Arrow keys navigation
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement.classList.contains('marks-input')) {
+        e.preventDefault();
+        const inputs = Array.from(document.querySelectorAll('.marks-input'));
+        const currentIndex = inputs.indexOf(document.activeElement);
+        let nextIndex;
+        
+        if (e.key === 'ArrowDown') {
+            nextIndex = Math.min(currentIndex + 1, inputs.length - 1);
+        } else {
+            nextIndex = Math.max(currentIndex - 1, 0);
+        }
+        
+        inputs[nextIndex].focus();
+    }
+});
+
+// Initialize progress on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateProgress();
+    
+    // Add mobile-specific enhancements
+    if (window.innerWidth < 768) {
+        // Add touch feedback for better mobile UX
+        const touchElements = document.querySelectorAll('.touch-manipulation');
+        touchElements.forEach(el => {
+            el.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+            });
+            el.addEventListener('touchend', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+    }
 });
 
 // Close mobile menu when clicking outside
@@ -390,4 +633,42 @@ document.addEventListener('click', function(event) {
     }
 });
 </script>
+
+<style>
+/* Mobile-specific enhancements */
+@media (max-width: 767px) {
+    .touch-manipulation {
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        transition: transform 0.1s ease;
+    }
+    
+    .marks-student-row {
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Improve readability on small screens */
+    .text-xs {
+        font-size: 0.8rem;
+        line-height: 1.2;
+    }
+    
+    /* Better spacing for mobile */
+    .space-x-1 > * + * {
+        margin-left: 0.5rem;
+    }
+}
+
+/* Ensure proper touch targets */
+@media (pointer: coarse) {
+    button, input[type="number"], input[type="text"], .student-checkbox {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* Smooth transitions for better UX */
+.transition-colors {
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+</style>
 {% endblock %}
