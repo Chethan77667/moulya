@@ -546,25 +546,45 @@ class ManagementService:
             assignments_created = 0
             
             for subject_id in subject_ids:
-                # Check if assignment already exists
-                existing = SubjectAssignment.query.filter_by(
+                # 1) If an active assignment exists, skip
+                existing_active = SubjectAssignment.query.filter_by(
                     lecturer_id=lecturer_id,
                     subject_id=int(subject_id),
                     academic_year=current_year,
                     is_active=True
                 ).first()
-                
-                if not existing:
-                    assignment = SubjectAssignment(
-                        lecturer_id=lecturer_id,
-                        subject_id=int(subject_id),
-                        academic_year=current_year
-                    )
-                    success, message = safe_add_and_commit(assignment)
-                    if success:
+
+                if existing_active:
+                    continue
+
+                # 2) If an inactive assignment exists for this year, reactivate it
+                existing_any = SubjectAssignment.query.filter_by(
+                    lecturer_id=lecturer_id,
+                    subject_id=int(subject_id),
+                    academic_year=current_year
+                ).first()
+
+                if existing_any:
+                    existing_any.is_active = True
+                    try:
+                        db.session.commit()
                         assignments_created += 1
-                    else:
-                        return False, f"Error creating assignment for subject {subject_id}: {message}"
+                    except Exception as e:
+                        db.session.rollback()
+                        return False, f"Error reactivating assignment for subject {subject_id}: {str(e)}"
+                    continue
+
+                # 3) Otherwise create a fresh assignment
+                assignment = SubjectAssignment(
+                    lecturer_id=lecturer_id,
+                    subject_id=int(subject_id),
+                    academic_year=current_year
+                )
+                success, message = safe_add_and_commit(assignment)
+                if success:
+                    assignments_created += 1
+                else:
+                    return False, f"Error creating assignment for subject {subject_id}: {message}"
             
             if assignments_created > 0:
                 return True, f"Successfully assigned {assignments_created} subject(s) to {lecturer.name}"
