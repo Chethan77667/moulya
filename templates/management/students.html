@@ -121,9 +121,12 @@
                             window.location.reload();
                         });
                     } else {
+                        const errorList = (data.errors && data.errors.length)
+                          ? `<div class=\"mt-3 text-left\"><p class=\"font-medium\">Details:</p><ul class=\"list-disc list-inside text-sm text-gray-700\">${data.errors.slice(0,10).map(e => `<li>${e}</li>`).join('')}</ul>${data.errors.length>10?`<p class=\"text-xs text-gray-500 mt-2\">+${data.errors.length-10} more...</p>`:''}</div>`
+                          : '';
                         Swal.fire({
                             title: 'Error!',
-                            text: data.message || 'Failed to upload file. Please try again.',
+                            html: `<p>${data.message || 'Failed to upload file. Please try again.'}</p>${errorList}`,
                             icon: 'error'
                         });
                     }

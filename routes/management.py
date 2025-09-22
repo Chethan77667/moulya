@@ -471,7 +471,7 @@ def bulk_add_students():
         
         # Handle AJAX requests
         if is_ajax_request():
-            return jsonify({'success': success, 'message': message})
+            return jsonify({'success': success, 'message': message, 'errors': errors})
         
         if success:
             flash(message, 'success')

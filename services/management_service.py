@@ -378,53 +378,124 @@ class ManagementService:
         try:
             workbook = openpyxl.load_workbook(BytesIO(file_data))
             sheet = workbook.active
-            
+
             students = []
             errors = []
-            
-            # Expected columns: roll_number, name, course_code, academic_year, email, phone
-            for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-                if not any(row):  # Skip empty rows
-                    continue
-                
+
+            # Read header row and map columns by header name (case-insensitive)
+            header_row = [str(c.value).strip() if c.value is not None else '' for c in next(sheet.iter_rows(min_row=1, max_row=1))]
+            header_to_index = {h.lower(): i for i, h in enumerate(header_row) if h}
+
+            def find_col(*possible_names):
+                for name in possible_names:
+                    idx = header_to_index.get(name.lower())
+                    if idx is not None:
+                        return idx
+                return None
+
+            col_roll = find_col('roll number', 'roll_number', 'rollno', 'roll', 'roll no')
+            col_name = find_col('name', 'full name', 'student name')
+            col_course_code = find_col('course code', 'course', 'course_code', 'course name', 'course short code')
+            col_ac_year = find_col('academic year', 'year', 'year level', 'class year')
+            col_email = find_col('email', 'email id', 'e-mail')
+
+            # If headers are missing, fall back to legacy fixed positions (A..E)
+            if col_roll is None:
+                col_roll = 0
+            if col_name is None:
+                col_name = 1
+            if col_course_code is None:
+                col_course_code = 2
+            if col_ac_year is None:
+                col_ac_year = 3
+            if col_email is None:
+                col_email = 4
+
+            import re
+
+            def parse_year(value):
+                if value is None:
+                    return None
                 try:
-                    roll_number = str(row[0]).strip() if row[0] else None
-                    name = str(row[1]).strip() if row[1] else None
-                    course_code = str(row[2]).strip() if row[2] else None
-                    academic_year = int(row[3]) if row[3] else None
-                    email = str(row[4]).strip() if row[4] and row[4] != 'None' else None
-                    
+                    # Try numeric directly
+                    return int(value)
+                except Exception:
+                    # Extract first digit 1-3 from strings like "1", "1st", "Year 1"
+                    match = re.search(r"([1-3])", str(value))
+                    return int(match.group(1)) if match else None
+
+            for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                if not any(row):
+                    continue
+
+                try:
+                    roll_number = str(row[col_roll]).strip() if col_roll < len(row) and row[col_roll] else None
+                    name = str(row[col_name]).strip() if col_name < len(row) and row[col_name] else None
+                    course_code_raw = str(row[col_course_code]).strip() if col_course_code < len(row) and row[col_course_code] else None
+                    course_code = course_code_raw.upper() if course_code_raw else None
+                    academic_year = parse_year(row[col_ac_year] if col_ac_year < len(row) else None)
+                    email_val = row[col_email] if col_email < len(row) else None
+                    email = str(email_val).strip() if email_val and str(email_val).strip().lower() not in ['none', 'na', 'n/a'] else None
+
                     if not all([roll_number, name, course_code, academic_year]):
                         errors.append(f"Row {row_num}: Roll number, name, course code, and academic year are required")
                         continue
-                    
+
                     # Validate data
                     is_valid, message = validate_roll_number(roll_number)
                     if not is_valid:
                         errors.append(f"Row {row_num}: {message}")
                         continue
-                    
+
                     is_valid, message = validate_name(name)
                     if not is_valid:
                         errors.append(f"Row {row_num}: {message}")
                         continue
-                    
+
                     is_valid, message = validate_academic_year(academic_year)
                     if not is_valid:
                         errors.append(f"Row {row_num}: {message}")
                         continue
-                    
-                    # Find course by code
-                    course = Course.query.filter_by(code=course_code, is_active=True).first()
+
+                    # Find course by code (case-insensitive). If not found, try using alphabetic prefix (e.g., BCA301 -> BCA)
+                    course = Course.query.filter(
+                        db.func.lower(Course.code) == course_code.lower(),
+                        Course.is_active == True
+                    ).first()
+                    if not course:
+                        prefix_match = re.match(r"^[A-Za-z]+", course_code)
+                        if prefix_match:
+                            prefix = prefix_match.group(0)
+                            # Try existing course with prefix (e.g., BCA)
+                            course = Course.query.filter(
+                                db.func.lower(Course.code) == prefix.lower(),
+                                Course.is_active == True
+                            ).first()
+                            # If still not found, create a minimal course for this prefix
+                            if not course:
+                                try:
+                                    new_course = Course(
+                                        name=prefix,
+                                        code=prefix,
+                                        description=f"Auto-created from bulk upload for prefix {prefix}",
+                                        duration_years=3,
+                                        total_semesters=6,
+                                        is_active=True
+                                    )
+                                    db.session.add(new_course)
+                                    db.session.commit()
+                                    course = new_course
+                                except Exception:
+                                    db.session.rollback()
                     if not course:
                         errors.append(f"Row {row_num}: Course code {course_code} not found")
                         continue
-                    
+
                     # Check for duplicates
                     if Student.query.filter_by(roll_number=roll_number).first():
                         errors.append(f"Row {row_num}: Roll number {roll_number} already exists")
                         continue
-                    
+
                     student = Student(
                         roll_number=roll_number,
                         name=name,
@@ -432,12 +503,12 @@ class ManagementService:
                         academic_year=academic_year,
                         email=email
                     )
-                    
+
                     students.append(student)
-                    
+
                 except Exception as e:
                     errors.append(f"Row {row_num}: Error processing data - {str(e)}")
-            
+
             if students:
                 success, message = bulk_insert(students)
                 if success:
@@ -446,7 +517,7 @@ class ManagementService:
                     return False, message, errors
             else:
                 return False, "No valid students found to add", errors
-                
+
         except Exception as e:
             return False, f"Error processing Excel file: {str(e)}", []
     
