@@ -574,3 +574,41 @@ class ManagementService:
         except Exception as e:
             return False, f"Error assigning subjects: {str(e)}"
     
+    @staticmethod
+    def unassign_subject_from_lecturer(lecturer_id, subject_id):
+        """Unassign (deactivate) a subject from a lecturer for current academic year"""
+        try:
+            lecturer = Lecturer.query.get(lecturer_id)
+            if not lecturer:
+                return False, "Lecturer not found"
+
+            from datetime import datetime
+            current_year = datetime.now().year
+
+            assignment = SubjectAssignment.query.filter_by(
+                lecturer_id=lecturer_id,
+                subject_id=int(subject_id),
+                academic_year=current_year,
+                is_active=True
+            ).first()
+
+            if not assignment:
+                # Check if it exists but already inactive
+                existing_inactive = SubjectAssignment.query.filter_by(
+                    lecturer_id=lecturer_id,
+                    subject_id=int(subject_id),
+                    academic_year=current_year,
+                    is_active=False
+                ).first()
+                if existing_inactive:
+                    return True, "Subject already unassigned for this year"
+                return False, "Assignment not found for this year"
+
+            assignment.is_active = False
+            db.session.commit()
+            return True, f"Unassigned subject successfully from {lecturer.name}"
+
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error unassigning subject: {str(e)}"
+

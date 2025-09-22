@@ -313,6 +313,36 @@ def assign_subjects_to_lecturer(lecturer_id):
         flash(error_msg, 'error')
         return redirect(url_for('management.lecturers'))
 
+@management_bp.route('/lecturers/<int:lecturer_id>/unassign-subject', methods=['POST'])
+@login_required('management')
+def unassign_subject_from_lecturer(lecturer_id):
+    """Unassign a subject from a lecturer (current academic year)"""
+    try:
+        subject_id = request.form.get('subject_id')
+        if not subject_id:
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': 'Subject is required'})
+            flash('Subject is required', 'error')
+            return redirect(url_for('management.lecturers'))
+
+        success, message = ManagementService.unassign_subject_from_lecturer(lecturer_id, subject_id)
+
+        if is_ajax_request():
+            return jsonify({'success': success, 'message': message})
+
+        if success:
+            flash(message, 'success')
+        else:
+            flash(message, 'error')
+
+    except Exception as e:
+        error_msg = f'Error unassigning subject: {str(e)}'
+        if is_ajax_request():
+            return jsonify({'success': False, 'message': error_msg})
+        flash(error_msg, 'error')
+
+    return redirect(url_for('management.lecturers'))
+
 @management_bp.route('/lecturers/credentials/export')
 @login_required('management')
 def export_lecturer_credentials():
