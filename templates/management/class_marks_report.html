@@ -28,7 +28,11 @@
         <div class="bg-white shadow rounded-lg mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-900">{{ report.subject.name }} ({{ report.subject.code }})</h2>
-                <p class="text-sm text-gray-600">{{ report.subject.course }} - Year {{ report.subject.year }}, Semester {{ report.subject.semester }}</p>
+                <p class="text-sm text-gray-600">
+                    {{ report.subject.course_display or report.subject.course }}
+                    {% if report.subject.section %}- Section {{ report.subject.section|upper }}{% endif %}
+                    - Year {{ report.subject.year }}, Semester {{ report.subject.semester }}
+                </p>
                 {% if report.assessment_type %}
                 <p class="text-sm text-blue-600">Assessment Type: {{ report.assessment_type|title }}</p>
                 {% endif %}

@@ -11,9 +11,36 @@ from models.user import Lecturer
 from database import db
 from datetime import datetime, date
 from sqlalchemy import func, and_, or_
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 
 class ReportingService:
     """Service for generating reports"""
+    
+    @staticmethod
+    def _parse_course_and_section(course_name: str):
+        """Split a user-entered course string into course and section.
+        Examples:
+        - "III bca b" -> ("bca", "b")
+        - "I bcom" -> ("bcom", None)
+        - "bsc" -> ("bsc", None)
+        We consider the last token as section only when there are at least 3 tokens.
+        The course becomes the last token when there are 1-2 tokens, otherwise the second last.
+        """
+        if not course_name:
+            return None, None
+        parts = [p for p in course_name.strip().split(' ') if p]
+        if not parts:
+            return None, None
+        if len(parts) >= 3:
+            return parts[-2], parts[-1]
+        # len == 1 or 2 -> course is last token, no section
+        return parts[-1], None
     
     @staticmethod
     def get_student_detailed_report(student_id):
@@ -30,12 +57,16 @@ class ReportingService:
                 StudentEnrollment.is_active == True
             ).all()
             
+            course_display, section = ReportingService._parse_course_and_section(student.course.name if student.course else None)
+
             report = {
                 'student': {
                     'id': student.id,
                     'name': student.name,
                     'roll_number': student.roll_number,
                     'course': student.course.name if student.course else None,
+                    'course_display': course_display,
+                    'section': section,
                     'academic_year': student.academic_year,
                     'current_semester': student.current_semester
                 },
@@ -190,12 +221,16 @@ class ReportingService:
             elif assessment_type:
                 assessment_type_display = assessment_type.title()
             
+            course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
+
             report = {
                 'subject': {
                     'id': subject.id,
                     'name': subject.name,
                     'code': subject.code,
                     'course': subject.course.name if subject.course else None,
+                    'course_display': course_display,
+                    'section': section,
                     'year': subject.year,
                     'semester': subject.semester
                 },
@@ -295,12 +330,16 @@ class ReportingService:
                           'July', 'August', 'September', 'October', 'November', 'December']
             month_name = month_names[month] if 1 <= month <= 12 else str(month)
             
+            course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
+
             report = {
                 'subject': {
                     'id': subject.id,
                     'name': subject.name,
                     'code': subject.code,
                     'course': subject.course.name if subject.course else None,
+                    'course_display': course_display,
+                    'section': section,
                     'year': subject.year,
                     'semester': subject.semester
                 },
@@ -435,3 +474,121 @@ class ReportingService:
         except Exception as e:
             print(f"Error getting students for reporting: {e}")
             return []
+
+    # ======================== PDF GENERATION ========================
+    @staticmethod
+    def generate_student_report_pdf(report):
+        """Generate a PDF for the student detailed report and return bytes."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        title_center = ParagraphStyle('TitleCenter', parent=styles['Title'], alignment=1)
+        subtitle_center = ParagraphStyle('SubtitleCenter', parent=styles['Normal'], alignment=1)
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+
+        # Header with logo and college name
+        # College-style header (logo + text, underline)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+
+        # Main report title
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph('Student Performance Report', title_center))
+        elements.append(Spacer(1, 8))
+
+        # Student info table
+        s = report['student']
+        course_line = s.get('course_display') or s.get('course') or ''
+        data = [
+            ['Name', s.get('name', '')],
+            ['Roll Number', s.get('roll_number', '')],
+            ['Course', course_line],
+        ]
+        if s.get('section'):
+            data.append(['Section', str(s.get('section')).upper()])
+        data.extend([
+            ['Academic Year', s.get('academic_year', '')],
+            ['Current Semester', s.get('current_semester', '')]
+        ])
+
+        table = Table(data, colWidths=[45*mm, 115*mm])
+        table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            # no header row now
+            ('ALIGN', (0,0), (0,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        elements.extend([Spacer(1, 6), table, Spacer(1, 12)])
+
+        # Marks table
+        elements.append(Paragraph('Marks Report', styles['Heading2']))
+        marks_headers = ['Subject', 'Code', 'Assessment', 'Marks', 'Max', 'Percent', 'Grade', 'Status']
+        marks_rows = [marks_headers]
+        for subj in report.get('subjects', []):
+            for m in subj.get('marks', []):
+                marks_rows.append([
+                    subj.get('subject_name',''), subj.get('subject_code',''), m.get('assessment_type',''),
+                    m.get('marks_obtained',''), m.get('max_marks',''), m.get('percentage',''), m.get('grade',''), m.get('performance_status','')
+                ])
+        if len(marks_rows) == 1:
+            marks_rows.append(['No data'] + ['']*7)
+        marks_table = Table(marks_rows, repeatRows=1)
+        marks_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.extend([marks_table, Spacer(1, 12)])
+
+        # Attendance table
+        elements.append(Paragraph('Attendance Report', styles['Heading2']))
+        att_headers = ['Subject', 'Code', 'Total', 'Present', 'Absent', 'Percent', 'Status']
+        att_rows = [att_headers]
+        for subj in report.get('subjects', []):
+            a = subj.get('attendance', {})
+            att_rows.append([
+                subj.get('subject_name',''), subj.get('subject_code',''), a.get('total_classes',''),
+                a.get('present_classes',''), a.get('absent_classes',''), a.get('attendance_percentage',''),
+                'Good' if a.get('attendance_percentage',0) >= 75 else 'Average' if a.get('attendance_percentage',0) >= 50 else 'Poor'
+            ])
+        if len(att_rows) == 1:
+            att_rows.append(['No data'] + ['']*6)
+        att_table = Table(att_rows, repeatRows=1)
+        att_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(att_table)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes

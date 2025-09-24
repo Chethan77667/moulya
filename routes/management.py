@@ -766,6 +766,27 @@ def export_student_report(student_id):
         flash(f'Error exporting student report: {str(e)}', 'error')
         return redirect(url_for('management.student_report', student_id=student_id))
 
+# ---------------- PDF Export ----------------
+@management_bp.route('/reports/export/student/<int:student_id>/pdf')
+@login_required('management')
+def export_student_report_pdf(student_id):
+    """Export student report to PDF"""
+    try:
+        from flask import make_response
+        report = ReportingService.get_student_detailed_report(student_id)
+        if not report:
+            flash('Student not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+
+        pdf_bytes = ReportingService.generate_student_report_pdf(report)
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=student_report_{report["student"]["roll_number"]}.pdf'
+        return response
+    except Exception as e:
+        flash(f'Error exporting PDF: {str(e)}', 'error')
+        return redirect(url_for('management.student_report', student_id=student_id))
+
 @management_bp.route('/reports/export/class/marks/<int:subject_id>')
 @login_required('management')
 def export_class_marks_report(subject_id):

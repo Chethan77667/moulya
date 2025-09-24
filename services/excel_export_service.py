@@ -69,11 +69,17 @@ class ExcelExportService:
             ws_info['A4'] = "Roll Number:"
             ws_info['B4'] = student['roll_number']
             ws_info['A5'] = "Course:"
-            ws_info['B5'] = student['course']
-            ws_info['A6'] = "Academic Year:"
-            ws_info['B6'] = student['academic_year']
-            ws_info['A7'] = "Current Semester:"
-            ws_info['B7'] = student['current_semester']
+            ws_info['B5'] = student.get('course_display') or student.get('course')
+            row = 6
+            if student.get('section'):
+                ws_info[f'A{row}'] = "Section:"
+                ws_info[f'B{row}'] = str(student.get('section')).upper()
+                row += 1
+            ws_info[f'A{row}'] = "Academic Year:"
+            ws_info[f'B{row}'] = student['academic_year']
+            row += 1
+            ws_info[f'A{row}'] = "Current Semester:"
+            ws_info[f'B{row}'] = student['current_semester']
             
             # Marks Sheet
             ws_marks = wb.create_sheet("Marks Report")
@@ -197,7 +203,10 @@ class ExcelExportService:
             ws['A1'] = f"CLASS ATTENDANCE REPORT - {subject['name']} ({subject['code']})"
             ws['A1'].font = Font(bold=True, size=16)
             
-            ws['A2'] = f"Course: {subject['course']}"
+            course_line = f"Course: {subject.get('course_display') or subject.get('course') or ''}"
+            if subject.get('section'):
+                course_line += f" | Section: {str(subject['section']).upper()}"
+            ws['A2'] = course_line
             ws['A3'] = f"Year: {subject['year']}, Semester: {subject['semester']}"
             ws['A4'] = f"Month: {report_data['month']}/{report_data['year']}"
             
