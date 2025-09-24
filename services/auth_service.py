@@ -51,13 +51,16 @@ class AuthService:
             if manual_username:
                 username = manual_username
             else:
-                username = Lecturer.generate_username(name, lecturer_id)
+                # Use lecturer_id as the base username (sanitized to allowed characters)
+                import re
+                base_username = re.sub(r'[^A-Za-z0-9_]', '_', str(lecturer_id).strip())
+                username = base_username.lower() or 'lecturer'
                 
                 # Ensure username is unique
                 counter = 1
                 original_username = username
                 while Lecturer.query.filter_by(username=username).first():
-                    username = f"{original_username}{counter}"
+                    username = f"{original_username}_{counter}"
                     counter += 1
             
             # Generate password

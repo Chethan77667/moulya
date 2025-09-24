@@ -19,7 +19,7 @@ def index():
         elif SessionManager.is_lecturer(session):
             return redirect(url_for('lecturer.dashboard'))
     
-    return render_template('auth/index.html')
+    return render_template('auth/index.html', hide_header=True)
 
 @auth_bp.route('/management/login', methods=['GET', 'POST'])
 def management_login():
@@ -35,13 +35,13 @@ def management_login():
         # Validate input
         if not username or not password:
             flash('Username and password are required', 'error')
-            return render_template('auth/management_login.html')
+            return render_template('auth/management_login.html', hide_header=True)
         
         # Validate username format
         is_valid, message = validate_username(username)
         if not is_valid:
             flash(message, 'error')
-            return render_template('auth/management_login.html')
+            return render_template('auth/management_login.html', hide_header=True)
         
         # Authenticate user
         success, user, message = AuthService.authenticate_management(username, password)
@@ -54,7 +54,7 @@ def management_login():
         else:
             flash(message, 'error')
     
-    return render_template('auth/management_login.html')
+    return render_template('auth/management_login.html', hide_header=True)
 
 @auth_bp.route('/lecturer/login', methods=['GET', 'POST'])
 def lecturer_login():
@@ -70,13 +70,13 @@ def lecturer_login():
         # Validate input
         if not username or not password:
             flash('Username and password are required', 'error')
-            return render_template('auth/lecturer_login.html')
+            return render_template('auth/lecturer_login.html', hide_header=True)
         
         # Validate username format
         is_valid, message = validate_username(username)
         if not is_valid:
             flash(message, 'error')
-            return render_template('auth/lecturer_login.html')
+            return render_template('auth/lecturer_login.html', hide_header=True)
         
         # Authenticate user
         success, user, message = AuthService.authenticate_lecturer(username, password)
@@ -89,7 +89,7 @@ def lecturer_login():
         else:
             flash(message, 'error')
     
-    return render_template('auth/lecturer_login.html')
+    return render_template('auth/lecturer_login.html', hide_header=True)
 
 @auth_bp.route('/logout', methods=['POST'])
 def logout():

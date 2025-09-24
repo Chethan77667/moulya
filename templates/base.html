@@ -35,6 +35,7 @@
     </script>
 </head>
 <body class="h-full bg-gray-50">
+    {% if not hide_header %}
     <header class="bg-white border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 py-2 sm:py-3 flex flex-col md:flex-row md:items-center md:gap-4 gap-2">
             <div class="flex md:block items-center justify-center">
@@ -47,6 +48,7 @@
             </div>
         </div>
     </header>
+    {% endif %}
     {% block content %}{% endblock %}
     
     {% block scripts %}{% endblock %}

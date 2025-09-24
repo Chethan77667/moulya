@@ -13,6 +13,7 @@ from models.user import Lecturer
 from models.academic import Course, Subject
 from models.student import Student
 from database import db
+from utils.validators import validate_username, validate_password
 
 def is_ajax_request():
     """Check if the current request is an AJAX request"""
@@ -235,11 +236,58 @@ def toggle_lecturer_status(lecturer_id):
 @management_bp.route('/lecturers/<int:lecturer_id>/reset-password', methods=['POST'])
 @login_required('management')
 def reset_lecturer_password(lecturer_id):
-    """Reset lecturer password"""
+    """Reset lecturer password. If username/password provided, set custom values with validation."""
     try:
         lecturer = Lecturer.query.get_or_404(lecturer_id)
+
+        payload = {}
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+        username = (payload.get('username') or request.form.get('username') or '').strip()
+        password = (payload.get('password') or request.form.get('password') or '').strip()
+
+        # If either field present, treat as custom update
+        if username or password:
+            # Validate fields
+            if username:
+                valid, msg = validate_username(username)
+                if not valid:
+                    if is_ajax_request():
+                        return jsonify({'success': False, 'message': msg}), 400
+                    flash(msg, 'error')
+                    return redirect(url_for('management.lecturers'))
+                # Uniqueness check excluding current lecturer
+                existing = Lecturer.query.filter(Lecturer.username == username, Lecturer.id != lecturer.id).first()
+                if existing:
+                    msg = 'Username already exists. Please choose a different one.'
+                    if is_ajax_request():
+                        return jsonify({'success': False, 'message': msg}), 400
+                    flash(msg, 'error')
+                    return redirect(url_for('management.lecturers'))
+
+            if password:
+                valid, msg = validate_password(password)
+                if not valid:
+                    if is_ajax_request():
+                        return jsonify({'success': False, 'message': msg}), 400
+                    flash(msg, 'error')
+                    return redirect(url_for('management.lecturers'))
+
+            # Apply updates
+            if username:
+                lecturer.username = username
+            if password:
+                lecturer.set_password(password)
+            db.session.commit()
+
+            message = 'Credentials updated successfully'
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.lecturers'))
+
+        # Default behavior: auto-generate a new password
         success, new_password, message = AuthService.reset_lecturer_password(lecturer.lecturer_id)
-        
         if success:
             response_message = f'Password reset for {lecturer.name}. New password: {new_password}'
             if is_ajax_request():
@@ -249,13 +297,66 @@ def reset_lecturer_password(lecturer_id):
             if is_ajax_request():
                 return jsonify({'success': False, 'message': message})
             flash(message, 'error')
-            
+
     except Exception as e:
         error_msg = f'Error resetting password: {str(e)}'
         if is_ajax_request():
             return jsonify({'success': False, 'message': error_msg})
         flash(error_msg, 'error')
     
+    return redirect(url_for('management.lecturers'))
+
+@management_bp.route('/lecturers/reset-passwords-all', methods=['POST'])
+@login_required('management')
+def reset_passwords_all_lecturers():
+    """Set a custom password for ALL lecturers"""
+    try:
+        # Accept JSON or form data
+        password = None
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+            password = (payload.get('password') or '').strip()
+        if not password:
+            password = (request.form.get('password') or '').strip()
+
+        if not password:
+            message = 'Password is required'
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': message}), 400
+            flash(message, 'error')
+            return redirect(url_for('management.lecturers'))
+
+        # Basic validation
+        if len(password) < 6:
+            message = 'Password must be at least 6 characters'
+            if is_ajax_request():
+                return jsonify({'success': False, 'message': message}), 400
+            flash(message, 'error')
+            return redirect(url_for('management.lecturers'))
+
+        from models.user import Lecturer
+        from database import db
+
+        lecturers = Lecturer.query.all()
+        for lecturer in lecturers:
+            lecturer.set_password(password)
+        db.session.commit()
+
+        message = f'Password updated for {len(lecturers)} lecturer(s).'
+        if is_ajax_request():
+            return jsonify({'success': True, 'message': message})
+        flash(message, 'success')
+    except Exception as e:
+        try:
+            from database import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
+        error_msg = f'Error resetting passwords: {str(e)}'
+        if is_ajax_request():
+            return jsonify({'success': False, 'message': error_msg}), 500
+        flash(error_msg, 'error')
+
     return redirect(url_for('management.lecturers'))
 
 @management_bp.route('/lecturers/credentials')
