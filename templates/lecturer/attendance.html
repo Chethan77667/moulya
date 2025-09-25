@@ -118,6 +118,10 @@
                     
                     <form method="POST" action="{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" id="prior_total_classes" value="{{ prior_total_classes or 0 }}" />
+                        <div id="prior_totals_map" data-json='{{ prior_totals_map|tojson|safe }}' class="hidden"></div>
+                        <div id="prev_present_map" data-json='{{ prev_present_map|tojson|safe }}' class="hidden"></div>
+                        <div id="prev_present_by_month_map" data-json='{{ prev_present_by_month_map|tojson|safe }}' class="hidden"></div>
                         
                         <!-- Month and Year Selection -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -138,7 +142,7 @@
                             </div>
                             <div>
                                 <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">Total Classes (cumulative till selected month)</label>
-                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="400" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm" placeholder="till selected month">
+                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="400" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm" placeholder="Total Classes (Number)">
                             </div>
                         </div>
 
@@ -393,16 +397,20 @@ document.getElementById('student-search')?.addEventListener('input', function() 
 
 // Monthly Attendance Functions
 function setAllAttendance(type) {
-    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value) || 0;
     const inputs = document.querySelectorAll('.monthly-attendance-input');
-    
-    let value = 0;
-    if (type === 'full') value = totalClasses;
-    else if (type === 'half') value = Math.floor(totalClasses / 2);
-    else if (type === 'zero') value = 0;
-    
+    const month = parseInt(document.getElementById('monthly_month').value) || 0;
+    const year = parseInt(document.getElementById('monthly_year').value) || 0;
+    const monthClasses = computeMonthClasses(year, month);
+    const prevMap = getPrevPresentMap();
     inputs.forEach(input => {
-        input.value = value;
+        const idMatch = (input.name || '').match(/attended_(\d+)/);
+        const studentId = idMatch ? parseInt(idMatch[1]) : null;
+        const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
+        let value = prevPresents;
+        if (type === 'full') value = prevPresents + monthClasses;
+        else if (type === 'half') value = prevPresents + Math.floor(monthClasses / 2);
+        else if (type === 'zero') value = prevPresents;
+        input.value = Math.max(prevPresents, Math.min(value, prevPresents + monthClasses));
     });
 }
 
@@ -425,15 +433,7 @@ document.getElementById('monthly-student-search')?.addEventListener('input', fun
 
 // Auto-calculate attendance based on total classes
 document.getElementById('monthly_total_classes')?.addEventListener('input', function() {
-    const totalClasses = parseInt(this.value) || 0;
-    const attendanceInputs = document.querySelectorAll('input[name^="attended_"]');
-    
-    attendanceInputs.forEach(input => {
-        input.max = totalClasses;
-        if (parseInt(input.value) > totalClasses) {
-            input.value = totalClasses;
-        }
-    });
+    updatePerStudentConstraints();
 });
 
 // Initialize counts on page load
@@ -454,24 +454,148 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMonthHelper();
     document.getElementById('monthly_month')?.addEventListener('change', updateMonthHelper);
     document.getElementById('monthly_year')?.addEventListener('input', updateMonthHelper);
+    // Update constraints whenever month/year/total changes
+    document.getElementById('monthly_month')?.addEventListener('change', updatePerStudentConstraints);
+    document.getElementById('monthly_year')?.addEventListener('input', updatePerStudentConstraints);
+    document.getElementById('monthly_total_classes')?.addEventListener('input', updatePerStudentConstraints);
+    updatePerStudentConstraints();
 });
 
-// Confirmation popup for monthly attendance submission
+// Helpers to get prior totals and prev presents
+function getPriorTotalsMap() {
+    try {
+        const el = document.getElementById('prior_totals_map');
+        if (!el) return {};
+        return JSON.parse(el.getAttribute('data-json') || '{}');
+    } catch(e) { return {}; }
+}
+
+function getPrevPresentMap() {
+    try {
+        const el = document.getElementById('prev_present_map');
+        if (!el) return {};
+        return JSON.parse(el.getAttribute('data-json') || '{}');
+    } catch(e) { return {}; }
+}
+
+function getPrevPresentForMonth(year, month) {
+    try {
+        const el = document.getElementById('prev_present_by_month_map');
+        const all = el ? JSON.parse(el.getAttribute('data-json') || '{}') : {};
+        const key = `${year}-${String(month).padStart(2,'0')}`;
+        return all[key] || {};
+    } catch(e) { return {}; }
+}
+
+function computeMonthClasses(year, month) {
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes')?.value || '0');
+    if (!year || !month) return 0;
+    const map = getPriorTotalsMap();
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const prior = map[key] != null ? parseInt(map[key]) : parseInt(document.getElementById('prior_total_classes')?.value || '0');
+    return Math.max(totalClasses - (prior || 0), 0);
+}
+
+function updatePerStudentConstraints() {
+    const month = parseInt(document.getElementById('monthly_month').value) || 0;
+    const year = parseInt(document.getElementById('monthly_year').value) || 0;
+    const monthClasses = computeMonthClasses(year, month);
+    const prevMap = getPrevPresentForMonth(year, month);
+    document.querySelectorAll('.monthly-attendance-input').forEach(function(input){
+        const idMatch = (input.name || '').match(/attended_(\d+)/);
+        const studentId = idMatch ? parseInt(idMatch[1]) : null;
+        const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
+        const minAllowed = Math.max(prevPresents, 0);
+        const maxAllowed = prevPresents + monthClasses;
+        input.min = String(minAllowed);
+        input.max = String(maxAllowed);
+        const current = parseInt((input.value || '').toString())
+        if (!isNaN(current)) {
+            if (current < minAllowed) input.value = String(minAllowed);
+            if (current > maxAllowed) input.value = String(maxAllowed);
+        }
+    });
+}
+
+// Validation first, then confirmation for monthly attendance submission
 document.getElementById('monthly-attendance-confirm')?.addEventListener('click', function(e) {
     const monthSelect = document.getElementById('monthly_month');
     const yearInput = document.getElementById('monthly_year');
     const totalClassesInput = document.getElementById('monthly_total_classes');
     const studentsContainer = document.getElementById('monthly-students-container');
+
+    const month = parseInt(monthSelect?.value || '0');
+    const year = parseInt(yearInput?.value || '0');
+    const totalClasses = parseInt(totalClassesInput?.value || '0');
+
+    // Basic required field checks
+    if (!month || !year || !totalClasses) {
+        openAlertModal('Validation Error', 'Please fill Month, Year and Total Classes.', 'error');
+        return;
+    }
+
+    // Validate cumulative total is >= sum of previous months' totals
+    try {
+        const priorMap = getPriorTotalsMap();
+        const key = `${year}-${String(month).padStart(2,'0')}`;
+        const priorTotal = priorMap[key] != null ? parseInt(priorMap[key]) : parseInt(document.getElementById('prior_total_classes')?.value || '0');
+        if (isFinite(priorTotal) && totalClasses < priorTotal) {
+            openAlertModal('Validation Error', `Total Classes must be at least ${priorTotal}`, 'error');
+            return;
+        }
+    } catch(err) {}
+
+    // Compute this month's actual class count based on selected month/year
+    const monthClasses = computeMonthClasses(year, month);
+
+    let invalid = false;
+    let firstErrorName = '';
+    let firstErrorMin = 0;
+    let firstErrorMax = monthClasses; // Display max as only this month's classes added to student's previous
+    document.querySelectorAll('.monthly-attendance-input').forEach(function(input) {
+        const raw = (input.value || '').toString().trim();
+        if (raw === '') { return; }
+        const attended = parseInt(raw, 10);
+        const row = input.closest('.monthly-student-row');
+        const idMatch = (input.name || '').match(/attended_(\d+)/);
+        const studentId = idMatch ? parseInt(idMatch[1]) : null;
+        // Retrieve this student's previous presents
+        const prevMap = getPrevPresentForMonth(year, month);
+        const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
+        const minAllowed = Math.max(prevPresents, 0);
+        // Maximum cumulative allowed for this student = previous presents + classes in this month
+        const maxAllowed = prevPresents + monthClasses;
+        
+        if (isNaN(attended) || attended < minAllowed || attended > maxAllowed) {
+            if (!invalid) {
+                const nameEl = row ? row.querySelector('p.text-sm') : null;
+                firstErrorName = nameEl ? nameEl.textContent.trim() : 'This student';
+                firstErrorMin = minAllowed;
+                firstErrorMax = maxAllowed;
+            }
+            invalid = true;
+            input.classList.add('border-red-500');
+            try { input.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            input.focus();
+        } else {
+            input.classList.remove('border-red-500');
+        }
+    });
+
+    if (invalid) {
+        openAlertModal('Validation Error', `${firstErrorName}: enter between ${firstErrorMin} and ${firstErrorMax}.`, 'error');
+        return;
+    }
+
+    // Build confirmation summary
     const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
-    const year = yearInput ? yearInput.value : '';
-    const totalClasses = totalClassesInput ? totalClassesInput.value : '';
     const studentCount = studentsContainer ? studentsContainer.children.length : 0;
-    let summary = `Month: ${monthName}\nYear: ${year}\nTotal Classes: ${totalClasses}\nStudents: ${studentCount}`;
-    // Find the form to submit
+    const summary = `Month: ${monthName}\nYear: ${year}\nTotal Classes: ${totalClasses}\nStudents: ${studentCount}`;
+
     const form = this.closest('form');
     openAlertModal('Confirm Submission', summary, 'info', function(){
         if (form) form.submit();
-    }, function(){ /* Cancel does nothing */ });
+    }, function(){});
 });
 </script>
 {% endblock %}

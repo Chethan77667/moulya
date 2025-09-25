@@ -8,6 +8,7 @@ from routes.auth import login_required
 from services.lecturer_service import LecturerService
 from models.academic import Subject
 from services.reporting_service import ReportingService
+from database import db
 from models.student import Student
 from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
 from datetime import datetime, date
@@ -142,6 +143,71 @@ def attendance_management(subject_id):
             year=selected_date.year
         ).first()
         
+        # Compute cumulative totals up to previous month for validation hints
+        from sqlalchemy import func
+        prior_total_classes = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
+            .filter(
+                MonthlyAttendanceSummary.subject_id == subject_id,
+                MonthlyAttendanceSummary.lecturer_id == lecturer_id,
+                ((MonthlyAttendanceSummary.year < selected_date.year) |
+                 ((MonthlyAttendanceSummary.year == selected_date.year) & (MonthlyAttendanceSummary.month < selected_date.month)))
+            ).scalar() or 0)
+
+        # Per-student present count up to previous month
+        from datetime import date as _date
+        prev_cutoff = _date(selected_date.year, selected_date.month, 1)
+        prev_present_map = {}
+        for s in students:
+            prev_present = AttendanceRecord.query.filter(
+                AttendanceRecord.student_id == s.id,
+                AttendanceRecord.subject_id == subject_id,
+                AttendanceRecord.lecturer_id == lecturer_id,
+                AttendanceRecord.date < prev_cutoff,
+                AttendanceRecord.status == 'present'
+            ).count()
+            prev_present_map[s.id] = prev_present
+
+        # Build prior totals map for all months/years to support client-side validation when month/year changes
+        # Map keys as f"{year}-{month:02d}" to cumulative total till previous month
+        prior_totals_map = {}
+        summaries = (MonthlyAttendanceSummary.query
+            .filter(
+                MonthlyAttendanceSummary.subject_id == subject_id,
+                MonthlyAttendanceSummary.lecturer_id == lecturer_id
+            )
+            .order_by(MonthlyAttendanceSummary.year.asc(), MonthlyAttendanceSummary.month.asc())
+            ).all()
+        # Accumulate totals in chronological order
+        cumulative_by_year_month = {}
+        cumulative_total = 0
+        for s in summaries:
+            key = f"{s.year}-{s.month:02d}"
+            # prior for this month is current cumulative
+            prior_totals_map[key] = cumulative_total
+            cumulative_total += int(s.total_classes or 0)
+            cumulative_by_year_month[key] = cumulative_total
+
+        # Build previous-presents map per month-year for each student
+        # Keys: 'YYYY-MM' -> { studentId: prevPresentsBeforeMonth }
+        from datetime import date as _date
+        prev_present_by_month_map = {}
+        # Include months present in summaries and the current selected month
+        months_to_prepare = {(s.year, s.month) for s in summaries}
+        months_to_prepare.add((selected_date.year, selected_date.month))
+        for (yr, mo) in sorted(months_to_prepare):
+            cutoff = _date(yr, mo, 1)
+            per_student = {}
+            for s in students:
+                count_prev = AttendanceRecord.query.filter(
+                    AttendanceRecord.student_id == s.id,
+                    AttendanceRecord.subject_id == subject_id,
+                    AttendanceRecord.lecturer_id == lecturer_id,
+                    AttendanceRecord.date < cutoff,
+                    AttendanceRecord.status == 'present'
+                ).count()
+                per_student[s.id] = count_prev
+            prev_present_by_month_map[f"{yr}-{mo:02d}"] = per_student
+
         # Get monthly attendance data if requested
         monthly_attendance_data = None
         view_month = request.args.get('view_month', selected_date.month, type=int)
@@ -158,7 +224,11 @@ def attendance_management(subject_id):
                              selected_date=selected_date,
                              existing_attendance=existing_attendance,
                              monthly_summary=monthly_summary,
-                             monthly_attendance_data=monthly_attendance_data)
+                             monthly_attendance_data=monthly_attendance_data,
+                             prior_total_classes=prior_total_classes,
+                             prev_present_map=prev_present_map,
+                             prior_totals_map=prior_totals_map,
+                             prev_present_by_month_map=prev_present_by_month_map)
     except Exception as e:
         flash(f'Error loading attendance: {str(e)}', 'error')
         return redirect(url_for('lecturer.subjects'))
@@ -223,16 +293,53 @@ def record_monthly_attendance(subject_id):
         year = int(request.form.get('year'))
         total_classes = int(request.form.get('total_classes'))
         
-        # Build attendance data from form
+        # Build attendance data from form with server-side range validation
         attendance_data = {}
+        from sqlalchemy import func
+        from datetime import date as _date
+        # Compute prior cumulative classes up to previous month
+        prior_total_classes = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
+            .filter(
+                MonthlyAttendanceSummary.subject_id == subject_id,
+                MonthlyAttendanceSummary.lecturer_id == lecturer_id,
+                ((MonthlyAttendanceSummary.year < year) |
+                 ((MonthlyAttendanceSummary.year == year) & (MonthlyAttendanceSummary.month < month)))
+            ).scalar() or 0)
+        # Classes actually conducted in the selected month
+        month_classes = max(total_classes - prior_total_classes, 0)
+        # Cutoff for previous presents is first day of selected month
+        prev_cutoff = _date(year, month, 1)
+        # Build per-student previous presents map
+        students = LecturerService.get_subject_students(subject_id, lecturer_id)
+        prev_present_map = {}
+        for s in students:
+            prev_present = AttendanceRecord.query.filter(
+                AttendanceRecord.student_id == s.id,
+                AttendanceRecord.subject_id == subject_id,
+                AttendanceRecord.lecturer_id == lecturer_id,
+                AttendanceRecord.date < prev_cutoff,
+                AttendanceRecord.status == 'present'
+            ).count()
+            prev_present_map[s.id] = prev_present
+
         for key, value in request.form.items():
-            if key.startswith('attended_') and value:
+            if key.startswith('attended_') and value is not None and value != '':
                 try:
                     student_id_str = key.replace('attended_', '')
                     student_id = int(student_id_str)
                     attended_classes = int(value)
-                    if attended_classes <= total_classes:
-                        attendance_data[student_id] = attended_classes
+                    # Determine allowed range for this student: [prev_presents, prev_presents + month_classes]
+                    prev_presents = prev_present_map.get(student_id, 0)
+                    min_allowed = max(prev_presents, 0)
+                    max_allowed = prev_presents + month_classes
+                    if attended_classes < min_allowed or attended_classes > max_allowed:
+                        flash(f"Invalid attended value for student {student_id}. Allowed range: {min_allowed}-{max_allowed}.", 'error')
+                        return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
+                    # Also cap by overall total cumulative to be safe
+                    if attended_classes > total_classes:
+                        flash(f"Attended cannot exceed total cumulative classes {total_classes}.", 'error')
+                        return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
+                    attendance_data[student_id] = attended_classes
                 except ValueError:
                     continue
         

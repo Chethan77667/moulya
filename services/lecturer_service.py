@@ -442,11 +442,10 @@ class LecturerService:
                 ( (MonthlyAttendanceSummary.year < year) | ((MonthlyAttendanceSummary.year == year) & (MonthlyAttendanceSummary.month < month)) )
             ).scalar() or 0
 
-            # Validate cumulative total must increase for a new month
-            if total_classes <= prior_total_classes:
+            # Validate cumulative total must be at least prior cumulative (non-decreasing)
+            if total_classes < prior_total_classes:
                 return False, (
-                    f"Total classes till {month},(" 
-                    f"{total_classes}) must be greater than previous cumulative ({prior_total_classes})."
+                    f"Total classes till {month} ({total_classes}) cannot be less than previous cumulative ({prior_total_classes})."
                 )
 
             # Calculate delta classes for this month
