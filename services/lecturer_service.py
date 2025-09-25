@@ -445,7 +445,7 @@ class LecturerService:
             # Validate cumulative total must increase for a new month
             if total_classes <= prior_total_classes:
                 return False, (
-                    f"Total classes till {month}/{year} (" 
+                    f"Total classes till {month},(" 
                     f"{total_classes}) must be greater than previous cumulative ({prior_total_classes})."
                 )
 
@@ -456,6 +456,28 @@ class LecturerService:
             summary = MonthlyAttendanceSummary.get_or_create(
                 subject_id, lecturer_id, month, year, month_total_classes
             )
+
+            # Ensure daily records reflect the month's delta exactly:
+            # remove any existing records in this month beyond the new total (e.g., when total reduced)
+            # This keeps the unique class days equal to month_total_classes for reporting.
+            def _cleanup_days_beyond_delta():
+                try:
+                    # Delete records where day index in month exceeds month_total_classes
+                    extra_recs = AttendanceRecord.query.filter(
+                        AttendanceRecord.subject_id == subject_id,
+                        AttendanceRecord.lecturer_id == lecturer_id,
+                        extract('month', AttendanceRecord.date) == month,
+                        extract('year', AttendanceRecord.date) == year,
+                        func.extract('day', AttendanceRecord.date) > month_total_classes
+                    ).all()
+                    for rec in extra_recs:
+                        db.session.delete(rec)
+                    db.session.flush()
+                except Exception:
+                    # Best-effort cleanup; continue even if none
+                    pass
+
+            _cleanup_days_beyond_delta()
 
             # Preload existing month records mapped by student for selective updates
             existing_records_by_student = {}
@@ -485,19 +507,42 @@ class LecturerService:
                         AttendanceRecord.date <= prev_end,
                         AttendanceRecord.status == 'present'
                     ).count()
-                # Monthly delta for student
-                # Validate student's cumulative cannot be less than previous cumulative
+                # Already recorded present in the current month (before this submission)
+                existing_month_present = AttendanceRecord.query.filter(
+                    AttendanceRecord.student_id == student_id,
+                    AttendanceRecord.subject_id == subject_id,
+                    AttendanceRecord.lecturer_id == lecturer_id,
+                    extract('month', AttendanceRecord.date) == month,
+                    extract('year', AttendanceRecord.date) == year,
+                    AttendanceRecord.status == 'present'
+                ).count()
+                # Monthly delta for student derived from cumulative without hard validation
+                # Normalize bad values and clamp within [0, month_total_classes]
+                if attended_cumulative is None:
+                    attended_cumulative = 0
+                # Hard validation: cumulative for this month must be at least the
+                # sum of all previous months for this student, and cannot exceed
+                # the total classes entered for the selected month.
                 if attended_cumulative < prev_present:
+                    student = Student.query.get(student_id)
+                    student_label = f"{student.name} ({student.roll_number})" if student else str(student_id)
                     return False, (
-                        f"Student cumulative present ({attended_cumulative}) cannot be less than previous cumulative ({prev_present})."
+                        f"Cumulative for {student_label} is too low. "
+                        f"Minimum is {prev_present}."
                     )
-                # If entered 0 or None, keep existing for this student (edit scenario)
-                if attended_cumulative == 0:
-                    continue
+                if attended_cumulative > total_classes:
+                    student = Student.query.get(student_id)
+                    student_label = f"{student.name} ({student.roll_number})" if student else str(student_id)
+                    return False, (
+                        f"Cumulative for {student_label} exceeds total classes. "
+                        f"Maximum is {total_classes}."
+                    )
 
                 attended_classes = attended_cumulative - prev_present
-                # Cap by this month's total classes
-                attended_classes = min(attended_classes, month_total_classes)
+                if attended_classes < 0:
+                    attended_classes = 0
+                if attended_classes > month_total_classes:
+                    attended_classes = month_total_classes
                 absent_classes = max(month_total_classes - attended_classes, 0)
                 
                 # Create attendance records for each day of the month

@@ -280,25 +280,39 @@ class ReportingService:
             unique_dates = set(record.date for record in all_attendance_records)
             total_classes_conducted = len(unique_dates)
             
+            from datetime import date as date_class
+            import calendar
+            prev_year = year
+            prev_month = month - 1
+            if prev_month == 0:
+                prev_month = 12
+                prev_year -= 1
+
             for student in students:
-                attendance_records = AttendanceRecord.query.filter(
+                # cumulative present till selected month
+                month_end = date_class(year, month, calendar.monthrange(year, month)[1])
+                prev_end = date_class(prev_year, prev_month, calendar.monthrange(prev_year, prev_month)[1])
+
+                cum_present_till_month = AttendanceRecord.query.filter(
                     AttendanceRecord.student_id == student.id,
                     AttendanceRecord.subject_id == subject_id,
-                    db.extract('month', AttendanceRecord.date) == month,
-                    db.extract('year', AttendanceRecord.date) == year
-                ).all()
+                    AttendanceRecord.date <= month_end,
+                    AttendanceRecord.status == 'present'
+                ).count()
+
+                cum_present_till_prev = AttendanceRecord.query.filter(
+                    AttendanceRecord.student_id == student.id,
+                    AttendanceRecord.subject_id == subject_id,
+                    AttendanceRecord.date <= prev_end,
+                    AttendanceRecord.status == 'present'
+                ).count()
+
+                present_classes = max(cum_present_till_month - cum_present_till_prev, 0)
+                total_classes = total_classes_conducted
+                absent_classes = max(total_classes_conducted - present_classes, 0)
                 
-                total_classes = len(attendance_records)
-                present_classes = len([r for r in attendance_records if r.status == 'present'])
-                absent_classes = total_classes - present_classes
-                
-                # Use total classes conducted if student has records, otherwise 0
-                if total_classes == 0:
-                    attendance_percentage = 0
-                    total_classes = total_classes_conducted
-                    absent_classes = total_classes_conducted
-                else:
-                    attendance_percentage = round((present_classes / total_classes) * 100, 2)
+                # Calculate percentage based on delta present vs conducted this month
+                attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
                 
                 student_data = {
                     'student_id': student.id,
