@@ -35,6 +35,7 @@ MANIFEST
 # Database
 instance/moulya_college.db
 instance/*.db
+instance/
 
 # Temp files
 *.tmp
