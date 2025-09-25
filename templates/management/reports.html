@@ -225,6 +225,10 @@
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
+                            <button @click="selectedStudent && (window.location.href = `/management/reports/export/student/${selectedStudent}/pdf`)" 
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                🧾 Export PDF
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -275,6 +279,10 @@
                             <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
+                            </button>
+                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}/pdf`)" 
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                🧾 Export PDF
                             </button>
                         </div>
                     </div>
@@ -344,6 +352,10 @@
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
+                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/attendance/${selectedSubject}/pdf?month=${selectedMonth}&year=${selectedYear}`)" 
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                🧾 Export PDF
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -383,6 +395,10 @@
                             <button @click="selectedCourse && (window.open(`/management/reports/export/course/${selectedCourse}`, '_blank'))" 
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
+                            </button>
+                            <button @click="selectedCourse && (window.open(`/management/reports/export/course/${selectedCourse}/pdf`, '_blank'))" 
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                🧾 Export PDF
                             </button>
                         </div>
                     </div>

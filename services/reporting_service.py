@@ -592,3 +592,262 @@ class ReportingService:
         pdf_bytes = buffer.getvalue()
         buffer.close()
         return pdf_bytes
+
+    # ======================== ADDITIONAL PDF GENERATORS ========================
+    @staticmethod
+    def generate_class_marks_report_pdf(report):
+        """Generate a PDF for the class marks report and return bytes."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        # Header (same format as student PDF)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_title = styles['Title']
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph('Class Marks Report', styles['Title']))
+        s = report.get('subject', {})
+        meta_rows = [
+            ['Subject', f"{s.get('name','')} ({s.get('code','')})"],
+            ['Course', s.get('course_display') or s.get('course') or ''],
+            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"]
+        ]
+        if report.get('assessment_type'):
+            meta_rows.append(['Assessment Type', report.get('assessment_type')])
+        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
+        meta_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+
+        # Statistics
+        stats = report.get('statistics', {})
+        stats_rows = [
+            ['Total Students', stats.get('total_students', 0)],
+            ['Class Average (%)', stats.get('class_average', 0)],
+            ['Highest (%)', stats.get('highest_score', 0)],
+            ['Lowest (%)', stats.get('lowest_score', 0)],
+            ['Passing Students', stats.get('passing_students', 0)],
+            ['Failing Students', stats.get('failing_students', 0)],
+        ]
+        stats_table = Table(stats_rows, colWidths=[55*mm, 105*mm])
+        stats_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Paragraph('Statistics', styles['Heading2']), stats_table, Spacer(1, 8)])
+
+        # Student marks table
+        header = ['Student', 'Roll', 'Assessment', 'Marks', 'Max', 'Percent']
+        rows = [header]
+        for sm in report.get('student_marks', []):
+            for m in sm.get('marks', []):
+                percent = m.get('percentage') if 'percentage' in m else (
+                    round((m.get('marks_obtained', 0) / m.get('max_marks', 1)) * 100, 2) if m.get('max_marks') else 0
+                )
+                rows.append([
+                    sm.get('student_name',''), sm.get('roll_number',''), m.get('assessment_type',''),
+                    m.get('marks_obtained',''), m.get('max_marks',''), percent
+                ])
+        if len(rows) == 1:
+            rows.append(['No data', '', '', '', '', ''])
+        tbl = Table(rows, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(tbl)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @staticmethod
+    def generate_class_attendance_report_pdf(report):
+        """Generate a PDF for the class attendance report and return bytes."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        # Header (same format as student PDF)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph('Class Attendance Report', styles['Title']))
+        s = report.get('subject', {})
+        meta_rows = [
+            ['Subject', f"{s.get('name','')} ({s.get('code','')})"],
+            ['Course', s.get('course_display') or s.get('course') or ''],
+            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"],
+            ['Period', f"{report.get('month','')} {report.get('year','')}"]
+        ]
+        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
+        meta_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+
+        stats = report.get('statistics', {})
+        stats_rows = [
+            ['Total Students', stats.get('total_students', 0)],
+            ['Classes Conducted', stats.get('total_classes_conducted', 0)],
+            ['Class Average (%)', stats.get('class_average_attendance', 0)],
+            ['Good Attendance (≥75%)', stats.get('students_with_good_attendance', 0)],
+            ['Poor Attendance (<50%)', stats.get('students_with_poor_attendance', 0)],
+        ]
+        stats_table = Table(stats_rows, colWidths=[60*mm, 100*mm])
+        stats_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Paragraph('Statistics', styles['Heading2']), stats_table, Spacer(1, 8)])
+
+        header = ['Student', 'Roll', 'Total', 'Present', 'Absent', 'Percent', 'Status']
+        rows = [header]
+        for st in report.get('student_attendance', []):
+            rows.append([
+                st.get('student_name',''), st.get('roll_number',''), st.get('total_classes',''),
+                st.get('present_classes',''), st.get('absent_classes',''), st.get('attendance_percentage',''), st.get('status','')
+            ])
+        if len(rows) == 1:
+            rows.append(['No data', '', '', '', '', '', ''])
+        tbl = Table(rows, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(tbl)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @staticmethod
+    def generate_course_overview_report_pdf(report):
+        """Generate a PDF for the course overview report and return bytes."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        # Header (same format as student PDF)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph('Course Overview Report', styles['Title']))
+        c = report.get('course', {})
+        meta_rows = [
+            ['Course', f"{c.get('name','')} ({c.get('code','')})"],
+            ['Duration (years)', c.get('duration_years','')],
+            ['Total Semesters', c.get('total_semesters','')],
+            ['Total Students', report.get('total_students','')],
+            ['Total Subjects', report.get('total_subjects','')],
+        ]
+        meta_table = Table(meta_rows, colWidths=[55*mm, 105*mm])
+        meta_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+
+        # Subjects table
+        header = ['Subject', 'Code', 'Y/S', 'Enrolled', 'Avg Marks %', 'Pass Rate %', 'Avg Attendance %']
+        rows = [header]
+        for s in report.get('subjects', []):
+            rows.append([
+                s.get('subject_name',''), s.get('subject_code',''), f"{s.get('year','')}/{s.get('semester','')}",
+                s.get('enrolled_students',''), s.get('marks_statistics',{}).get('average_marks',0),
+                s.get('marks_statistics',{}).get('passing_rate',0), s.get('attendance_statistics',{}).get('average_attendance',0)
+            ])
+        if len(rows) == 1:
+            rows.append(['No data', '', '', '', '', '', ''])
+        tbl = Table(rows, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(tbl)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
