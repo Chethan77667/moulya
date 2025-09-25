@@ -64,11 +64,11 @@
         <!-- Tab Navigation - Mobile Friendly -->
         <div class="mb-4 sm:mb-6">
             <div class="border-b border-gray-200">
-                <nav class="-mb-px flex">
-                    <button onclick="showTab('monthly-view')" id="monthly-view-tab" class="tab-button flex-1 border-b-2 border-black text-black py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                <nav class="-mb-px flex flex-col sm:flex-row gap-2 sm:gap-0">
+                    <button onclick="showTab('monthly-view')" id="monthly-view-tab" class="tab-button w-full sm:w-auto border-b-2 border-black text-black py-2 px-2 text-xs sm:text-sm font-medium text-center">
                         View Reports
                     </button>
-                    <button onclick="showTab('monthly-mark')" id="monthly-mark-tab" class="tab-button flex-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                    <button onclick="showTab('monthly-mark')" id="monthly-mark-tab" class="tab-button w-full sm:w-auto border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-2 text-xs sm:text-sm font-medium text-center">
                         Monthly
                     </button>
                 </nav>
@@ -82,43 +82,14 @@
         <div id="monthly-mark-content" class="tab-content hidden">
             <div class="bg-white shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                    <!-- Inline banner above the section for quick glance -->
-                    <div class="mb-4" id="monthly-inline-flash">
-                        {% for category, message in messages %}
-                        <div class="p-3 rounded border text-sm
-                            {% if category == 'success' %} bg-green-50 border-green-200 text-green-800 {% elif category == 'error' %} bg-red-50 border-red-200 text-red-800 {% else %} bg-gray-50 border-gray-200 text-gray-800 {% endif %}">
-                            {{ message }}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    {% endwith %}
+                    {# Removed inline error flash display for monthly attendance. Errors will show only in custom modal popup. #}
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Mark Monthly Attendance</h3>
                     <p class="text-sm text-gray-600 mb-6">Enter the number of classes each student attended out of total classes conducted in the month.</p>
                     {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
-                    <div class="mb-4 space-y-2" id="monthly-flash-container">
-                        {% for category, message in messages %}
-                        <div class="flex items-start p-3 rounded-md text-sm shadow border
-                            {% if category == 'success' %} bg-green-50 border-green-200 text-green-800 {% elif category == 'error' %} bg-red-50 border-red-200 text-red-800 {% else %} bg-gray-50 border-gray-200 text-gray-800 {% endif %}">
-                            <span class="mr-2">{% if category == 'success' %}✓{% elif category == 'error' %}!{% else %}i{% endif %}</span>
-                            <span>{{ message }}</span>
-                            <button type="button" class="ml-auto text-xs opacity-70 hover:opacity-100" onclick="this.parentElement.remove()">Dismiss</button>
-                        </div>
-                        {% endfor %}
-                    </div>
                     <div id="flash-data" data-messages='{{ messages|tojson|safe }}' class="hidden"></div>
                     <script>
-                    // Auto-hide flash after 7s (linger longer as requested)
-                    setTimeout(function(){
-                        const wrap = document.getElementById('monthly-flash-container');
-                        if (wrap) wrap.remove();
-                        const inline = document.getElementById('monthly-inline-flash');
-                        if (inline) inline.remove();
-                    }, 7000);
-                    // Also show popup modal for readability
+                    // Show popup modal for error messages only
                     (function(){
                         try {
                             const el = document.getElementById('flash-data');
@@ -135,15 +106,8 @@
                                         openAlertModal('Error!', text, 'error');
                                     }
                                 });
-                                // If there was an error, ensure Monthly tab is visible and hide any global banner
                                 if (hasError) {
                                     try { showTab('monthly-mark'); } catch(e) {}
-                                    // Remove/hide top-page flash banners so the modal is the only visible message
-                                    try {
-                                        document.querySelectorAll('[role="alert"], .alert, .flashes, .flash, .bg-red-100, .bg-green-100').forEach(function(el){
-                                            el.style.display = 'none';
-                                        });
-                                    } catch(e) {}
                                 }
                             }
                         } catch(e){}
@@ -200,7 +164,7 @@
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto" id="monthly-students-container">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto w-full" id="monthly-students-container">
                             {% for student in students %}
                             <div class="monthly-student-row flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50" 
                                  data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
@@ -218,7 +182,7 @@
                         </div>
                         
                         <div class="mt-6">
-                            <button type="submit" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                            <button type="button" id="monthly-attendance-confirm" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 Save Monthly Attendance
                             </button>
                         </div>
@@ -241,7 +205,7 @@
                 <div class="px-4 py-5 sm:p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-medium text-gray-900">Monthly Attendance Reports</h3>
-                        <form method="GET" class="flex items-center space-x-2">
+                        <form method="GET" class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full">
                             <input type="hidden" name="view" value="monthly">
                             <select name="view_month" class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
                                 {% for i in range(1, 13) %}
@@ -260,8 +224,8 @@
                     </div>
 
                     {% if monthly_attendance_data %}
-                    <div class="overflow-x-auto -mx-4 sm:mx-0">
-                        <table class="min-w-full divide-y divide-gray-200">
+                    <div class="overflow-x-auto w-full">
+                        <table class="min-w-full w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
@@ -312,7 +276,7 @@
 
 <script>
 // Lightweight modal for alerts (success/error/info)
-function openAlertModal(title, message, category) {
+function openAlertModal(title, message, category, onConfirm, onCancel) {
     // Remove existing
     const existing = document.getElementById('alert-modal');
     if (existing) existing.remove();
@@ -321,20 +285,41 @@ function openAlertModal(title, message, category) {
     overlay.className = 'fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50';
     const box = document.createElement('div');
     box.className = 'bg-white rounded-md shadow-xl w-11/12 max-w-md p-5 text-center';
+    // SVG icon for confirm
     const icon = document.createElement('div');
-    icon.className = 'mx-auto mb-3 text-4xl';
-    icon.textContent = category === 'error' ? '✕' : (category === 'success' ? '✓' : 'ℹ');
+    icon.className = 'mx-auto mb-3 flex items-center justify-center';
+    if (category === 'info') {
+        icon.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='h-12 w-12 text-green-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'><circle cx='12' cy='12' r='10' stroke='currentColor' stroke-width='2' fill='white'/><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12l2 2l4-4'/></svg>`;
+    } else if (category === 'error') {
+        icon.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='h-12 w-12 text-red-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'><circle cx='12' cy='12' r='10' stroke='currentColor' stroke-width='2' fill='white'/><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12'/></svg>`;
+    } else {
+        icon.innerHTML = `<svg xmlns='http://www.w3.org/2000/svg' class='h-12 w-12 text-blue-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'><circle cx='12' cy='12' r='10' stroke='currentColor' stroke-width='2' fill='white'/><text x='12' y='16' text-anchor='middle' font-size='12' fill='currentColor'>i</text></svg>`;
+    }
     const h = document.createElement('div');
     h.className = 'text-xl font-semibold mb-2';
     h.textContent = title || 'Notice';
     const p = document.createElement('div');
     p.className = 'text-sm text-gray-700 mb-4';
     p.textContent = message || '';
-    const btn = document.createElement('button');
-    btn.className = 'px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700';
-    btn.textContent = 'OK';
-    btn.onclick = function(){ document.getElementById('alert-modal')?.remove(); };
-    box.appendChild(icon); box.appendChild(h); box.appendChild(p); box.appendChild(btn);
+    const btnWrap = document.createElement('div');
+    btnWrap.className = 'flex justify-center gap-4';
+    const okBtn = document.createElement('button');
+    okBtn.className = 'px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700';
+    okBtn.textContent = 'OK';
+    okBtn.onclick = function(){
+        document.getElementById('alert-modal')?.remove();
+        if (typeof onConfirm === 'function') onConfirm();
+    };
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = function(){
+        document.getElementById('alert-modal')?.remove();
+        if (typeof onCancel === 'function') onCancel();
+    };
+    btnWrap.appendChild(okBtn);
+    btnWrap.appendChild(cancelBtn);
+    box.appendChild(icon); box.appendChild(h); box.appendChild(p); box.appendChild(btnWrap);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 }
@@ -469,6 +454,24 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMonthHelper();
     document.getElementById('monthly_month')?.addEventListener('change', updateMonthHelper);
     document.getElementById('monthly_year')?.addEventListener('input', updateMonthHelper);
+});
+
+// Confirmation popup for monthly attendance submission
+document.getElementById('monthly-attendance-confirm')?.addEventListener('click', function(e) {
+    const monthSelect = document.getElementById('monthly_month');
+    const yearInput = document.getElementById('monthly_year');
+    const totalClassesInput = document.getElementById('monthly_total_classes');
+    const studentsContainer = document.getElementById('monthly-students-container');
+    const monthName = monthSelect ? monthSelect.options[monthSelect.selectedIndex].text : '';
+    const year = yearInput ? yearInput.value : '';
+    const totalClasses = totalClassesInput ? totalClassesInput.value : '';
+    const studentCount = studentsContainer ? studentsContainer.children.length : 0;
+    let summary = `Month: ${monthName}\nYear: ${year}\nTotal Classes: ${totalClasses}\nStudents: ${studentCount}`;
+    // Find the form to submit
+    const form = this.closest('form');
+    openAlertModal('Confirm Submission', summary, 'info', function(){
+        if (form) form.submit();
+    }, function(){ /* Cancel does nothing */ });
 });
 </script>
 {% endblock %}
