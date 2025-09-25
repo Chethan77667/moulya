@@ -888,6 +888,72 @@ def export_student_report_pdf(student_id):
         flash(f'Error exporting PDF: {str(e)}', 'error')
         return redirect(url_for('management.student_report', student_id=student_id))
 
+@management_bp.route('/reports/export/class/marks/<int:subject_id>/pdf')
+@login_required('management')
+def export_class_marks_report_pdf(subject_id):
+    """Export class marks report to PDF"""
+    try:
+        from flask import make_response
+        assessment_type = request.args.get('assessment_type')
+        report = ReportingService.get_class_marks_report(subject_id, assessment_type)
+        if not report:
+            flash('Subject not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        pdf_bytes = ReportingService.generate_class_marks_report_pdf(report)
+        filename = f"class_marks_{report['subject']['code']}"
+        if assessment_type:
+            filename += f"_{assessment_type}"
+        filename += ".pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting class marks PDF: {str(e)}', 'error')
+        return redirect(url_for('management.class_marks_report', subject_id=subject_id))
+
+@management_bp.route('/reports/export/class/attendance/<int:subject_id>/pdf')
+@login_required('management')
+def export_class_attendance_report_pdf(subject_id):
+    """Export class attendance report to PDF"""
+    try:
+        from flask import make_response
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        report = ReportingService.get_class_attendance_report(subject_id, month, year)
+        if not report:
+            flash('Subject not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        pdf_bytes = ReportingService.generate_class_attendance_report_pdf(report)
+        filename = f"class_attendance_{report['subject']['code']}_{report['month']}_{report['year']}.pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting class attendance PDF: {str(e)}', 'error')
+        return redirect(url_for('management.class_attendance_report', subject_id=subject_id))
+
+@management_bp.route('/reports/export/course/<int:course_id>/pdf')
+@login_required('management')
+def export_course_overview_report_pdf(course_id):
+    """Export course overview report to PDF"""
+    try:
+        from flask import make_response
+        report = ReportingService.get_course_overview_report(course_id)
+        if not report:
+            flash('Course not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        pdf_bytes = ReportingService.generate_course_overview_report_pdf(report)
+        filename = f"course_overview_{report['course']['code']}.pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting course overview PDF: {str(e)}', 'error')
+        return redirect(url_for('management.course_overview_report', course_id=course_id))
+
 @management_bp.route('/reports/export/class/marks/<int:subject_id>')
 @login_required('management')
 def export_class_marks_report(subject_id):

@@ -12,12 +12,16 @@
                     <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
                     <h1 class="text-xl font-semibold text-gray-900">Class Attendance Report</h1>
                 </div>
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
                     <a href="{{ url_for('management.export_class_attendance_report', subject_id=report.subject.id, month=report.month, year=report.year) }}" 
                        class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
                         📥 Export Excel
                     </a>
-                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <a href="{{ url_for('management.export_class_attendance_report_pdf', subject_id=report.subject.id, month=report.month, year=report.year) }}"
+                       class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
+                        🧾 Export PDF
+                    </a>
+                    <span class="text-sm text-gray-700 ml-2">{{ current_user.username }}</span>
                 </div>
             </div>
         </div>
