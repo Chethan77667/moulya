@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from routes.auth import login_required
 from services.lecturer_service import LecturerService
 from models.academic import Subject
+from services.reporting_service import ReportingService
 from models.student import Student
 from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
 from datetime import datetime, date
@@ -363,6 +364,41 @@ def subject_reports(subject_id):
     except Exception as e:
         flash(f'Error loading reports: {str(e)}', 'error')
         return redirect(url_for('lecturer.subjects'))
+
+# ---------------- PDF Export for Lecturer Reports ----------------
+@lecturer_bp.route('/subjects/<int:subject_id>/reports/marks/pdf')
+@login_required('lecturer')
+def export_subject_marks_report_pdf(subject_id):
+    try:
+        lecturer_id = session.get('user_id')
+        subject = Subject.query.get_or_404(subject_id)
+        marks_report, _ = LecturerService.generate_marks_report(subject_id, lecturer_id)
+        pdf_bytes = ReportingService.generate_subject_marks_report_pdf(subject, marks_report)
+        from flask import make_response
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=marks_report_{subject.code}.pdf'
+        return response
+    except Exception as e:
+        flash(f'Error exporting marks PDF: {str(e)}', 'error')
+        return redirect(url_for('lecturer.subject_reports', subject_id=subject_id))
+
+@lecturer_bp.route('/subjects/<int:subject_id>/reports/attendance/pdf')
+@login_required('lecturer')
+def export_subject_attendance_report_pdf(subject_id):
+    try:
+        lecturer_id = session.get('user_id')
+        subject = Subject.query.get_or_404(subject_id)
+        attendance_report, _ = LecturerService.generate_attendance_report(subject_id, lecturer_id)
+        pdf_bytes = ReportingService.generate_subject_attendance_report_pdf(subject, attendance_report)
+        from flask import make_response
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=attendance_report_{subject.code}.pdf'
+        return response
+    except Exception as e:
+        flash(f'Error exporting attendance PDF: {str(e)}', 'error')
+        return redirect(url_for('lecturer.subject_reports', subject_id=subject_id))
 
 @lecturer_bp.route('/reports/attendance-shortage')
 @login_required('lecturer')

@@ -593,6 +593,156 @@ class ReportingService:
         buffer.close()
         return pdf_bytes
 
+    # ======================== LECTURER PDFS ========================
+    @staticmethod
+    def generate_subject_marks_report_pdf(subject, marks_report):
+        """Generate a PDF for a subject's marks report (lecturer view)."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+
+        # Header (logo + college text)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+
+        # Subject summary box
+        subj_table = Table([
+            ['Subject', subject.name],
+            ['Code', subject.code],
+            ['Course', subject.course.name if subject.course else 'N/A']
+        ], colWidths=[35*mm, 130*mm])
+        subj_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        elements.extend([Spacer(1, 10), Paragraph('Marks Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
+
+        # Marks table (Student | Roll | Overall % | Status)
+        rows = [['Student', 'Roll Number', 'Overall %', 'Status']]
+        for record in marks_report or []:
+            student = record['student']
+            overall = record.get('overall_percentage') or 0
+            status = 'Good' if overall >= 50 else 'Deficient'
+            rows.append([student.name, student.roll_number, f"{overall}%", status])
+        if len(rows) == 1:
+            rows.append(['No data', '', '', ''])
+
+        table = Table(rows, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(table)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @staticmethod
+    def generate_subject_attendance_report_pdf(subject, attendance_report):
+        """Generate a PDF for a subject's attendance report (lecturer view)."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+
+        subj_table = Table([
+            ['Subject', subject.name],
+            ['Code', subject.code],
+            ['Course', subject.course.name if subject.course else 'N/A']
+        ], colWidths=[35*mm, 130*mm])
+        subj_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        elements.extend([Spacer(1, 10), Paragraph('Attendance Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
+
+        # Attendance table (Student | Present | Total | % | Status)
+        rows = [['Student', 'Roll Number', 'Present', 'Total', '%', 'Status']]
+        for record in attendance_report or []:
+            student = record['student']
+            percent = record.get('attendance_percentage') or 0
+            status = 'Good' if percent >= 75 else 'Shortage'
+            rows.append([
+                student.name,
+                student.roll_number,
+                record.get('present_classes') or 0,
+                record.get('total_classes') or 0,
+                f"{percent}%",
+                status
+            ])
+        if len(rows) == 1:
+            rows.append(['No data', '', '', '', '', ''])
+
+        table = Table(rows, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+        ]))
+        elements.append(table)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
     # ======================== ADDITIONAL PDF GENERATORS ========================
     @staticmethod
     def generate_class_marks_report_pdf(report):
