@@ -250,14 +250,15 @@
                                     </option>
                                     {% endfor %}
                                 </select>
+                                <p class="mt-1 text-xs text-gray-500" id="month-helper"></p>
                             </div>
                             <div>
                                 <label for="monthly_year" class="block text-sm font-medium text-gray-700">Year</label>
                                 <input type="number" name="year" id="monthly_year" value="{{ selected_date.year }}" min="2020" max="2030" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                             </div>
                             <div>
-                                <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">Total Classes</label>
-                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="50" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">Total Classes (cumulative till selected month)</label>
+                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="400" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm" placeholder="e.g 40 ( till September )">
                             </div>
                         </div>
 
@@ -292,7 +293,7 @@
                                     <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <input type="number" name="attended_{{ student.id }}" min="0" max="50" 
+                                    <input type="number" name="attended_{{ student.id }}" min="0" max="400" 
                                            class="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black monthly-attendance-input"
                                            placeholder="0">
                                 </div>
@@ -506,6 +507,19 @@ document.getElementById('monthly_total_classes')?.addEventListener('input', func
 // Initialize counts on page load
 document.addEventListener('DOMContentLoaded', function() {
     updateCounts();
+    // Set month helper to show last date of month
+    function updateMonthHelper() {
+        const month = parseInt(document.getElementById('monthly_month').value);
+        const year = parseInt(document.getElementById('monthly_year').value);
+        if (!month || !year) return;
+        const lastDay = new Date(year, month, 0).getDate();
+        const monthName = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month];
+        const helper = document.getElementById('month-helper');
+        if (helper) helper.textContent = `Till ${monthName} ${lastDay}, ${year}`;
+    }
+    updateMonthHelper();
+    document.getElementById('monthly_month')?.addEventListener('change', updateMonthHelper);
+    document.getElementById('monthly_year')?.addEventListener('input', updateMonthHelper);
 });
 </script>
 {% endblock %}

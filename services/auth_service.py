@@ -17,7 +17,15 @@ class AuthService:
     def authenticate_management(username, password):
         """Authenticate management user"""
         try:
-            user = Management.query.filter_by(username=username, is_active=True).first()
+            # Case-insensitive username match
+            from sqlalchemy import func
+            normalized = (username or '').strip()
+            user = (
+                Management.query
+                .filter(func.lower(Management.username) == func.lower(normalized))
+                .filter_by(is_active=True)
+                .first()
+            )
             
             if user and user.check_password(password):
                 user.update_last_login()
@@ -32,7 +40,15 @@ class AuthService:
     def authenticate_lecturer(username, password):
         """Authenticate lecturer user"""
         try:
-            user = Lecturer.query.filter_by(username=username, is_active=True).first()
+            # Case-insensitive username match
+            from sqlalchemy import func
+            normalized = (username or '').strip()
+            user = (
+                Lecturer.query
+                .filter(func.lower(Lecturer.username) == func.lower(normalized))
+                .filter_by(is_active=True)
+                .first()
+            )
             
             if user and user.check_password(password):
                 user.update_last_login()

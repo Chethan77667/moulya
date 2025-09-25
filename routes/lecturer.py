@@ -372,21 +372,29 @@ def attendance_shortage_report():
         lecturer_id = session.get('user_id')
         subjects = LecturerService.get_assigned_subjects(lecturer_id)
         
+        # Get threshold from query parameter, default to 75%
+        threshold = request.args.get('threshold', 75, type=int)
+        
         shortage_data = []
         for subject in subjects:
             report, message = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                shortage_students = [r for r in report if r['has_shortage']]
+                # Filter students based on custom threshold
+                shortage_students = [r for r in report if r['attendance_percentage'] < threshold]
                 if shortage_students:
                     shortage_data.append({
                         'subject': subject,
                         'shortage_students': shortage_students
                     })
         
-        return render_template('lecturer/attendance_shortage.html', shortage_data=shortage_data)
+        return render_template('lecturer/attendance_shortage.html', 
+                             shortage_data=shortage_data, 
+                             threshold=threshold)
     except Exception as e:
         flash(f'Error loading attendance shortage report: {str(e)}', 'error')
-        return render_template('lecturer/attendance_shortage.html', shortage_data=[])
+        return render_template('lecturer/attendance_shortage.html', 
+                             shortage_data=[], 
+                             threshold=75)
 
 @lecturer_bp.route('/reports/marks-deficiency')
 @login_required('lecturer')
@@ -396,18 +404,26 @@ def marks_deficiency_report():
         lecturer_id = session.get('user_id')
         subjects = LecturerService.get_assigned_subjects(lecturer_id)
         
+        # Get threshold from query parameter, default to 50%
+        threshold = request.args.get('threshold', 50, type=int)
+        
         deficiency_data = []
         for subject in subjects:
             report, message = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                deficient_students = [r for r in report if r['has_deficiency']]
+                # Filter students based on custom threshold
+                deficient_students = [r for r in report if r['overall_percentage'] < threshold]
                 if deficient_students:
                     deficiency_data.append({
                         'subject': subject,
                         'deficient_students': deficient_students
                     })
         
-        return render_template('lecturer/marks_deficiency.html', deficiency_data=deficiency_data)
+        return render_template('lecturer/marks_deficiency.html', 
+                             deficiency_data=deficiency_data, 
+                             threshold=threshold)
     except Exception as e:
         flash(f'Error loading marks deficiency report: {str(e)}', 'error')
-        return render_template('lecturer/marks_deficiency.html', deficiency_data=[])
+        return render_template('lecturer/marks_deficiency.html', 
+                             deficiency_data=[], 
+                             threshold=50)
