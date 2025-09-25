@@ -194,20 +194,17 @@ def record_daily_attendance(subject_id):
                     continue
         
         if not attendance_data:
-            # Use custom popup via query params instead of flash
-            return redirect(url_for('lecturer.attendance_management', subject_id=subject_id,
-                                    popup_category='error', popup_message='No attendance data provided', view='monthly'))
+            flash('No attendance data provided', 'error')
+            return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
         
         success, message = LecturerService.record_daily_attendance(
             subject_id, lecturer_id, attendance_data, attendance_date
         )
         
         if success:
-            return redirect(url_for('lecturer.attendance_management', subject_id=subject_id,
-                                    popup_category='success', popup_message=message, view='monthly'))
+            flash(message, 'success')
         else:
-            return redirect(url_for('lecturer.attendance_management', subject_id=subject_id,
-                                    popup_category='error', popup_message=message, view='monthly'))
+            flash(message, 'error')
             
     except ValueError as ve:
         flash(f'Invalid date format: {str(ve)}', 'error')
@@ -253,8 +250,9 @@ def record_monthly_attendance(subject_id):
             flash(message, 'error')
             
     except Exception as e:
-        return redirect(url_for('lecturer.attendance_management', subject_id=subject_id,
-                                popup_category='error', popup_message=f'Error recording monthly attendance: {str(e)}', view='monthly'))
+        flash(f'Error recording monthly attendance: {str(e)}', 'error')
+    
+    return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
 
 @lecturer_bp.route('/subjects/<int:subject_id>/attendance/summary', methods=['POST'])
 @login_required('lecturer')

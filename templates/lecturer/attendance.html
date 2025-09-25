@@ -82,23 +82,6 @@
         <div id="monthly-mark-content" class="tab-content hidden">
             <div class="bg-white shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    {% set popup_category = request.args.get('popup_category') %}
-                    {% set popup_message = request.args.get('popup_message') %}
-                    {% if popup_category and popup_message %}
-                    <div id="popup-args" data-cat="{{ popup_category }}" data-msg="{{ popup_message }}" class="hidden"></div>
-                    <script>
-                        // Ensure monthly tab is shown and open modal with provided message
-                        try { showTab('monthly-mark'); } catch(e) {}
-                        (function(){
-                            var el = document.getElementById('popup-args');
-                            if (!el) return;
-                            var cat = el.getAttribute('data-cat');
-                            var msg = el.getAttribute('data-msg');
-                            var title = (cat === 'error') ? 'Error!' : (cat === 'success' ? 'Success' : 'Notice');
-                            openAlertModal(title, msg, cat);
-                        })();
-                    </script>
-                    {% endif %}
                     {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                     <!-- Inline banner above the section for quick glance -->
