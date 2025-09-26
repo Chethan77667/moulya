@@ -101,7 +101,19 @@
                                     {{ mark.assessment_type }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ mark.marks_obtained }}/{{ mark.max_marks }}
+                                    {% set obtained = mark.marks_obtained %}
+                                    {% set max_val = mark.max_marks %}
+                                    {% if obtained is number and obtained == obtained|int %}
+                                        {% set obtained_display = obtained|int %}
+                                    {% else %}
+                                        {% set obtained_display = obtained %}
+                                    {% endif %}
+                                    {% if max_val is number and max_val == max_val|int %}
+                                        {% set max_display = max_val|int %}
+                                    {% else %}
+                                        {% set max_display = max_val %}
+                                    {% endif %}
+                                    {{ obtained_display }}/{{ max_display }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                     {% set percentage = (mark.marks_obtained / mark.max_marks * 100) | round(2) if mark.max_marks > 0 else 0 %}
