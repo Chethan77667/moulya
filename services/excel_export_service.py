@@ -201,9 +201,16 @@ class ExcelExportService:
             ws.cell(row=3, column=2, value=subject.get('course_display') or subject.get('course'))
             ws.cell(row=4, column=1, value="Year/Semester")
             ws.cell(row=4, column=2, value=f"{subject['year']}/{subject['semester']}")
+            # Optional section line
+            if subject.get('section'):
+                ws.cell(row=5, column=1, value="Section")
+                ws.cell(row=5, column=2, value=str(subject.get('section')).upper())
+                next_row = 6
+            else:
+                next_row = 5
             if subject.get('lecturers'):
-                ws.cell(row=5, column=1, value="Faculty")
-                ws.cell(row=5, column=2, value=", ".join(subject.get('lecturers') or []))
+                ws.cell(row=next_row, column=1, value="Faculty")
+                ws.cell(row=next_row, column=2, value=", ".join(subject.get('lecturers') or []))
             
             if report_data['assessment_type']:
                 ws.cell(row=5, column=1, value="Assessment Type")
@@ -212,27 +219,28 @@ class ExcelExportService:
             # Clean statistics table
             stats = report_data['statistics']
             stats_headers = ['Statistic', 'Value']
-            ExcelExportService.style_header_row(ws, 8, stats_headers)
+            ExcelExportService.style_header_row(ws, next_row + 2, stats_headers)
             
-            ws.cell(row=9, column=1, value="Total Students")
-            ws.cell(row=9, column=2, value=stats['total_students'])
-            ws.cell(row=10, column=1, value="Class Average")
-            ExcelExportService.set_percentage(ws.cell(row=10, column=2), stats['class_average'], align_left=True)
-            ws.cell(row=11, column=1, value="Highest Score")
-            ExcelExportService.set_percentage(ws.cell(row=11, column=2), stats['highest_score'], align_left=True)
-            ws.cell(row=12, column=1, value="Lowest Score")
-            ExcelExportService.set_percentage(ws.cell(row=12, column=2), stats['lowest_score'], align_left=True)
-            ws.cell(row=13, column=1, value="Passing Students")
-            ws.cell(row=13, column=2, value=stats['passing_students'])
-            ws.cell(row=14, column=1, value="Failing Students")
-            ws.cell(row=14, column=2, value=stats['failing_students'])
+            base = next_row + 3
+            ws.cell(row=base + 0, column=1, value="Total Students")
+            ws.cell(row=base + 0, column=2, value=stats['total_students'])
+            ws.cell(row=base + 1, column=1, value="Class Average")
+            ExcelExportService.set_percentage(ws.cell(row=base + 1, column=2), stats['class_average'], align_left=True)
+            ws.cell(row=base + 2, column=1, value="Highest Score")
+            ExcelExportService.set_percentage(ws.cell(row=base + 2, column=2), stats['highest_score'], align_left=True)
+            ws.cell(row=base + 3, column=1, value="Lowest Score")
+            ExcelExportService.set_percentage(ws.cell(row=base + 3, column=2), stats['lowest_score'], align_left=True)
+            ws.cell(row=base + 4, column=1, value="Passing Students")
+            ws.cell(row=base + 4, column=2, value=stats['passing_students'])
+            ws.cell(row=base + 5, column=1, value="Failing Students")
+            ws.cell(row=base + 5, column=2, value=stats['failing_students'])
             
             # Student marks table
             headers = ['Roll Number', 'Student Name', 'Assessment Type', 'Marks Obtained', 
                       'Max Marks', 'Percentage', 'Grade', 'Status']
-            ExcelExportService.style_header_row(ws, 16, headers)
+            ExcelExportService.style_header_row(ws, base + 7, headers)
             
-            row = 17
+            row = base + 8
             for student_data in report_data['student_marks']:
                 student = student_data['student']
                 for mark in student_data['marks']:
@@ -278,32 +286,40 @@ class ExcelExportService:
             ws.cell(row=4, column=2, value=f"{subject['year']}/{subject['semester']}")
             ws.cell(row=5, column=1, value="Period")
             ws.cell(row=5, column=2, value=f"{report_data['month']}/{report_data['year']}")
+            # Optional section line
+            if subject.get('section'):
+                ws.cell(row=6, column=1, value="Section")
+                ws.cell(row=6, column=2, value=str(subject.get('section')).upper())
+                next_row2 = 7
+            else:
+                next_row2 = 6
             if subject.get('lecturers'):
-                ws.cell(row=6, column=1, value="Faculty")
-                ws.cell(row=6, column=2, value=", ".join(subject.get('lecturers') or []))
+                ws.cell(row=next_row2, column=1, value="Faculty")
+                ws.cell(row=next_row2, column=2, value=", ".join(subject.get('lecturers') or []))
             
             # Clean statistics table
             stats = report_data['statistics']
             stats_headers = ['Statistic', 'Value']
-            ExcelExportService.style_header_row(ws, 8, stats_headers)
+            ExcelExportService.style_header_row(ws, next_row2 + 2, stats_headers)
             
-            ws.cell(row=9, column=1, value="Total Students")
-            ws.cell(row=9, column=2, value=stats['total_students'])
-            ws.cell(row=10, column=1, value="Total Classes Conducted")
-            ws.cell(row=10, column=2, value=stats['total_classes_conducted'])
-            ws.cell(row=11, column=1, value="Class Average Attendance")
-            ExcelExportService.set_percentage(ws.cell(row=11, column=2), stats['class_average_attendance'], align_left=True)
-            ws.cell(row=12, column=1, value="Good Attendance (≥75%)")
-            ws.cell(row=12, column=2, value=stats['students_with_good_attendance'])
-            ws.cell(row=13, column=1, value="Poor Attendance (<50%)")
-            ws.cell(row=13, column=2, value=stats['students_with_poor_attendance'])
+            base2 = next_row2 + 3
+            ws.cell(row=base2 + 0, column=1, value="Total Students")
+            ws.cell(row=base2 + 0, column=2, value=stats['total_students'])
+            ws.cell(row=base2 + 1, column=1, value="Total Classes Conducted")
+            ws.cell(row=base2 + 1, column=2, value=stats['total_classes_conducted'])
+            ws.cell(row=base2 + 2, column=1, value="Class Average Attendance")
+            ExcelExportService.set_percentage(ws.cell(row=base2 + 2, column=2), stats['class_average_attendance'], align_left=True)
+            ws.cell(row=base2 + 3, column=1, value="Good Attendance (≥75%)")
+            ws.cell(row=base2 + 3, column=2, value=stats['students_with_good_attendance'])
+            ws.cell(row=base2 + 4, column=1, value="Poor Attendance (<50%)")
+            ws.cell(row=base2 + 4, column=2, value=stats['students_with_poor_attendance'])
             
             # Student attendance table
             headers = ['Roll Number', 'Student Name', 'Total Classes', 'Present', 
                       'Absent', 'Attendance %', 'Status']
-            ExcelExportService.style_header_row(ws, 15, headers)
+            ExcelExportService.style_header_row(ws, base2 + 6, headers)
             
-            row = 16
+            row = base2 + 7
             for student in report_data['student_attendance']:
                 ws.cell(row=row, column=1, value=student['roll_number'])
                 ws.cell(row=row, column=2, value=student['student_name'])

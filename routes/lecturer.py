@@ -507,6 +507,40 @@ def export_subject_attendance_report_pdf(subject_id):
         flash(f'Error exporting attendance PDF: {str(e)}', 'error')
         return redirect(url_for('lecturer.subject_reports', subject_id=subject_id))
 
+@lecturer_bp.route('/subjects/<int:subject_id>/reports/marks/excel')
+@login_required('lecturer')
+def export_subject_marks_report_excel(subject_id):
+    try:
+        lecturer_id = session.get('user_id')
+        subject = Subject.query.get_or_404(subject_id)
+        marks_report, _ = LecturerService.generate_marks_report(subject_id, lecturer_id)
+        excel_bytes = ReportingService.generate_subject_marks_report_excel(subject, marks_report)
+        from flask import make_response
+        response = make_response(excel_bytes)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=marks_report_{subject.code}.xlsx'
+        return response
+    except Exception as e:
+        flash(f'Error exporting marks Excel: {str(e)}', 'error')
+        return redirect(url_for('lecturer.subject_reports', subject_id=subject_id))
+
+@lecturer_bp.route('/subjects/<int:subject_id>/reports/attendance/excel')
+@login_required('lecturer')
+def export_subject_attendance_report_excel(subject_id):
+    try:
+        lecturer_id = session.get('user_id')
+        subject = Subject.query.get_or_404(subject_id)
+        attendance_report, _ = LecturerService.generate_attendance_report(subject_id, lecturer_id)
+        excel_bytes = ReportingService.generate_subject_attendance_report_excel(subject, attendance_report)
+        from flask import make_response
+        response = make_response(excel_bytes)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=attendance_report_{subject.code}.xlsx'
+        return response
+    except Exception as e:
+        flash(f'Error exporting attendance Excel: {str(e)}', 'error')
+        return redirect(url_for('lecturer.subject_reports', subject_id=subject_id))
+
 @lecturer_bp.route('/reports/attendance-shortage')
 @login_required('lecturer')
 def attendance_shortage_report():

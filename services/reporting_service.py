@@ -18,10 +18,22 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 class ReportingService:
     """Service for generating reports"""
     
+    @staticmethod
+    def _full_width_colwidths(total_width, num_columns):
+        """Return equal column widths that use the full available width.
+        This keeps every table consistent and maximized to the page width.
+        """
+        if num_columns <= 0:
+            return []
+        col = total_width / float(num_columns)
+        return [col] * num_columns
+
     @staticmethod
     def _parse_course_and_section(course_name: str):
         """Split a user-entered course string into course and section.
@@ -530,7 +542,7 @@ class ReportingService:
             Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
             Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
         ]
-        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
@@ -583,7 +595,9 @@ class ReportingService:
                 ])
         if len(marks_rows) == 1:
             marks_rows.append(['No data'] + ['']*7)
-        marks_table = Table(marks_rows, repeatRows=1)
+        # Make table full width
+        page_width = A4[0] - (18*mm + 18*mm)
+        marks_table = Table(marks_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(marks_headers)))
         marks_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -606,7 +620,7 @@ class ReportingService:
             ])
         if len(att_rows) == 1:
             att_rows.append(['No data'] + ['']*6)
-        att_table = Table(att_rows, repeatRows=1)
+        att_table = Table(att_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(att_headers)))
         att_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -645,7 +659,7 @@ class ReportingService:
             Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
             Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
         ]
-        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
@@ -656,12 +670,31 @@ class ReportingService:
         ]))
         elements.append(header_table)
 
+        # Get faculty name
+        from models.assignments import SubjectAssignment
+        assignment = SubjectAssignment.query.filter_by(subject_id=subject.id, is_active=True).first()
+        faculty_name = assignment.lecturer.name if assignment and assignment.lecturer else 'N/A'
+        
+        # Parse course name to extract course code and section
+        course_name = subject.course.name if subject.course else 'N/A'
+        course_parts = course_name.split() if course_name != 'N/A' else []
+        
+        # Determine if section exists (if there are 3+ parts, last part is section)
+        has_section = len(course_parts) >= 3
+        course_code = course_parts[-2] if has_section else (course_parts[-1] if course_parts else 'N/A')
+        section = course_parts[-1] if has_section else None
+        
         # Subject summary box
-        subj_table = Table([
+        subj_rows = [
             ['Subject', subject.name],
             ['Code', subject.code],
-            ['Course', subject.course.name if subject.course else 'N/A']
-        ], colWidths=[35*mm, 130*mm])
+            ['Course', course_code]
+        ]
+        if has_section:
+            subj_rows.append(['Section', section])
+        subj_rows.append(['Faculty', faculty_name])
+        
+        subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -679,7 +712,8 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', ''])
 
-        table = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -727,11 +761,31 @@ class ReportingService:
         ]))
         elements.append(header_table)
 
-        subj_table = Table([
+        # Get faculty name
+        from models.assignments import SubjectAssignment
+        assignment = SubjectAssignment.query.filter_by(subject_id=subject.id, is_active=True).first()
+        faculty_name = assignment.lecturer.name if assignment and assignment.lecturer else 'N/A'
+        
+        # Parse course name to extract course code and section
+        course_name = subject.course.name if subject.course else 'N/A'
+        course_parts = course_name.split() if course_name != 'N/A' else []
+        
+        # Determine if section exists (if there are 3+ parts, last part is section)
+        has_section = len(course_parts) >= 3
+        course_code = course_parts[-2] if has_section else (course_parts[-1] if course_parts else 'N/A')
+        section = course_parts[-1] if has_section else None
+        
+        # Subject summary box
+        subj_rows = [
             ['Subject', subject.name],
             ['Code', subject.code],
-            ['Course', subject.course.name if subject.course else 'N/A']
-        ], colWidths=[35*mm, 130*mm])
+            ['Course', course_code]
+        ]
+        if has_section:
+            subj_rows.append(['Section', section])
+        subj_rows.append(['Faculty', faculty_name])
+        
+        subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -756,7 +810,8 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
 
-        table = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -770,6 +825,205 @@ class ReportingService:
         pdf_bytes = buffer.getvalue()
         buffer.close()
         return pdf_bytes
+
+    # ======================== EXCEL EXPORT FUNCTIONS ========================
+    @staticmethod
+    def generate_subject_marks_report_excel(subject, marks_report):
+        """Generate an Excel file for a subject's marks report (lecturer view)."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Marks Report"
+        
+        # Get faculty name
+        from models.assignments import SubjectAssignment
+        assignment = SubjectAssignment.query.filter_by(subject_id=subject.id, is_active=True).first()
+        faculty_name = assignment.lecturer.name if assignment and assignment.lecturer else 'N/A'
+        
+        # Parse course name to extract course code and section
+        course_name = subject.course.name if subject.course else 'N/A'
+        course_parts = course_name.split() if course_name != 'N/A' else []
+        
+        # Determine if section exists (if there are 3+ parts, last part is section)
+        has_section = len(course_parts) >= 3
+        course_code = course_parts[-2] if has_section else (course_parts[-1] if course_parts else 'N/A')
+        section = course_parts[-1] if has_section else None
+        
+        # Title
+        ws['A1'] = 'Marks Report'
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:D1')
+        
+        # Subject info
+        ws['A3'] = 'Subject'
+        ws['B3'] = subject.name
+        ws['A4'] = 'Code'
+        ws['B4'] = subject.code
+        ws['A5'] = 'Course'
+        ws['B5'] = course_code
+        if has_section:
+            ws['A6'] = 'Section'
+            ws['B6'] = section
+            ws['A7'] = 'Faculty'
+            ws['B7'] = faculty_name
+        else:
+            ws['A6'] = 'Faculty'
+            ws['B6'] = faculty_name
+        # Determine where to place spacer row and headers
+        last_info_row = 7 if has_section else 6
+        spacer_row = last_info_row + 1
+        header_row = spacer_row + 1
+        data_start_row = header_row + 1
+
+        # Spacer row above the table
+        ws.merge_cells(start_row=spacer_row, start_column=1, end_row=spacer_row, end_column=4)
+        spacer_cell = ws.cell(row=spacer_row, column=1, value='')
+        spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
+        # Table headers
+        headers = ['Student', 'Roll Number', 'Overall %', 'Status']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col, value=header)
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Data rows
+        row = data_start_row
+        for record in marks_report or []:
+            student = record['student']
+            overall = record.get('overall_percentage') or 0
+            status = 'Good' if overall >= 50 else 'Deficient'
+            
+            ws.cell(row=row, column=1, value=student.name)
+            ws.cell(row=row, column=2, value=student.roll_number)
+            ws.cell(row=row, column=3, value=f"{overall}%")
+            ws.cell(row=row, column=4, value=status)
+            row += 1
+        
+        if not marks_report:
+            ws.cell(row=data_start_row, column=1, value='No data')
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = None
+            for cell in column:
+                try:
+                    if hasattr(cell, 'column_letter'):
+                        column_letter = cell.column_letter
+                    if cell.value and len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            if column_letter:
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    @staticmethod
+    def generate_subject_attendance_report_excel(subject, attendance_report):
+        """Generate an Excel file for a subject's attendance report (lecturer view)."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Attendance Report"
+        
+        # Get faculty name
+        from models.assignments import SubjectAssignment
+        assignment = SubjectAssignment.query.filter_by(subject_id=subject.id, is_active=True).first()
+        faculty_name = assignment.lecturer.name if assignment and assignment.lecturer else 'N/A'
+        
+        # Parse course name to extract course code and section
+        course_name = subject.course.name if subject.course else 'N/A'
+        course_parts = course_name.split() if course_name != 'N/A' else []
+        
+        # Determine if section exists (if there are 3+ parts, last part is section)
+        has_section = len(course_parts) >= 3
+        course_code = course_parts[-2] if has_section else (course_parts[-1] if course_parts else 'N/A')
+        section = course_parts[-1] if has_section else None
+        
+        # Title
+        ws['A1'] = 'Attendance Report'
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:F1')
+        
+        # Subject info
+        ws['A3'] = 'Subject'
+        ws['B3'] = subject.name
+        ws['A4'] = 'Code'
+        ws['B4'] = subject.code
+        ws['A5'] = 'Course'
+        ws['B5'] = course_code
+        if has_section:
+            ws['A6'] = 'Section'
+            ws['B6'] = section
+            ws['A7'] = 'Faculty'
+            ws['B7'] = faculty_name
+        else:
+            ws['A6'] = 'Faculty'
+            ws['B6'] = faculty_name
+        # Determine where to place spacer row and headers
+        last_info_row = 7 if has_section else 6
+        spacer_row = last_info_row + 1
+        header_row = spacer_row + 1
+        data_start_row = header_row + 1
+
+        # Spacer row above the table
+        ws.merge_cells(start_row=spacer_row, start_column=1, end_row=spacer_row, end_column=6)
+        spacer_cell = ws.cell(row=spacer_row, column=1, value='')
+        spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
+        # Table headers
+        headers = ['Student', 'Roll Number', 'Present', 'Total', '%', 'Status']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col, value=header)
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Data rows
+        row = data_start_row
+        for record in attendance_report or []:
+            student = record['student']
+            percent = record.get('attendance_percentage') or 0
+            status = 'Good' if percent >= 75 else 'Shortage'
+            
+            ws.cell(row=row, column=1, value=student.name)
+            ws.cell(row=row, column=2, value=student.roll_number)
+            ws.cell(row=row, column=3, value=record.get('present_classes') or 0)
+            ws.cell(row=row, column=4, value=record.get('total_classes') or 0)
+            ws.cell(row=row, column=5, value=f"{percent}%")
+            ws.cell(row=row, column=6, value=status)
+            row += 1
+        
+        if not attendance_report:
+            ws.cell(row=data_start_row, column=1, value='No data')
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = None
+            for cell in column:
+                try:
+                    if hasattr(cell, 'column_letter'):
+                        column_letter = cell.column_letter
+                    if cell.value and len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            if column_letter:
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
 
     # ======================== ADDITIONAL PDF GENERATORS ========================
     @staticmethod
@@ -810,9 +1064,11 @@ class ReportingService:
         s = report.get('subject', {})
         meta_rows = [
             ['Subject', f"{s.get('name','')} ({s.get('code','')})"],
-            ['Course', s.get('course_display') or s.get('course') or ''],
-            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"]
+            ['Course', s.get('course_display') or s.get('course') or '']
         ]
+        if s.get('section'):
+            meta_rows.append(['Section', str(s.get('section')).upper()])
+        meta_rows.append(['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"])
         # Faculty line if available
         try:
             lecturers = s.get('lecturers') or []
@@ -860,7 +1116,8 @@ class ReportingService:
                 ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -912,9 +1169,11 @@ class ReportingService:
         s = report.get('subject', {})
         meta_rows = [
             ['Subject', f"{s.get('name','')} ({s.get('code','')})"],
-            ['Course', s.get('course_display') or s.get('course') or ''],
-            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"]
+            ['Course', s.get('course_display') or s.get('course') or '']
         ]
+        if s.get('section'):
+            meta_rows.append(['Section', str(s.get('section')).upper()])
+        meta_rows.append(['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"])
         # Faculty line if available
         try:
             lecturers = s.get('lecturers') or []
@@ -955,7 +1214,8 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1030,7 +1290,8 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
