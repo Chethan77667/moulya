@@ -320,7 +320,9 @@
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ student.roll_number }}</td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {% if student_marks.get('internal1') %}
-                                {{ student_marks['internal1'].marks_obtained }}/{{ student_marks['internal1'].max_marks }}
+                                {% set obtained = student_marks['internal1'].marks_obtained %}
+                                {% set max_val = student_marks['internal1'].max_marks %}
+                                {% if obtained is number and obtained == obtained|int %}{{ obtained|int }}{% else %}{{ obtained }}{% endif %}/{% if max_val is number and max_val == max_val|int %}{{ max_val|int }}{% else %}{{ max_val }}{% endif %}
                                 <span class="text-xs text-gray-500">({{ student_marks['internal1'].percentage }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
@@ -328,7 +330,9 @@
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {% if student_marks.get('internal2') %}
-                                {{ student_marks['internal2'].marks_obtained }}/{{ student_marks['internal2'].max_marks }}
+                                {% set obtained = student_marks['internal2'].marks_obtained %}
+                                {% set max_val = student_marks['internal2'].max_marks %}
+                                {% if obtained is number and obtained == obtained|int %}{{ obtained|int }}{% else %}{{ obtained }}{% endif %}/{% if max_val is number and max_val == max_val|int %}{{ max_val|int }}{% else %}{{ max_val }}{% endif %}
                                 <span class="text-xs text-gray-500">({{ student_marks['internal2'].percentage }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
@@ -336,7 +340,9 @@
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {% if student_marks.get('assignment') %}
-                                {{ student_marks['assignment'].marks_obtained }}/{{ student_marks['assignment'].max_marks }}
+                                {% set obtained = student_marks['assignment'].marks_obtained %}
+                                {% set max_val = student_marks['assignment'].max_marks %}
+                                {% if obtained is number and obtained == obtained|int %}{{ obtained|int }}{% else %}{{ obtained }}{% endif %}/{% if max_val is number and max_val == max_val|int %}{{ max_val|int }}{% else %}{{ max_val }}{% endif %}
                                 <span class="text-xs text-gray-500">({{ student_marks['assignment'].percentage }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
@@ -344,7 +350,9 @@
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {% if student_marks.get('project') %}
-                                {{ student_marks['project'].marks_obtained }}/{{ student_marks['project'].max_marks }}
+                                {% set obtained = student_marks['project'].marks_obtained %}
+                                {% set max_val = student_marks['project'].max_marks %}
+                                {% if obtained is number and obtained == obtained|int %}{{ obtained|int }}{% else %}{{ obtained }}{% endif %}/{% if max_val is number and max_val == max_val|int %}{{ max_val|int }}{% else %}{{ max_val }}{% endif %}
                                 <span class="text-xs text-gray-500">({{ student_marks['project'].percentage }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
