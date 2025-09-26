@@ -211,20 +211,37 @@ def bulk_add_lecturers():
 @management_bp.route('/lecturers/<int:lecturer_id>/toggle-status', methods=['POST'])
 @login_required('management')
 def toggle_lecturer_status(lecturer_id):
-    """Toggle lecturer active status"""
+    """On deactivate: permanently delete the lecturer and dependencies; on inactive -> active: reactivate.
+
+    This preserves the existing button/JS flow while ensuring a hard delete when switching from
+    active to inactive.
+    """
     try:
         lecturer = Lecturer.query.get_or_404(lecturer_id)
-        lecturer.is_active = not lecturer.is_active
-        db.session.commit()
-        
-        status = "activated" if lecturer.is_active else "deactivated"
-        message = f'Lecturer {lecturer.name} has been {status}'
-        
-        if is_ajax_request():
-            return jsonify({'success': True, 'message': message})
-        
-        flash(message, 'success')
-        
+
+        if lecturer.is_active:
+            # Deactivation request -> permanently delete
+            success, message = ManagementService.delete_lecturer_permanently(lecturer_id)
+            if not success:
+                if is_ajax_request():
+                    return jsonify({'success': False, 'message': message})
+                flash(message, 'error')
+                return redirect(url_for('management.lecturers'))
+
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.lecturers'))
+        else:
+            # Inactive -> Active toggle retains record
+            lecturer.is_active = True
+            db.session.commit()
+            message = f'Lecturer {lecturer.name} has been activated'
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.lecturers'))
+
     except Exception as e:
         error_msg = f'Error updating lecturer status: {str(e)}'
         if is_ajax_request():
@@ -594,21 +611,31 @@ def bulk_add_students():
 @management_bp.route('/students/<int:student_id>/toggle-status', methods=['POST'])
 @login_required('management')
 def toggle_student_status(student_id):
-    """Toggle student active status"""
+    """On deactivate: permanently delete the student; on inactive -> active: reactivate."""
     try:
         student = Student.query.get_or_404(student_id)
-        student.is_active = not student.is_active
-        db.session.commit()
-        
-        status = "activated" if student.is_active else "deactivated"
-        message = f'Student {student.name} has been {status}'
-        
-        # Handle AJAX requests
-        if is_ajax_request():
-            return jsonify({'success': True, 'message': message})
-        
-        flash(message, 'success')
-        
+
+        if student.is_active:
+            success, message = ManagementService.delete_student_permanently(student_id)
+            if not success:
+                if is_ajax_request():
+                    return jsonify({'success': False, 'message': message})
+                flash(message, 'error')
+                return redirect(url_for('management.students'))
+
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.students'))
+        else:
+            student.is_active = True
+            db.session.commit()
+            message = f'Student {student.name} has been activated'
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.students'))
+
     except Exception as e:
         error_msg = f'Error updating student status: {str(e)}'
         if is_ajax_request():
@@ -652,21 +679,31 @@ def add_course():
 @management_bp.route('/courses/<int:course_id>/toggle-status', methods=['POST'])
 @login_required('management')
 def toggle_course_status(course_id):
-    """Toggle course active status"""
+    """On deactivate: permanently delete the course; on inactive -> active: reactivate."""
     try:
         course = Course.query.get_or_404(course_id)
-        course.is_active = not course.is_active
-        db.session.commit()
-        
-        status = "activated" if course.is_active else "deactivated"
-        message = f'Course {course.name} has been {status}'
-        
-        # Handle AJAX requests
-        if is_ajax_request():
-            return jsonify({'success': True, 'message': message})
-        
-        flash(message, 'success')
-        
+
+        if course.is_active:
+            success, message = ManagementService.delete_course_permanently(course_id)
+            if not success:
+                if is_ajax_request():
+                    return jsonify({'success': False, 'message': message})
+                flash(message, 'error')
+                return redirect(url_for('management.courses'))
+
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.courses'))
+        else:
+            course.is_active = True
+            db.session.commit()
+            message = f'Course {course.name} has been activated'
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.courses'))
+
     except Exception as e:
         error_msg = f'Error updating course status: {str(e)}'
         if is_ajax_request():
@@ -711,21 +748,31 @@ def add_subject():
 @management_bp.route('/subjects/<int:subject_id>/toggle-status', methods=['POST'])
 @login_required('management')
 def toggle_subject_status(subject_id):
-    """Toggle subject active status"""
+    """On deactivate: permanently delete the subject; on inactive -> active: reactivate."""
     try:
         subject = Subject.query.get_or_404(subject_id)
-        subject.is_active = not subject.is_active
-        db.session.commit()
-        
-        status = "activated" if subject.is_active else "deactivated"
-        message = f'Subject {subject.name} has been {status}'
-        
-        # Handle AJAX requests
-        if is_ajax_request():
-            return jsonify({'success': True, 'message': message})
-        
-        flash(message, 'success')
-        
+
+        if subject.is_active:
+            success, message = ManagementService.delete_subject_permanently(subject_id)
+            if not success:
+                if is_ajax_request():
+                    return jsonify({'success': False, 'message': message})
+                flash(message, 'error')
+                return redirect(url_for('management.subjects'))
+
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.subjects'))
+        else:
+            subject.is_active = True
+            db.session.commit()
+            message = f'Subject {subject.name} has been activated'
+            if is_ajax_request():
+                return jsonify({'success': True, 'message': message})
+            flash(message, 'success')
+            return redirect(url_for('management.subjects'))
+
     except Exception as e:
         error_msg = f'Error updating subject status: {str(e)}'
         if is_ajax_request():

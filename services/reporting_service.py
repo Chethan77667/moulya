@@ -18,11 +18,72 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from xml.sax.saxutils import escape as xml_escape
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 class ReportingService:
     """Service for generating reports"""
+    
+    @staticmethod
+    def _get_paragraph_style():
+        """Return a compact cell Paragraph style to enable auto word-wrap in table cells."""
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        return ParagraphStyle(
+            'Cell',
+            parent=styles['Normal'],
+            fontSize=9,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+
+    @staticmethod
+    def _get_header_paragraph_style():
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        return ParagraphStyle(
+            'HeaderCell',
+            parent=styles['Normal'],
+            fontSize=9,
+            leading=11,
+            textColor=colors.white,
+            spaceAfter=0,
+            spaceBefore=0,
+        )
+
+    @staticmethod
+    def _to_paragraph(value):
+        """Convert any value to a Paragraph so ReportLab wraps text within cell width."""
+        try:
+            if value is None:
+                return Paragraph('', ReportingService._get_paragraph_style())
+            # Keep numbers as plain strings too; Paragraph will handle fine
+            text = xml_escape(str(value))
+            return Paragraph(text, ReportingService._get_paragraph_style())
+        except Exception:
+            return Paragraph(xml_escape(str(value)), ReportingService._get_paragraph_style())
+
+    @staticmethod
+    def _wrap_table_data(rows, skip_header=True, header_text_white=False):
+        """Map table cells to Paragraphs for word-wrap.
+        If skip_header=True, the first row is left as-is so TableStyle header
+        text color/background rules still apply.
+        """
+        if not rows:
+            return rows
+        start_idx = 1 if skip_header and len(rows) > 0 else 0
+        wrapped_rows = []
+        # Keep header as-is if requested
+        if start_idx == 1:
+            if header_text_white:
+                wrapped_rows.append([Paragraph(xml_escape(str(c)), ReportingService._get_header_paragraph_style()) for c in rows[0]])
+            else:
+                wrapped_rows.append(rows[0])
+        for row in rows[start_idx:]:
+            wrapped_rows.append([ReportingService._to_paragraph(cell) for cell in row])
+        return wrapped_rows
     
     @staticmethod
     def _full_width_colwidths(total_width, num_columns):
@@ -595,15 +656,22 @@ class ReportingService:
                 ])
         if len(marks_rows) == 1:
             marks_rows.append(['No data'] + ['']*7)
-        # Make table full width
+        # Wrap text in table data and make table full width
+        marks_rows_wrapped = ReportingService._wrap_table_data(marks_rows, skip_header=True, header_text_white=True)
         page_width = A4[0] - (18*mm + 18*mm)
-        marks_table = Table(marks_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(marks_headers)))
+        marks_table = Table(marks_rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(marks_headers)))
         marks_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+            ('LEFTPADDING', (0,0), (-1,0), 4),
+            ('RIGHTPADDING', (0,0), (-1,0), 4),
+            ('TOPPADDING', (0,0), (-1,0), 3),
+            ('BOTTOMPADDING', (0,0), (-1,0), 3)
         ]))
         elements.extend([marks_table, Spacer(1, 12)])
 
@@ -620,7 +688,9 @@ class ReportingService:
             ])
         if len(att_rows) == 1:
             att_rows.append(['No data'] + ['']*6)
-        att_table = Table(att_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(att_headers)))
+        # Wrap text in table data
+        att_rows_wrapped = ReportingService._wrap_table_data(att_rows, skip_header=True, header_text_white=True)
+        att_table = Table(att_rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(att_headers)))
         att_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -711,9 +781,11 @@ class ReportingService:
             rows.append([student.name, student.roll_number, f"{overall}%", status])
         if len(rows) == 1:
             rows.append(['No data', '', '', ''])
+        # Wrap text in table data
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
 
         page_width = A4[0] - (18*mm + 18*mm)
-        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        table = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -809,9 +881,11 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
+        # Wrap text in table data
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
 
         page_width = A4[0] - (18*mm + 18*mm)
-        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        table = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1116,8 +1190,10 @@ class ReportingService:
                 ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
+        # Wrap text in table data
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1214,8 +1290,10 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
+        # Wrap text in table data
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1290,8 +1368,10 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
+        # Wrap text in table data
+        rows_wrapped = ReportingService._wrap_table_data(rows)
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),

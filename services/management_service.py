@@ -112,9 +112,27 @@ class ManagementService:
                 return False, message
             
             # Check if lecturer ID already exists
-            existing = Lecturer.query.filter_by(lecturer_id=lecturer_data['lecturer_id']).first()
-            if existing:
+            # If an ACTIVE lecturer exists, block; if an INACTIVE one exists, remove it to allow re-adding
+            existing_active = Lecturer.query.filter_by(lecturer_id=lecturer_data['lecturer_id'], is_active=True).first()
+            if existing_active:
                 return False, "Lecturer ID already exists"
+
+            existing_inactive = Lecturer.query.filter_by(lecturer_id=lecturer_data['lecturer_id'], is_active=False).first()
+            if existing_inactive:
+                try:
+                    # Remove dependent rows and the inactive lecturer to free unique constraints
+                    from models.assignments import SubjectAssignment
+                    SubjectAssignment.query.filter_by(lecturer_id=existing_inactive.id).delete(synchronize_session=False)
+                    from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
+                    from models.marks import StudentMarks
+                    AttendanceRecord.query.filter_by(lecturer_id=existing_inactive.id).delete(synchronize_session=False)
+                    MonthlyAttendanceSummary.query.filter_by(lecturer_id=existing_inactive.id).delete(synchronize_session=False)
+                    StudentMarks.query.filter_by(lecturer_id=existing_inactive.id).delete(synchronize_session=False)
+                    db.session.delete(existing_inactive)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    return False, f"Error replacing inactive lecturer with same ID: {str(e)}"
             
             # Generate credentials
             success, username, password, msg = AuthService.generate_lecturer_credentials(
@@ -347,9 +365,16 @@ class ManagementService:
                 return False, message
             
             # Check if roll number already exists
-            existing = Student.query.filter_by(roll_number=student_data['roll_number']).first()
-            if existing:
+            existing_active = Student.query.filter_by(roll_number=student_data['roll_number'], is_active=True).first()
+            if existing_active:
                 return False, "Roll number already exists"
+
+            # Remove inactive duplicate if present
+            existing_inactive = Student.query.filter_by(roll_number=student_data['roll_number'], is_active=False).first()
+            if existing_inactive:
+                ok, msg = ManagementService.delete_student_permanently(existing_inactive.id)
+                if not ok:
+                    return False, msg
             
             # Validate course exists
             course = Course.query.get(student_data.get('course_id'))
@@ -535,9 +560,16 @@ class ManagementService:
                 return False, message
             
             # Check if course code already exists
-            existing = Course.query.filter_by(code=course_data['code']).first()
-            if existing:
+            existing_active = Course.query.filter_by(code=course_data['code'], is_active=True).first()
+            if existing_active:
                 return False, "Course code already exists"
+
+            # Remove inactive duplicate course (same code)
+            existing_inactive = Course.query.filter_by(code=course_data['code'], is_active=False).first()
+            if existing_inactive:
+                ok, msg = ManagementService.delete_course_permanently(existing_inactive.id)
+                if not ok:
+                    return False, msg
             
             course = Course(
                 name=course_data['name'],
@@ -580,12 +612,24 @@ class ManagementService:
                 return False, "Invalid course selected"
             
             # Check if subject code already exists for this course
-            existing = Subject.query.filter_by(
+            existing_active = Subject.query.filter_by(
                 code=subject_data['code'], 
-                course_id=subject_data['course_id']
+                course_id=subject_data['course_id'],
+                is_active=True
             ).first()
-            if existing:
+            if existing_active:
                 return False, "Subject code already exists for this course"
+
+            # Remove inactive duplicate if present for same course/code
+            existing_inactive = Subject.query.filter_by(
+                code=subject_data['code'],
+                course_id=subject_data['course_id'],
+                is_active=False
+            ).first()
+            if existing_inactive:
+                ok, msg = ManagementService.delete_subject_permanently(existing_inactive.id)
+                if not ok:
+                    return False, msg
             
             subject = Subject(
                 name=subject_data['name'],
@@ -703,3 +747,106 @@ class ManagementService:
             db.session.rollback()
             return False, f"Error unassigning subject: {str(e)}"
 
+
+    @staticmethod
+    def delete_lecturer_permanently(lecturer_id):
+        """Hard-delete a lecturer and all dependent records referencing the lecturer.
+
+        Removes:
+        - Subject assignments
+        - Attendance records and monthly summaries
+        - Student marks
+        Finally deletes the lecturer row itself.
+        """
+        try:
+            lecturer = Lecturer.query.get(lecturer_id)
+            if not lecturer:
+                return False, "Lecturer not found"
+
+            # Delete dependent rows explicitly to satisfy FK constraints
+            from models.assignments import SubjectAssignment
+            from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
+            from models.marks import StudentMarks
+
+            SubjectAssignment.query.filter_by(lecturer_id=lecturer.id).delete(synchronize_session=False)
+            AttendanceRecord.query.filter_by(lecturer_id=lecturer.id).delete(synchronize_session=False)
+            MonthlyAttendanceSummary.query.filter_by(lecturer_id=lecturer.id).delete(synchronize_session=False)
+            StudentMarks.query.filter_by(lecturer_id=lecturer.id).delete(synchronize_session=False)
+
+            db.session.delete(lecturer)
+            db.session.commit()
+            return True, "Lecturer permanently deleted"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error deleting lecturer: {str(e)}"
+
+    @staticmethod
+    def delete_student_permanently(student_id):
+        """Hard-delete a student and dependent rows (enrollments, attendance, marks)."""
+        try:
+            student = Student.query.get(student_id)
+            if not student:
+                return False, "Student not found"
+
+            from models.student import StudentEnrollment
+            from models.attendance import AttendanceRecord
+            from models.marks import StudentMarks
+
+            StudentEnrollment.query.filter_by(student_id=student.id).delete(synchronize_session=False)
+            AttendanceRecord.query.filter_by(student_id=student.id).delete(synchronize_session=False)
+            StudentMarks.query.filter_by(student_id=student.id).delete(synchronize_session=False)
+
+            db.session.delete(student)
+            db.session.commit()
+            return True, "Student permanently deleted"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error deleting student: {str(e)}"
+
+    @staticmethod
+    def delete_subject_permanently(subject_id):
+        """Hard-delete a subject and all dependent rows (assignments, enrollments, attendance, summaries, marks)."""
+        try:
+            subject = Subject.query.get(subject_id)
+            if not subject:
+                return False, "Subject not found"
+
+            from models.assignments import SubjectAssignment
+            from models.student import StudentEnrollment
+            from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
+            from models.marks import StudentMarks
+
+            SubjectAssignment.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+            StudentEnrollment.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+            AttendanceRecord.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+            MonthlyAttendanceSummary.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+            StudentMarks.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+
+            db.session.delete(subject)
+            db.session.commit()
+            return True, "Subject permanently deleted"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error deleting subject: {str(e)}"
+
+    @staticmethod
+    def delete_course_permanently(course_id):
+        """Hard-delete a course by first deleting its subjects and associated data, then the course itself."""
+        try:
+            course = Course.query.get(course_id)
+            if not course:
+                return False, "Course not found"
+
+            # Delete all subjects under the course (and their dependencies)
+            subjects = Subject.query.filter_by(course_id=course.id).all()
+            for subj in subjects:
+                ok, msg = ManagementService.delete_subject_permanently(subj.id)
+                if not ok:
+                    return False, msg
+
+            db.session.delete(course)
+            db.session.commit()
+            return True, "Course permanently deleted"
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error deleting course: {str(e)}"
