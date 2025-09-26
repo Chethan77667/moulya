@@ -180,8 +180,18 @@ def login_required(user_type=None):
 @auth_bp.app_context_processor
 def inject_user():
     """Inject user information into template context"""
+    session_info = SessionManager.get_session_info(session)
+    # Enrich with lecturer name when available
+    if session_info and session_info.get('user_type') == 'lecturer':
+        try:
+            from services.auth_service import AuthService
+            user_obj, _ = AuthService.get_user_info('lecturer', session_info.get('user_id'))
+            if user_obj and getattr(user_obj, 'name', None):
+                session_info['name'] = user_obj.name
+        except Exception:
+            pass
     return {
-        'current_user': SessionManager.get_session_info(session),
+        'current_user': session_info,
         'is_authenticated': SessionManager.is_authenticated(session),
         'is_management': SessionManager.is_management(session),
         'is_lecturer': SessionManager.is_lecturer(session)

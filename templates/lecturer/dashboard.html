@@ -23,7 +23,7 @@
                 
                 <!-- Desktop menu -->
                 <div class="hidden md:flex items-center space-x-4">
-                    <span class="text-sm text-gray-700">Welcome, {{ current_user.username }}</span>
+                    <span class="text-sm text-gray-700">Welcome, {{ current_user.name or current_user.username }}</span>
                     <a href="{{ url_for('auth.change_password') }}" class="text-sm text-gray-600 hover:text-black">Change Password</a>
                     <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -35,7 +35,7 @@
             <!-- Mobile menu -->
             <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
                 <div class="space-y-2">
-                    <div class="text-sm text-gray-700 px-2">Welcome, {{ current_user.username }}</div>
+                    <div class="text-sm text-gray-700 px-2">Welcome, {{ current_user.name or current_user.username }}</div>
                     <a href="{{ url_for('auth.change_password') }}" class="block px-2 py-2 text-sm text-gray-600 hover:text-black hover:bg-gray-50 rounded">Change Password</a>
                     <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

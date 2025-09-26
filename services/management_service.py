@@ -193,14 +193,24 @@ class ManagementService:
     
     @staticmethod
     def bulk_add_lecturers(file_data):
-        """Bulk add lecturers from Excel file"""
+        """Bulk upsert lecturers from Excel file.
+
+        Behavior:
+        - If a lecturer with the same `lecturer_id` exists and is active, update their `name`.
+        - If they do not exist, create a new lecturer and generate credentials.
+        - If subject codes are provided for a row:
+          - Ensure those subjects are assigned for the current academic year (create missing assignments).
+          - Deactivate assignments for the current academic year that are not in the uploaded list.
+        - If the existing record is inactive, replace/reactivate by removing the inactive record and creating a new one.
+        """
         try:
             workbook = openpyxl.load_workbook(BytesIO(file_data))
             sheet = workbook.active
             
-            lecturers = []
+            lecturers_to_create = []
             errors = []
             credentials = []
+            updates_applied = 0
             
             # Expected columns: lecturer_id, name, email, phone, department
             for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
@@ -247,63 +257,103 @@ class ManagementService:
                         errors.append(f"Row {row_num}: Name '{name}' - {message}")
                         continue
                     
-                    # Check for duplicates (only active lecturers)
+                    # Upsert by lecturer_id
                     existing_active_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=True).first()
                     if existing_active_lecturer:
-                        errors.append(f"Row {row_num}: Lecturer ID {lecturer_id} already exists (active)")
-                        continue
-                    
-                    # Check if there's an inactive lecturer with the same ID - if so, we'll replace it
-                    existing_inactive_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=False).first()
-                    if existing_inactive_lecturer:
-                        # Delete all subject assignments for this lecturer first to avoid foreign key constraint violations
-                        from models.assignments import SubjectAssignment
-                        SubjectAssignment.query.filter_by(lecturer_id=existing_inactive_lecturer.id).delete()
-                        # Delete the inactive lecturer so we can create a new one with the same ID
-                        db.session.delete(existing_inactive_lecturer)
-                    
-                    # Generate credentials for new lecturer
-                    success, username, password, msg = AuthService.generate_lecturer_credentials(name, lecturer_id)
-                    if not success:
-                        errors.append(f"Row {row_num}: {msg}")
-                        continue
-                    
-                    print(f"Row {row_num}: Lecturer '{name}' (ID: {lecturer_id}) passed validation, adding to list")
-                    
-                    lecturer = Lecturer(
-                        lecturer_id=lecturer_id,
-                        name=name,
-                        username=username
-                    )
-                    lecturer.set_password(password)
-                    
-                    # Store subject IDs for later assignment
-                    lecturer._temp_subject_ids = subject_ids
-                    
-                    lecturers.append(lecturer)
-                    credentials.append({
-                        'lecturer_id': lecturer_id,
-                        'name': name,
-                        'username': username,
-                        'password': password
-                    })
+                        # Update name if changed
+                        if existing_active_lecturer.name != name:
+                            existing_active_lecturer.name = name
+                            updates_applied += 1
+                        # Handle subject assignments for current year based on provided list
+                        if subject_ids:
+                            from models.assignments import SubjectAssignment
+                            from datetime import datetime
+                            current_year = datetime.now().year
+                            # Fetch existing assignments for the year
+                            existing_assignments = SubjectAssignment.query.filter_by(
+                                lecturer_id=existing_active_lecturer.id,
+                                academic_year=current_year
+                            ).all()
+                            existing_subject_ids = {a.subject_id for a in existing_assignments if a.is_active}
+                            desired_subject_ids = set(int(sid) for sid in subject_ids)
+
+                            # Add new ones
+                            to_add = desired_subject_ids - existing_subject_ids
+                            for sid in to_add:
+                                assignment = SubjectAssignment(
+                                    lecturer_id=existing_active_lecturer.id,
+                                    subject_id=int(sid),
+                                    academic_year=current_year
+                                )
+                                db.session.add(assignment)
+
+                            # Deactivate those not desired
+                            to_deactivate = existing_subject_ids - desired_subject_ids
+                            if to_deactivate:
+                                for a in existing_assignments:
+                                    if a.subject_id in to_deactivate and a.is_active:
+                                        a.is_active = False
+                        # No credentials for updates
+                    else:
+                        # Check inactive and remove to free unique
+                        existing_inactive_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=False).first()
+                        if existing_inactive_lecturer:
+                            from models.assignments import SubjectAssignment
+                            SubjectAssignment.query.filter_by(lecturer_id=existing_inactive_lecturer.id).delete()
+                            db.session.delete(existing_inactive_lecturer)
+
+                        # Generate credentials for new lecturer
+                        success, username, password, msg = AuthService.generate_lecturer_credentials(name, lecturer_id)
+                        if not success:
+                            errors.append(f"Row {row_num}: {msg}")
+                            continue
+
+                        lecturer = Lecturer(
+                            lecturer_id=lecturer_id,
+                            name=name,
+                            username=username
+                        )
+                        lecturer.set_password(password)
+
+                        # Store subject IDs for later assignment
+                        lecturer._temp_subject_ids = subject_ids
+
+                        lecturers_to_create.append(lecturer)
+                        credentials.append({
+                            'lecturer_id': lecturer_id,
+                            'name': name,
+                            'username': username,
+                            'password': password
+                        })
                     
                 except Exception as e:
                     errors.append(f"Row {row_num}: Error processing data - {str(e)}")
                     print(f"Row {row_num}: Exception - {str(e)}")
             
-            print(f"Processing complete: {len(lecturers)} lecturers to add, {len(errors)} errors")
+            print(f"Processing complete: {len(lecturers_to_create)} lecturers to add, {updates_applied} updates, {len(errors)} errors")
             for error in errors:
                 print(f"Error: {error}")
             
-            if lecturers:
-                # Add all lecturers to session (all are new now)
-                for lecturer in lecturers:
-                    db.session.add(lecturer)
-                
+            if lecturers_to_create or updates_applied > 0:
                 try:
-                    db.session.commit()
-                    message = f"Successfully added {len(lecturers)} lecturer{'s' if len(lecturers) > 1 else ''}"
+                    # Commit updates to existing lecturers first
+                    if updates_applied > 0:
+                        db.session.commit()
+                    
+                    # Add all new lecturers to session
+                    for lecturer in lecturers_to_create:
+                        db.session.add(lecturer)
+                    
+                    # Commit new lecturers
+                    if lecturers_to_create:
+                        db.session.commit()
+                    
+                    message = []
+                    if lecturers_to_create:
+                        message.append(f"added {len(lecturers_to_create)}")
+                    if updates_applied:
+                        message.append(f"updated {updates_applied}")
+                    message = "Successfully " + ", ".join(message) + " lecturer(s)"
                     
                     # Create subject assignments for lecturers that have subjects
                     from models.assignments import SubjectAssignment
@@ -312,7 +362,7 @@ class ManagementService:
                     current_year = datetime.now().year
                     assignments = []
                     
-                    for lecturer in lecturers:
+                    for lecturer in lecturers_to_create:
                         if hasattr(lecturer, '_temp_subject_ids') and lecturer._temp_subject_ids:
                             for subject_id in lecturer._temp_subject_ids:
                                 # Check if assignment already exists
@@ -342,7 +392,7 @@ class ManagementService:
                     db.session.rollback()
                     return False, f"Database error: {str(e)}", [], errors
             else:
-                return False, "No valid lecturers found to add", [], errors
+                return False, "No valid lecturer changes found", [], errors
                 
         except Exception as e:
             return False, f"Error processing Excel file: {str(e)}", [], []
@@ -399,13 +449,21 @@ class ManagementService:
     
     @staticmethod
     def bulk_add_students(file_data):
-        """Bulk add students from Excel file"""
+        """Bulk upsert students from Excel file.
+
+        Behavior:
+        - Match by `roll_number`.
+        - If student exists (active), update fields: name, course, academic_year, email.
+        - If student does not exist, create a new one.
+        - If a course code is new (e.g., prefix-based), auto-create minimal course if needed.
+        """
         try:
             workbook = openpyxl.load_workbook(BytesIO(file_data))
             sheet = workbook.active
 
-            students = []
+            students_to_create = []
             errors = []
+            updates_applied = 0
 
             # Read header row and map columns by header name (case-insensitive)
             header_row = [str(c.value).strip() if c.value is not None else '' for c in next(sheet.iter_rows(min_row=1, max_row=1))]
@@ -422,6 +480,14 @@ class ManagementService:
             col_name = find_col('name', 'full name', 'student name')
             col_course_code = find_col('course code', 'course', 'course_code', 'course name', 'course short code')
             col_ac_year = find_col('academic year', 'year', 'year level', 'class year')
+            # Try exact-name matches first
+            col_class = find_col('class', 'class name', 'year/class', 'year & course', 'class section', 'class & section')
+            # If still not found, choose first header containing the word 'class'
+            if col_class is None:
+                for h, idx in header_to_index.items():
+                    if 'class' in h:
+                        col_class = idx
+                        break
             col_email = find_col('email', 'email id', 'e-mail')
 
             # If headers are missing, fall back to legacy fixed positions (A..E)
@@ -449,16 +515,88 @@ class ManagementService:
                     match = re.search(r"([1-3])", str(value))
                     return int(match.group(1)) if match else None
 
+            ROMAN_TO_INT = { 'I': 1, 'II': 2, 'III': 3 }
+
+            def parse_class(value):
+                """Parse strings like 'II BCA B' → (course_code='BCA', academic_year=2).
+                Section (e.g., 'B') is currently ignored.
+                """
+                if not value:
+                    return None, None
+                text = str(value).strip()
+                # Try split by spaces, handle roman numerals or digits
+                parts = text.split()
+                year_val = None
+                course_val = None
+                if parts:
+                    first = parts[0].upper()
+                    if first in ROMAN_TO_INT:
+                        year_val = ROMAN_TO_INT[first]
+                        if len(parts) > 1:
+                            course_val = re.sub(r"[^A-Za-z]", "", parts[1]).upper() or None
+                    else:
+                        # Try digits anywhere
+                        y = parse_year(first)
+                        if y:
+                            year_val = y
+                            if len(parts) > 1:
+                                course_val = re.sub(r"[^A-Za-z]", "", parts[1]).upper() or None
+                        else:
+                            # Maybe 'BCA II B' format → find alpha block and roman/digit
+                            m_course = re.search(r"([A-Za-z]+)", text)
+                            m_year = re.search(r"\b(I{1,3}|[1-3])\b", text, re.IGNORECASE)
+                            if m_year:
+                                yr = m_year.group(1).upper()
+                                year_val = ROMAN_TO_INT.get(yr, parse_year(yr))
+                            if m_course:
+                                course_val = m_course.group(1).upper()
+                return course_val, year_val
+
+            ROMAN_SET = { 'I', 'II', 'III' }
+
+            def normalize_course_code(raw: str):
+                """Extract a likely course code from values like 'II_BCA_B' -> 'BCA'.
+                Picks the longest alphabetic token that is not a roman year indicator.
+                """
+                if not raw:
+                    return None
+                tokens = re.findall(r"[A-Za-z]+", str(raw).upper())
+                # Filter out roman numerals used for year
+                tokens = [t for t in tokens if t not in ROMAN_SET]
+                if not tokens:
+                    return None
+                # Prefer the longest token
+                tokens.sort(key=len, reverse=True)
+                return tokens[0]
+
             for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
                 if not any(row):
                     continue
 
                 try:
-                    roll_number = str(row[col_roll]).strip() if col_roll < len(row) and row[col_roll] else None
+                    roll_number = str(row[col_roll]).strip() if (col_roll is not None and col_roll < len(row) and row[col_roll]) else None
                     name = str(row[col_name]).strip() if col_name < len(row) and row[col_name] else None
-                    course_code_raw = str(row[col_course_code]).strip() if col_course_code < len(row) and row[col_course_code] else None
-                    course_code = course_code_raw.upper() if course_code_raw else None
-                    academic_year = parse_year(row[col_ac_year] if col_ac_year < len(row) else None)
+                    course_code_raw = str(row[col_course_code]).strip() if (col_course_code is not None and col_course_code < len(row) and row[col_course_code]) else None
+                    # Normalize complex codes such as 'II_BCA_B' -> 'BCA'
+                    course_code = normalize_course_code(course_code_raw) if course_code_raw else None
+                    academic_year = parse_year(row[col_ac_year] if (col_ac_year is not None and col_ac_year < len(row)) else None)
+                    # If missing, try parsing from combined class column
+                    if (course_code is None or academic_year is None) and col_class is not None and col_class < len(row):
+                        cc_from_class, year_from_class = parse_class(row[col_class])
+                        if course_code is None:
+                            course_code = cc_from_class
+                        if academic_year is None:
+                            academic_year = year_from_class
+
+                    # As final fallback for course, try extracting letters from roll number prefix (e.g., BCA23081 -> BCA)
+                    if course_code is None and roll_number:
+                        m_prefix = re.match(r"^[A-Za-z]+", roll_number)
+                        if m_prefix:
+                            course_code = normalize_course_code(m_prefix.group(0))
+
+                    # If academic year is still None, default to 1 (so initial bulk upload doesn't drop rows)
+                    if academic_year is None:
+                        academic_year = 1
                     email_val = row[col_email] if col_email < len(row) else None
                     email = str(email_val).strip() if email_val and str(email_val).strip().lower() not in ['none', 'na', 'n/a'] else None
 
@@ -482,66 +620,95 @@ class ManagementService:
                         errors.append(f"Row {row_num}: {message}")
                         continue
 
-                    # Find course by code (case-insensitive). If not found, try using alphabetic prefix (e.g., BCA301 -> BCA)
+                    # Find course by normalized code; auto-create if not found
                     course = Course.query.filter(
                         db.func.lower(Course.code) == course_code.lower(),
                         Course.is_active == True
                     ).first()
-                    if not course:
-                        prefix_match = re.match(r"^[A-Za-z]+", course_code)
-                        if prefix_match:
-                            prefix = prefix_match.group(0)
-                            # Try existing course with prefix (e.g., BCA)
-                            course = Course.query.filter(
-                                db.func.lower(Course.code) == prefix.lower(),
-                                Course.is_active == True
-                            ).first()
-                            # If still not found, create a minimal course for this prefix
-                            if not course:
-                                try:
-                                    new_course = Course(
-                                        name=prefix,
-                                        code=prefix,
-                                        description=f"Auto-created from bulk upload for prefix {prefix}",
-                                        duration_years=3,
-                                        total_semesters=6,
-                                        is_active=True
-                                    )
-                                    db.session.add(new_course)
-                                    db.session.commit()
-                                    course = new_course
-                                except Exception:
-                                    db.session.rollback()
+                    if not course and course_code:
+                        try:
+                            new_course = Course(
+                                name=course_code,
+                                code=course_code,
+                                description=f"Auto-created from bulk upload",
+                                duration_years=3,
+                                total_semesters=6,
+                                is_active=True
+                            )
+                            db.session.add(new_course)
+                            db.session.commit()
+                            course = new_course
+                        except Exception:
+                            db.session.rollback()
                     if not course:
                         errors.append(f"Row {row_num}: Course code {course_code} not found")
                         continue
 
-                    # Check for duplicates
-                    if Student.query.filter_by(roll_number=roll_number).first():
-                        errors.append(f"Row {row_num}: Roll number {roll_number} already exists")
-                        continue
+                    existing = Student.query.filter_by(roll_number=roll_number, is_active=True).first()
+                    if existing:
+                        # Update existing fields if changed
+                        changed = False
+                        if existing.name != name:
+                            existing.name = name
+                            changed = True
+                        if existing.course_id != course.id:
+                            existing.course_id = course.id
+                            changed = True
+                        if existing.academic_year != academic_year:
+                            existing.academic_year = academic_year
+                            changed = True
+                        if (email or None) != (existing.email or None):
+                            existing.email = email
+                            changed = True
+                        if changed:
+                            updates_applied += 1
+                    else:
+                        # If inactive exists, hard-delete to free unique key, then create
+                        existing_inactive = Student.query.filter_by(roll_number=roll_number, is_active=False).first()
+                        if existing_inactive:
+                            ok, msg = ManagementService.delete_student_permanently(existing_inactive.id)
+                            if not ok:
+                                errors.append(f"Row {row_num}: {msg}")
+                                continue
 
-                    student = Student(
-                        roll_number=roll_number,
-                        name=name,
-                        course_id=course.id,
-                        academic_year=academic_year,
-                        email=email
-                    )
+                        student = Student(
+                            roll_number=roll_number,
+                            name=name,
+                            course_id=course.id,
+                            academic_year=academic_year,
+                            email=email
+                        )
 
-                    students.append(student)
+                        students_to_create.append(student)
 
                 except Exception as e:
                     errors.append(f"Row {row_num}: Error processing data - {str(e)}")
-
-            if students:
-                success, message = bulk_insert(students)
-                if success:
-                    return True, f"Successfully added {len(students)} students", errors
-                else:
-                    return False, message, errors
+            print(students_to_create)
+            print(updates_applied)
+            print(errors)
+            if students_to_create or updates_applied > 0:
+                try:
+                    # Commit updates to existing students
+                    if updates_applied > 0:
+                        db.session.commit()
+                    
+                    # Add new students
+                    if students_to_create:
+                        success, message = bulk_insert(students_to_create)
+                        if not success:
+                            return False, message, errors
+                    
+                    response_msg = []
+                    if students_to_create:
+                        response_msg.append(f"added {len(students_to_create)}")
+                    if updates_applied:
+                        response_msg.append(f"updated {updates_applied}")
+                    return True, f"Successfully {', '.join(response_msg)} student(s)", errors
+                except Exception as e:
+                    db.session.rollback()
+                    return False, f"Database error: {str(e)}", errors
             else:
-                return False, "No valid students found to add", errors
+                return False, "No valid student changes found", errors
 
         except Exception as e:
             return False, f"Error processing Excel file: {str(e)}", []

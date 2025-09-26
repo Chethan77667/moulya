@@ -167,7 +167,7 @@ def bulk_add_lecturers():
                 return jsonify({'success': False, 'message': error_msg})
             flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
-        
+
         file = request.files['file']
         if file.filename == '':
             error_msg = 'No file selected'
@@ -175,37 +175,35 @@ def bulk_add_lecturers():
                 return jsonify({'success': False, 'message': error_msg})
             flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
-        
+
         if not file.filename.lower().endswith(('.xlsx', '.xls')):
             error_msg = 'Please upload an Excel file (.xlsx or .xls)'
             if is_ajax_request():
                 return jsonify({'success': False, 'message': error_msg})
             flash(error_msg, 'error')
             return redirect(url_for('management.lecturers'))
-        
+
         success, message, credentials, errors = ManagementService.bulk_add_lecturers(file.read())
-        
+
         # Handle AJAX requests
         if is_ajax_request():
-            return jsonify({'success': success, 'message': message})
-        
+            return jsonify({'success': success, 'message': message, 'errors': errors})
+
         if success:
             flash(message, 'success')
-            # Store credentials in session for display
-            session['bulk_credentials'] = credentials
             if errors:
                 flash(f'Some errors occurred: {"; ".join(errors[:5])}', 'warning')
         else:
             flash(message, 'error')
             if errors:
                 flash(f'Errors: {"; ".join(errors[:5])}', 'error')
-                
+
     except Exception as e:
         error_msg = f'Error processing file: {str(e)}'
         if is_ajax_request():
             return jsonify({'success': False, 'message': error_msg})
         flash(error_msg, 'error')
-    
+
     return redirect(url_for('management.lecturers'))
 
 @management_bp.route('/lecturers/<int:lecturer_id>/toggle-status', methods=['POST'])
