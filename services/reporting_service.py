@@ -25,6 +25,16 @@ class ReportingService:
     """Service for generating reports"""
     
     @staticmethod
+    def _full_width_colwidths(total_width, num_columns):
+        """Return equal column widths that use the full available width.
+        This keeps every table consistent and maximized to the page width.
+        """
+        if num_columns <= 0:
+            return []
+        col = total_width / float(num_columns)
+        return [col] * num_columns
+
+    @staticmethod
     def _parse_course_and_section(course_name: str):
         """Split a user-entered course string into course and section.
         Examples:
@@ -518,7 +528,7 @@ class ReportingService:
             Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
             Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
         ]
-        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
@@ -571,7 +581,9 @@ class ReportingService:
                 ])
         if len(marks_rows) == 1:
             marks_rows.append(['No data'] + ['']*7)
-        marks_table = Table(marks_rows, repeatRows=1)
+        # Make table full width
+        page_width = A4[0] - (18*mm + 18*mm)
+        marks_table = Table(marks_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(marks_headers)))
         marks_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -594,7 +606,7 @@ class ReportingService:
             ])
         if len(att_rows) == 1:
             att_rows.append(['No data'] + ['']*6)
-        att_table = Table(att_rows, repeatRows=1)
+        att_table = Table(att_rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(att_headers)))
         att_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -633,7 +645,7 @@ class ReportingService:
             Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
             Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
         ]
-        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
         header_table.setStyle(TableStyle([
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
@@ -668,7 +680,7 @@ class ReportingService:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
         
-        subj_table = Table(subj_rows, colWidths=[35*mm, 130*mm])
+        subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -686,7 +698,8 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', ''])
 
-        table = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -758,7 +771,7 @@ class ReportingService:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
         
-        subj_table = Table(subj_rows, colWidths=[35*mm, 130*mm])
+        subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -783,7 +796,8 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
 
-        table = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        table = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -840,17 +854,27 @@ class ReportingService:
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
-        
+        # Determine where to place spacer row and headers
+        last_info_row = 7 if has_section else 6
+        spacer_row = last_info_row + 1
+        header_row = spacer_row + 1
+        data_start_row = header_row + 1
+
+        # Spacer row above the table
+        ws.merge_cells(start_row=spacer_row, start_column=1, end_row=spacer_row, end_column=4)
+        spacer_cell = ws.cell(row=spacer_row, column=1, value='')
+        spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
         # Table headers
         headers = ['Student', 'Roll Number', 'Overall %', 'Status']
         for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=8, column=col, value=header)
+            cell = ws.cell(row=header_row, column=col, value=header)
             cell.font = Font(bold=True, color='FFFFFF')
             cell.fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid')
             cell.alignment = Alignment(horizontal='center')
         
         # Data rows
-        row = 9
+        row = data_start_row
         for record in marks_report or []:
             student = record['student']
             overall = record.get('overall_percentage') or 0
@@ -863,7 +887,7 @@ class ReportingService:
             row += 1
         
         if not marks_report:
-            ws.cell(row=9, column=1, value='No data')
+            ws.cell(row=data_start_row, column=1, value='No data')
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -928,17 +952,27 @@ class ReportingService:
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
-        
+        # Determine where to place spacer row and headers
+        last_info_row = 7 if has_section else 6
+        spacer_row = last_info_row + 1
+        header_row = spacer_row + 1
+        data_start_row = header_row + 1
+
+        # Spacer row above the table
+        ws.merge_cells(start_row=spacer_row, start_column=1, end_row=spacer_row, end_column=6)
+        spacer_cell = ws.cell(row=spacer_row, column=1, value='')
+        spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
+
         # Table headers
         headers = ['Student', 'Roll Number', 'Present', 'Total', '%', 'Status']
         for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=8, column=col, value=header)
+            cell = ws.cell(row=header_row, column=col, value=header)
             cell.font = Font(bold=True, color='FFFFFF')
             cell.fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid')
             cell.alignment = Alignment(horizontal='center')
         
         # Data rows
-        row = 9
+        row = data_start_row
         for record in attendance_report or []:
             student = record['student']
             percent = record.get('attendance_percentage') or 0
@@ -953,7 +987,7 @@ class ReportingService:
             row += 1
         
         if not attendance_report:
-            ws.cell(row=9, column=1, value='No data')
+            ws.cell(row=data_start_row, column=1, value='No data')
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -1059,7 +1093,8 @@ class ReportingService:
                 ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1146,7 +1181,8 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1221,7 +1257,8 @@ class ReportingService:
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
-        tbl = Table(rows, repeatRows=1)
+        page_width = A4[0] - (18*mm + 18*mm)
+        tbl = Table(rows, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
