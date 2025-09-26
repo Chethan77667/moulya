@@ -53,10 +53,6 @@
                 <p class="text-xs sm:text-sm text-gray-500 mt-1">{{ subject.code }} | {{ subject.course.name if subject.course else 'N/A' }}</p>
                 <div class="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                     <span class="bg-gray-100 px-2 py-1 rounded">Students: {{ students|length }}</span>
-                    {% if monthly_summary %}
-                    <span class="bg-gray-100 px-2 py-1 rounded">Classes: {{ monthly_summary.total_classes }}</span>
-                    <span class="bg-gray-100 px-2 py-1 rounded">Avg: {{ "%.1f"|format(monthly_summary.average_attendance) }}%</span>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -64,11 +60,11 @@
         <!-- Tab Navigation - Mobile Friendly -->
         <div class="mb-4 sm:mb-6">
             <div class="border-b border-gray-200">
-                <nav class="-mb-px flex flex-col sm:flex-row gap-2 sm:gap-0">
-                    <button onclick="showTab('monthly-view')" id="monthly-view-tab" class="tab-button w-full sm:w-auto border-b-2 border-black text-black py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                <nav class="-mb-px flex">
+                    <button onclick="showTab('monthly-view')" id="monthly-view-tab" class="tab-button flex-1 border-b-2 border-black text-black py-2 px-2 text-xs sm:text-sm font-medium text-center">
                         View Reports
                     </button>
-                    <button onclick="showTab('monthly-mark')" id="monthly-mark-tab" class="tab-button w-full sm:w-auto border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-2 text-xs sm:text-sm font-medium text-center">
+                    <button onclick="showTab('monthly-mark')" id="monthly-mark-tab" class="tab-button flex-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-2 text-xs sm:text-sm font-medium text-center">
                         Monthly
                     </button>
                 </nav>
@@ -82,14 +78,14 @@
         <div id="monthly-mark-content" class="tab-content hidden">
             <div class="bg-white shadow rounded-lg">
                 <div class="px-4 py-5 sm:p-6">
-                    {# Removed inline error flash display for monthly attendance. Errors will show only in custom modal popup. #}
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Mark Monthly Attendance</h3>
-                    <p class="text-sm text-gray-600 mb-6">Enter the number of classes each student attended out of total classes conducted in the month.</p>
                     {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
+                    <!-- Keep data only; do not render visible banners -->
+                    <div class="hidden" id="monthly-flash-container"></div>
                     <div id="flash-data" data-messages='{{ messages|tojson|safe }}' class="hidden"></div>
                     <script>
-                    // Show popup modal for error messages only
+                    // No inline banners; use modal only
+                    // Also show popup modal for readability
                     (function(){
                         try {
                             const el = document.getElementById('flash-data');
@@ -106,8 +102,19 @@
                                         openAlertModal('Error!', text, 'error');
                                     }
                                 });
+                                // If there was an error, ensure Monthly tab is visible and hide any global banner
                                 if (hasError) {
                                     try { showTab('monthly-mark'); } catch(e) {}
+                                    // Remove/hide top-page flash banners so the modal is the only visible message
+                                    try {
+                                        document.querySelectorAll('[role="alert"], .alert, .flashes, .flash, .bg-red-100, .bg-green-100').forEach(function(el){
+                                            el.style.display = 'none';
+                                        });
+                                        // Also remove base template fixed flash container
+                                        document.querySelectorAll('div.fixed.top-4.right-4').forEach(function(el){
+                                            el.remove();
+                                        });
+                                    } catch(e) {}
                                 }
                             }
                         } catch(e){}
@@ -115,6 +122,9 @@
                     </script>
                     {% endif %}
                     {% endwith %}
+
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Mark Monthly Attendance</h3>
+                    <p class="text-sm text-gray-600 mb-6">Enter the number of classes each student attended out of total classes conducted in the month.</p>
                     
                     <form method="POST" action="{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

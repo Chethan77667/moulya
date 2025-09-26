@@ -83,7 +83,19 @@
                             <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
                                 <span class="text-sm font-medium">{{ mark.assessment_type }}</span>
                                 <div class="text-right">
-                                    <span class="text-sm">{{ mark.marks_obtained }}/{{ mark.max_marks }}</span>
+                                    {% set obtained = mark.marks_obtained %}
+                                    {% set max_val = mark.max_marks %}
+                                    {% if obtained is number and obtained == obtained|int %}
+                                        {% set obtained_display = obtained|int %}
+                                    {% else %}
+                                        {% set obtained_display = obtained %}
+                                    {% endif %}
+                                    {% if max_val is number and max_val == max_val|int %}
+                                        {% set max_display = max_val|int %}
+                                    {% else %}
+                                        {% set max_display = max_val %}
+                                    {% endif %}
+                                    <span class="text-sm">{{ obtained_display }}/{{ max_display }}</span>
                                     <span class="text-sm text-gray-600 ml-2">({{ mark.percentage }}%)</span>
                                 </div>
                             </div>
