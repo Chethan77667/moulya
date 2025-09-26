@@ -223,6 +223,12 @@ class ReportingService:
             
             course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
 
+            lecturers_list = []
+            try:
+                lecturers_list = [lec.name for lec in subject.get_assigned_lecturers() if lec]
+            except Exception:
+                lecturers_list = []
+
             report = {
                 'subject': {
                     'id': subject.id,
@@ -232,7 +238,8 @@ class ReportingService:
                     'course_display': course_display,
                     'section': section,
                     'year': subject.year,
-                    'semester': subject.semester
+                    'semester': subject.semester,
+                    'lecturers': lecturers_list
                 },
                 'assessment_type': assessment_type_display,
                 'statistics': statistics,
@@ -346,6 +353,12 @@ class ReportingService:
             
             course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
 
+            lecturers_list = []
+            try:
+                lecturers_list = [lec.name for lec in subject.get_assigned_lecturers() if lec]
+            except Exception:
+                lecturers_list = []
+
             report = {
                 'subject': {
                     'id': subject.id,
@@ -355,7 +368,8 @@ class ReportingService:
                     'course_display': course_display,
                     'section': section,
                     'year': subject.year,
-                    'semester': subject.semester
+                    'semester': subject.semester,
+                    'lecturers': lecturers_list
                 },
                 'month': month_name,
                 'year': year,
@@ -573,7 +587,7 @@ class ReportingService:
         marks_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -596,7 +610,7 @@ class ReportingService:
         att_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -669,7 +683,7 @@ class ReportingService:
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -746,7 +760,7 @@ class ReportingService:
         table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -799,6 +813,13 @@ class ReportingService:
             ['Course', s.get('course_display') or s.get('course') or ''],
             ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"]
         ]
+        # Faculty line if available
+        try:
+            lecturers = s.get('lecturers') or []
+            if lecturers:
+                meta_rows.append(['Faculty', ', '.join(lecturers)])
+        except Exception:
+            pass
         if report.get('assessment_type'):
             meta_rows.append(['Assessment Type', report.get('assessment_type')])
         meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
@@ -843,7 +864,7 @@ class ReportingService:
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -892,9 +913,17 @@ class ReportingService:
         meta_rows = [
             ['Subject', f"{s.get('name','')} ({s.get('code','')})"],
             ['Course', s.get('course_display') or s.get('course') or ''],
-            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"],
-            ['Period', f"{report.get('month','')} {report.get('year','')}"]
+            ['Year/Sem', f"{s.get('year','')}/{s.get('semester','')}"]
         ]
+        # Faculty line if available
+        try:
+            lecturers = s.get('lecturers') or []
+            if lecturers:
+                meta_rows.append(['Faculty', ', '.join(lecturers)])
+        except Exception:
+            pass
+        # Period after faculty
+        meta_rows.append(['Period', f"{report.get('month','')} {report.get('year','')}"])
         meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
         meta_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -930,7 +959,7 @@ class ReportingService:
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))
@@ -1005,7 +1034,7 @@ class ReportingService:
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#366092')),
+            ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
         ]))

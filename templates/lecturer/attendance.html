@@ -54,8 +54,27 @@
                 <div class="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                     <span class="bg-gray-100 px-2 py-1 rounded">Students: {{ students|length }}</span>
                     {% if monthly_summary %}
-                    <span class="bg-gray-100 px-2 py-1 rounded">Classes: {{ monthly_summary.total_classes }}</span>
+                    <span class="bg-gray-100 px-2 py-1 rounded">Classes (This Month): {{ monthly_summary.total_classes }}</span>
                     <span class="bg-gray-100 px-2 py-1 rounded">Avg: {{ "%.1f"|format(monthly_summary.average_attendance) }}%</span>
+                    {# Determine the most recent month-year that has a total in prior_totals_map, including current if present #}
+                    {% set all_keys = prior_totals_map.keys()|list %}
+                    {% set latest_total = 0 %}
+                    {% set latest_key = None %}
+                    {% for k in all_keys|sort %}
+                        {% set latest_key = k %}
+                        {% set latest_total = prior_totals_map[k] %}
+                    {% endfor %}
+                    {% if latest_key %}
+                        {% set parts = latest_key.split('-') %}
+                        {% set ly = parts[0]|int %}
+                        {% set lm = parts[1]|int %}
+                        {% set prev_key = (lm == 1) and (ly-1 ~ '-12') or (ly ~ '-' ~ ("%02d" % (lm-1))) %}
+                        {% set prev_total2 = prior_totals_map.get(prev_key, 0) %}
+                        {% set last_month_classes = (latest_total - prev_total2) if latest_total >= prev_total2 else 0 %}
+                        <span class="bg-gray-100 px-2 py-1 rounded">Last Month Classes: {{ last_month_classes }}</span>
+                    {% else %}
+                        <span class="bg-gray-100 px-2 py-1 rounded">Last Month Classes: 0</span>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
