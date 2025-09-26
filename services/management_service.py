@@ -193,91 +193,93 @@ class ManagementService:
     
     @staticmethod
     def bulk_add_lecturers(file_data):
-        """Bulk upsert lecturers from Excel file.
-
-        Behavior:
-        - If a lecturer with the same `lecturer_id` exists and is active, update their `name`.
-        - If they do not exist, create a new lecturer and generate credentials.
-        - If subject codes are provided for a row:
-          - Ensure those subjects are assigned for the current academic year (create missing assignments).
-          - Deactivate assignments for the current academic year that are not in the uploaded list.
-        - If the existing record is inactive, replace/reactivate by removing the inactive record and creating a new one.
-        """
+        """Bulk upsert lecturers from Excel file. Improved: auto-detect header, flexible columns, clear errors."""
         try:
             workbook = openpyxl.load_workbook(BytesIO(file_data))
             sheet = workbook.active
-            
+
+            # Detect header row and map columns
+            header_row = None
+            for row in sheet.iter_rows(min_row=1, max_row=1, values_only=True):
+                header_row = [str(cell).strip().lower().replace(' ', '_') if cell else '' for cell in row]
+                break
+            # Map common header variations
+            header_aliases = {
+                'lecturer_id': ['lecturer_id', 'lecturerid', 'lecturer id', 'id'],
+                'name': ['name', 'full_name', 'fullname', 'full name']
+            }
+            col_map = {}
+            for key, aliases in header_aliases.items():
+                for alias in aliases:
+                    if alias in header_row:
+                        col_map[key] = header_row.index(alias)
+                        break
+            # Also map subject_codes if present
+            for idx, col in enumerate(header_row):
+                if col in ['subject_codes', 'subject code', 'subjects', 'subject']:  # Accept variations
+                    col_map['subject_codes'] = idx
+            required_cols = ['lecturer_id', 'name']
+            missing_cols = [col for col in required_cols if col not in col_map]
+            if missing_cols:
+                return False, f"Missing required columns: {', '.join(missing_cols)}", [], []
+
             lecturers_to_create = []
             errors = []
             credentials = []
             updates_applied = 0
-            
-            # Expected columns: lecturer_id, name, email, phone, department
+
             for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-                if not any(row):  # Skip empty rows
+                if not any(row):
                     continue
-                
                 try:
-                    lecturer_id = str(row[0]).strip() if row[0] else None
-                    name = str(row[1]).strip() if row[1] else None
-                    subject_codes = str(row[2]).strip() if row[2] and str(row[2]).strip() and str(row[2]).strip().lower() != 'none' else None
-                    
-                    # Debug: log what we read
-                    print(f"Row {row_num}: lecturer_id='{lecturer_id}', name='{name}', subject_codes='{subject_codes}'")
-                    
+                    lecturer_id = str(row[col_map['lecturer_id']]).strip() if row[col_map['lecturer_id']] else None
+                    name = str(row[col_map['name']]).strip() if row[col_map['name']] else None
+                    subject_codes = None
+                    if 'subject_codes' in col_map:
+                        subject_codes = str(row[col_map['subject_codes']]).strip() if row[col_map['subject_codes']] and str(row[col_map['subject_codes']]).strip().lower() != 'none' else None
+
                     if not lecturer_id or not name:
-                        errors.append(f"Row {row_num}: Lecturer ID ('{lecturer_id}') and Name ('{name}') are required")
+                        errors.append(f"Row {row_num}: Lecturer ID and Name are required")
                         continue
-                    
+
                     # Parse subject codes (comma-separated)
                     subject_ids = []
                     if subject_codes:
-                        print(f"Row {row_num}: Processing subject codes: '{subject_codes}'")
                         subject_code_list = [code.strip() for code in subject_codes.split(',') if code.strip()]
-                        print(f"Row {row_num}: Subject code list: {subject_code_list}")
                         for code in subject_code_list:
                             subject = Subject.query.filter_by(code=code, is_active=True).first()
                             if subject:
                                 subject_ids.append(subject.id)
-                                print(f"Row {row_num}: Found subject '{code}' with ID {subject.id}")
                             else:
                                 errors.append(f"Row {row_num}: Subject code '{code}' not found")
-                                print(f"Row {row_num}: Subject code '{code}' not found")
-                    
-                    print(f"Row {row_num}: Final subject_ids: {subject_ids}")
-                    
+
                     # Validate data
                     is_valid, message = validate_lecturer_id(lecturer_id)
                     if not is_valid:
                         errors.append(f"Row {row_num}: Lecturer ID '{lecturer_id}' - {message}")
                         continue
-                    
+
                     is_valid, message = validate_name(name)
                     if not is_valid:
                         errors.append(f"Row {row_num}: Name '{name}' - {message}")
                         continue
-                    
+
                     # Upsert by lecturer_id
                     existing_active_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=True).first()
                     if existing_active_lecturer:
-                        # Update name if changed
                         if existing_active_lecturer.name != name:
                             existing_active_lecturer.name = name
                             updates_applied += 1
-                        # Handle subject assignments for current year based on provided list
                         if subject_ids:
                             from models.assignments import SubjectAssignment
                             from datetime import datetime
                             current_year = datetime.now().year
-                            # Fetch existing assignments for the year
                             existing_assignments = SubjectAssignment.query.filter_by(
                                 lecturer_id=existing_active_lecturer.id,
                                 academic_year=current_year
                             ).all()
                             existing_subject_ids = {a.subject_id for a in existing_assignments if a.is_active}
                             desired_subject_ids = set(int(sid) for sid in subject_ids)
-
-                            # Add new ones
                             to_add = desired_subject_ids - existing_subject_ids
                             for sid in to_add:
                                 assignment = SubjectAssignment(
@@ -286,38 +288,28 @@ class ManagementService:
                                     academic_year=current_year
                                 )
                                 db.session.add(assignment)
-
-                            # Deactivate those not desired
                             to_deactivate = existing_subject_ids - desired_subject_ids
                             if to_deactivate:
                                 for a in existing_assignments:
                                     if a.subject_id in to_deactivate and a.is_active:
                                         a.is_active = False
-                        # No credentials for updates
                     else:
-                        # Check inactive and remove to free unique
                         existing_inactive_lecturer = Lecturer.query.filter_by(lecturer_id=lecturer_id, is_active=False).first()
                         if existing_inactive_lecturer:
                             from models.assignments import SubjectAssignment
                             SubjectAssignment.query.filter_by(lecturer_id=existing_inactive_lecturer.id).delete()
                             db.session.delete(existing_inactive_lecturer)
-
-                        # Generate credentials for new lecturer
                         success, username, password, msg = AuthService.generate_lecturer_credentials(name, lecturer_id)
                         if not success:
                             errors.append(f"Row {row_num}: {msg}")
                             continue
-
                         lecturer = Lecturer(
                             lecturer_id=lecturer_id,
                             name=name,
                             username=username
                         )
                         lecturer.set_password(password)
-
-                        # Store subject IDs for later assignment
                         lecturer._temp_subject_ids = subject_ids
-
                         lecturers_to_create.append(lecturer)
                         credentials.append({
                             'lecturer_id': lecturer_id,
@@ -325,53 +317,35 @@ class ManagementService:
                             'username': username,
                             'password': password
                         })
-                    
                 except Exception as e:
                     errors.append(f"Row {row_num}: Error processing data - {str(e)}")
-                    print(f"Row {row_num}: Exception - {str(e)}")
-            
-            print(f"Processing complete: {len(lecturers_to_create)} lecturers to add, {updates_applied} updates, {len(errors)} errors")
-            for error in errors:
-                print(f"Error: {error}")
-            
+
             if lecturers_to_create or updates_applied > 0:
                 try:
-                    # Commit updates to existing lecturers first
                     if updates_applied > 0:
                         db.session.commit()
-                    
-                    # Add all new lecturers to session
                     for lecturer in lecturers_to_create:
                         db.session.add(lecturer)
-                    
-                    # Commit new lecturers
                     if lecturers_to_create:
                         db.session.commit()
-                    
                     message = []
                     if lecturers_to_create:
                         message.append(f"added {len(lecturers_to_create)}")
                     if updates_applied:
                         message.append(f"updated {updates_applied}")
                     message = "Successfully " + ", ".join(message) + " lecturer(s)"
-                    
-                    # Create subject assignments for lecturers that have subjects
                     from models.assignments import SubjectAssignment
                     from datetime import datetime
-                    
                     current_year = datetime.now().year
                     assignments = []
-                    
                     for lecturer in lecturers_to_create:
                         if hasattr(lecturer, '_temp_subject_ids') and lecturer._temp_subject_ids:
                             for subject_id in lecturer._temp_subject_ids:
-                                # Check if assignment already exists
                                 existing = SubjectAssignment.query.filter_by(
                                     lecturer_id=lecturer.id,
                                     subject_id=subject_id,
                                     academic_year=current_year
                                 ).first()
-                                
                                 if not existing:
                                     assignment = SubjectAssignment(
                                         lecturer_id=lecturer.id,
@@ -379,21 +353,14 @@ class ManagementService:
                                         academic_year=current_year
                                     )
                                     assignments.append(assignment)
-                    
                     if assignments:
                         success_assign, message_assign = bulk_insert(assignments)
-                        if not success_assign:
-                            # Log but don't fail the whole operation
-                            print(f"Warning: Failed to create some subject assignments: {message_assign}")
-                    
                     return True, message, credentials, errors
-                    
                 except Exception as e:
                     db.session.rollback()
                     return False, f"Database error: {str(e)}", [], errors
             else:
                 return False, "No valid lecturer changes found", [], errors
-                
         except Exception as e:
             return False, f"Error processing Excel file: {str(e)}", [], []
     
