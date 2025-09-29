@@ -411,16 +411,35 @@ function setAllAttendance(type) {
     const month = parseInt(document.getElementById('monthly_month').value) || 0;
     const year = parseInt(document.getElementById('monthly_year').value) || 0;
     const monthClasses = computeMonthClasses(year, month);
-    const prevMap = getPrevPresentMap();
+    const prevMap = getPrevPresentForMonth(year, month);
+    
     inputs.forEach(input => {
         const idMatch = (input.name || '').match(/attended_(\d+)/);
         const studentId = idMatch ? parseInt(idMatch[1]) : null;
         const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
-        let value = prevPresents;
-        if (type === 'full') value = prevPresents + monthClasses;
-        else if (type === 'half') value = prevPresents + Math.floor(monthClasses / 2);
-        else if (type === 'zero') value = prevPresents;
-        input.value = Math.max(prevPresents, Math.min(value, prevPresents + monthClasses));
+        
+        // Calculate valid range for this student
+        const minAllowed = Math.max(prevPresents, 0);
+        const maxAllowed = prevPresents + monthClasses;
+        
+        let value;
+        if (type === 'zero') {
+            // Set to minimum allowed value
+            value = minAllowed;
+        } else if (type === 'half') {
+            // Set to middle of the range
+            value = Math.floor((minAllowed + maxAllowed) / 2);
+        } else if (type === 'full') {
+            // Set to maximum allowed value
+            value = maxAllowed;
+        }
+        
+        // Ensure value is within valid range
+        value = Math.max(minAllowed, Math.min(value, maxAllowed));
+        input.value = value;
+        
+        // Remove any error styling
+        input.classList.remove('border-red-500');
     });
 }
 
@@ -444,6 +463,44 @@ document.getElementById('monthly-student-search')?.addEventListener('input', fun
 // Auto-calculate attendance based on total classes
 document.getElementById('monthly_total_classes')?.addEventListener('input', function() {
     updatePerStudentConstraints();
+});
+
+// Real-time validation for total classes field
+document.getElementById('monthly_total_classes')?.addEventListener('blur', function() {
+    validateTotalClasses();
+});
+
+// Real-time validation for student attendance fields
+document.addEventListener('DOMContentLoaded', function() {
+    // Add blur event listeners to all student attendance inputs
+    document.querySelectorAll('.monthly-attendance-input').forEach(function(input) {
+        input.addEventListener('blur', function() {
+            validateStudentAttendance(this);
+        });
+    });
+    
+    // Re-add event listeners when new inputs are added (e.g., after search filtering)
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        const inputs = node.querySelectorAll ? node.querySelectorAll('.monthly-attendance-input') : [];
+                        inputs.forEach(function(input) {
+                            input.addEventListener('blur', function() {
+                                validateStudentAttendance(this);
+                            });
+                        });
+                    }
+                });
+            }
+        });
+    });
+    
+    const studentsContainer = document.getElementById('monthly-students-container');
+    if (studentsContainer) {
+        observer.observe(studentsContainer, { childList: true, subtree: true });
+    }
 });
 
 // Initialize counts on page load
@@ -527,6 +584,95 @@ function updatePerStudentConstraints() {
     });
 }
 
+// Real-time validation functions
+async function validateTotalClasses() {
+    const month = parseInt(document.getElementById('monthly_month').value) || 0;
+    const year = parseInt(document.getElementById('monthly_year').value) || 0;
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+    
+    if (!month || !year || !totalClasses) return;
+    
+    try {
+        const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('input[name="csrf_token"]').value
+            },
+            body: JSON.stringify({
+                month: month,
+                year: year,
+                total_classes: totalClasses
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.valid) {
+            if (result.error_type === 'cumulative_total') {
+                openAlertModal('Validation Error', result.message, 'error');
+                document.getElementById('monthly_total_classes').classList.add('border-red-500');
+            }
+        } else {
+            document.getElementById('monthly_total_classes').classList.remove('border-red-500');
+        }
+    } catch (error) {
+        console.error('Validation error:', error);
+    }
+}
+
+async function validateStudentAttendance(inputElement) {
+    const month = parseInt(document.getElementById('monthly_month').value) || 0;
+    const year = parseInt(document.getElementById('monthly_year').value) || 0;
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+    const attendedClasses = parseInt(inputElement.value || '0');
+    
+    if (!month || !year || !totalClasses || !attendedClasses) return;
+    
+    // Extract student ID from input name
+    const idMatch = (inputElement.name || '').match(/attended_(\d+)/);
+    const studentId = idMatch ? parseInt(idMatch[1]) : null;
+    
+    if (!studentId) return;
+    
+    // Get student name and roll number from the DOM
+    const studentRow = inputElement.closest('.monthly-student-row');
+    const studentName = studentRow ? studentRow.querySelector('p.text-sm')?.textContent?.trim() : 'Student';
+    const studentRoll = studentRow ? studentRow.querySelector('p.text-xs')?.textContent?.trim() : '';
+    
+    try {
+        const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': document.querySelector('input[name="csrf_token"]').value
+            },
+            body: JSON.stringify({
+                month: month,
+                year: year,
+                total_classes: totalClasses,
+                student_id: studentId,
+                attended_classes: attendedClasses
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.valid) {
+            if (result.error_type === 'student_range') {
+                const studentInfo = studentRoll ? `${studentName} (${studentRoll})` : studentName;
+                const errorMessage = `${studentInfo}: ${result.message}`;
+                openAlertModal('Validation Error', errorMessage, 'error');
+                inputElement.classList.add('border-red-500');
+            }
+        } else {
+            inputElement.classList.remove('border-red-500');
+        }
+    } catch (error) {
+        console.error('Validation error:', error);
+    }
+}
+
 // Validation first, then confirmation for monthly attendance submission
 document.getElementById('monthly-attendance-confirm')?.addEventListener('click', function(e) {
     const monthSelect = document.getElementById('monthly_month');
@@ -593,7 +739,7 @@ document.getElementById('monthly-attendance-confirm')?.addEventListener('click',
     });
 
     if (invalid) {
-        openAlertModal('Validation Error', `${firstErrorName}: enter between ${firstErrorMin} and ${firstErrorMax}.`, 'error');
+        openAlertModal('Validation Error',`${firstErrorName}: enter between ${firstErrorMin} and ${firstErrorMax}.`, 'error');
         return;
     }
 

@@ -163,7 +163,7 @@
                             <div class="text-xs sm:text-sm text-gray-500 ml-2 flex-shrink-0">
                                 {% set attendance_pct = subject.get_attendance_percentage(student.id) %}
                                 <div class="text-right">
-                                    <div>{{ attendance_pct }}%</div>
+                                    <div>{{ "%.2f"|format(attendance_pct) }}%</div>
                                     <div class="text-xs text-gray-400">Attendance</div>
                                 </div>
                             </div>

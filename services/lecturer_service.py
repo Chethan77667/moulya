@@ -619,6 +619,21 @@ class LecturerService:
             if not subject:
                 return []
             
+            # Get the monthly summary to get the actual total classes from database
+            monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                subject_id=subject_id,
+                lecturer_id=lecturer_id,
+                month=month,
+                year=year
+            ).first()
+            
+            # If no monthly summary exists, return empty data
+            if not monthly_summary:
+                return []
+            
+            # Get the actual total classes from the monthly summary
+            total_classes_from_db = monthly_summary.total_classes
+            
             enrolled_students = subject.get_enrolled_students()
             monthly_data = []
             
@@ -631,7 +646,8 @@ class LecturerService:
                     extract('year', AttendanceRecord.date) == year
                 ).all()
                 
-                total_classes = len(attendance_records)
+                # Use the total classes from the monthly summary (database value)
+                total_classes = total_classes_from_db
                 present_classes = len([r for r in attendance_records if r.status == 'present'])
                 absent_classes = total_classes - present_classes
                 attendance_percentage = (present_classes / total_classes * 100) if total_classes > 0 else 0

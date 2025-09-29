@@ -67,7 +67,7 @@
                         </div>
                         <div class="w-16">
                             <span id="threshold-value" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                {{ threshold }}%
+                                {{ "%.2f"|format(threshold) }}%
                             </span>
                         </div>
                         <button onclick="applyFilter()" 
@@ -76,7 +76,7 @@
                         </button>
                     </div>
                     <div class="mt-2 text-xs text-gray-500">
-                        Students with attendance below <span id="threshold-text">{{ threshold }}%</span> will be shown
+                        Students with attendance below <span id="threshold-text">{{ "%.2f"|format(threshold) }}%</span> will be shown
                     </div>
                 </div>
             </div>
@@ -102,7 +102,7 @@
                                     <p class="text-xs text-gray-500">{{ student_data.student.roll_number }}</p>
                                 </div>
                                 <div class="ml-2 text-right">
-                                    <div class="text-sm font-medium text-red-600">{{ student_data.attendance_percentage }}%</div>
+                                    <div class="text-sm font-medium text-red-600">{{ "%.2f"|format(student_data.attendance_percentage) }}%</div>
                                     <div class="text-xs text-red-500">Attendance</div>
                                 </div>
                             </div>
@@ -118,7 +118,7 @@
                             </div>
                             <div class="mt-2">
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                    {{ threshold - student_data.attendance_percentage }}% below threshold
+                                    {{ "%.2f"|format(threshold - student_data.attendance_percentage) }}% below threshold
                                 </span>
                             </div>
                         </div>
@@ -146,10 +146,10 @@
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ student_data.student.roll_number }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ student_data.present_classes }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ student_data.total_classes }}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ student_data.attendance_percentage }}%</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ "%.2f"|format(student_data.attendance_percentage) }}%</td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                        {{ threshold - student_data.attendance_percentage }}% below threshold
+                                        {{ "%.2f"|format(threshold - student_data.attendance_percentage) }}% below threshold
                                     </span>
                                 </td>
                             </tr>
@@ -173,7 +173,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <h3 class="mt-2 text-base sm:text-lg font-medium text-gray-900">No Attendance Shortages</h3>
-                <p class="mt-1 text-sm text-gray-500">All students in your subjects have good attendance (≥{{ threshold }}%).</p>
+                <p class="mt-1 text-sm text-gray-500">All students in your subjects have good attendance (≥{{ "%.2f"|format(threshold) }}%).</p>
                 <a href="{{ url_for('lecturer.dashboard') }}" 
                    class="mt-4 inline-flex items-center px-4 py-2 border border-black text-sm font-medium rounded text-black bg-white hover:bg-gray-50">
                     Back to Dashboard
@@ -202,8 +202,9 @@ document.addEventListener('click', function(event) {
 
 // Range slider functionality
 function updateThreshold(value) {
-    document.getElementById('threshold-value').textContent = value + '%';
-    document.getElementById('threshold-text').textContent = value + '%';
+    const formattedValue = parseFloat(value).toFixed(2);
+    document.getElementById('threshold-value').textContent = formattedValue + '%';
+    document.getElementById('threshold-text').textContent = formattedValue + '%';
 }
 
 function applyFilter() {
