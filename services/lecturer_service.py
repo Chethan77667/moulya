@@ -7,13 +7,13 @@ from models.user import Lecturer
 from models.academic import Subject
 from models.student import Student, StudentEnrollment
 from models.assignments import SubjectAssignment
-from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
+from models.attendance import AttendanceRecord, MonthlyAttendanceSummary, MonthlyStudentAttendance
 from models.marks import StudentMarks
 from database import db
 from utils.db_helpers import safe_add_and_commit, safe_update_and_commit
 from datetime import datetime, date
 from sqlalchemy import extract, func
-from sqlalchemy import and_, extract
+from sqlalchemy import and_, extract, func
 
 class LecturerService:
     """Lecturer service class"""
@@ -327,7 +327,12 @@ class LecturerService:
     
     @staticmethod
     def generate_attendance_report(subject_id, lecturer_id):
-        """Generate attendance report for a subject"""
+        """Generate attendance report for a subject using monthly summary tables.
+
+        Totals are computed from MonthlyAttendanceSummary (sum of total_classes),
+        and per-student presents from MonthlyStudentAttendance (sum of present_count).
+        This aligns with the new monthly marking model that allows multiple classes per day.
+        """
         try:
             # Verify lecturer is assigned to this subject
             assignment = SubjectAssignment.query.filter_by(
@@ -346,25 +351,35 @@ class LecturerService:
             enrolled_students = subject.get_enrolled_students()
             report_data = []
             
+            # Compute subject total classes cumulatively
+            total_classes_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
+                .filter(
+                    MonthlyAttendanceSummary.subject_id == subject_id,
+                    MonthlyAttendanceSummary.lecturer_id == lecturer_id
+                ).scalar() or 0)
+            total_classes_cumulative = int(total_classes_cumulative)
+            
             for student in enrolled_students:
-                attendance_percentage = subject.get_attendance_percentage(student.id)
-                total_classes = AttendanceRecord.query.filter_by(
-                    student_id=student.id,
-                    subject_id=subject_id
-                ).count()
+                # Sum student's presents cumulatively across months
+                present_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.present_count), 0))
+                    .filter(
+                        MonthlyStudentAttendance.student_id == student.id,
+                        MonthlyStudentAttendance.subject_id == subject_id,
+                        MonthlyStudentAttendance.lecturer_id == lecturer_id
+                    ).scalar() or 0)
+                present_cumulative = int(present_cumulative)
                 
-                present_classes = AttendanceRecord.query.filter_by(
-                    student_id=student.id,
-                    subject_id=subject_id,
-                    status='present'
-                ).count()
+                total_classes = total_classes_cumulative
+                present_classes = min(present_cumulative, total_classes) if total_classes > 0 else present_cumulative
+                absent_classes = max(total_classes - present_classes, 0)
+                attendance_percentage = (present_classes / total_classes * 100) if total_classes > 0 else 0
                 
                 report_data.append({
                     'student': student,
                     'total_classes': total_classes,
                     'present_classes': present_classes,
-                    'absent_classes': total_classes - present_classes,
-                    'attendance_percentage': attendance_percentage,
+                    'absent_classes': absent_classes,
+                    'attendance_percentage': round(attendance_percentage, 1),
                     'has_shortage': attendance_percentage < 75
                 })
             
@@ -489,32 +504,18 @@ class LecturerService:
             for rec in existing_q.all():
                 existing_records_by_student.setdefault(rec.student_id, []).append(rec)
             
-            # Create attendance records based on monthly delta
-            days_in_month = calendar.monthrange(year, month)[1]
-            
+            # Upsert per-student monthly attendance (supports multiple classes per day)
             total_records_created = 0
-            
             for student_id, attended_cumulative in attendance_data.items():
-                # Present count up to previous month
-                prev_end = date_class(prev_year, prev_month, calendar.monthrange(prev_year, prev_month)[1]) if prior_total_classes > 0 else None
-                prev_present = 0
-                if prev_end:
-                    prev_present = AttendanceRecord.query.filter(
-                        AttendanceRecord.student_id == student_id,
-                        AttendanceRecord.subject_id == subject_id,
-                        AttendanceRecord.lecturer_id == lecturer_id,
-                        AttendanceRecord.date <= prev_end,
-                        AttendanceRecord.status == 'present'
-                    ).count()
-                # Already recorded present in the current month (before this submission)
-                existing_month_present = AttendanceRecord.query.filter(
-                    AttendanceRecord.student_id == student_id,
-                    AttendanceRecord.subject_id == subject_id,
-                    AttendanceRecord.lecturer_id == lecturer_id,
-                    extract('month', AttendanceRecord.date) == month,
-                    extract('year', AttendanceRecord.date) == year,
-                    AttendanceRecord.status == 'present'
-                ).count()
+                # Present count up to previous month (use MonthlyStudentAttendance sums)
+                prev_present = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.present_count), 0))
+                    .filter(
+                        MonthlyStudentAttendance.student_id == student_id,
+                        MonthlyStudentAttendance.subject_id == subject_id,
+                        MonthlyStudentAttendance.lecturer_id == lecturer_id,
+                        ((MonthlyStudentAttendance.year < year) |
+                         ((MonthlyStudentAttendance.year == year) & (MonthlyStudentAttendance.month < month)))
+                    ).scalar() or 0)
                 # Monthly delta for student derived from cumulative without hard validation
                 # Normalize bad values and clamp within [0, month_total_classes]
                 if attended_cumulative is None:
@@ -538,56 +539,17 @@ class LecturerService:
                     )
 
                 attended_classes = attended_cumulative - prev_present
+                
                 if attended_classes < 0:
                     attended_classes = 0
                 if attended_classes > month_total_classes:
                     attended_classes = month_total_classes
                 absent_classes = max(month_total_classes - attended_classes, 0)
-                
-                # Create attendance records for each day of the month
-                # We'll distribute present/absent days across the month
-                present_days = []
-                absent_days = []
-                
-                # Simple distribution: mark first 'attended_classes' days as present
-                for day in range(1, month_total_classes + 1):
-                    if day <= attended_classes:
-                        present_days.append(day)
-                    else:
-                        absent_days.append(day)
-                
-                # Replace existing month records for this student, then insert
-                if student_id in existing_records_by_student:
-                    for rec in existing_records_by_student[student_id]:
-                        db.session.delete(rec)
-                    db.session.flush()
 
-                # Create attendance records
-                for day in present_days:
-                    if day <= days_in_month:
-                        attendance_date = date_class(year, month, day)
-                        record = AttendanceRecord(
-                            student_id=student_id,
-                            subject_id=subject_id,
-                            lecturer_id=lecturer_id,
-                            date=attendance_date,
-                            status='present'
-                        )
-                        db.session.add(record)
-                        total_records_created += 1
-                
-                for day in absent_days:
-                    if day <= days_in_month:
-                        attendance_date = date_class(year, month, day)
-                        record = AttendanceRecord(
-                            student_id=student_id,
-                            subject_id=subject_id,
-                            lecturer_id=lecturer_id,
-                            date=attendance_date,
-                            status='absent'
-                        )
-                        db.session.add(record)
-                        total_records_created += 1
+                # Upsert MonthlyStudentAttendance with cumulative present for this month
+                msa = MonthlyStudentAttendance.get_or_create(student_id, subject_id, lecturer_id, month, year)
+                msa.present_count = attended_classes
+                total_records_created += 1
             
             # Update the monthly summary
             summary.calculate_average_attendance()
@@ -638,18 +600,20 @@ class LecturerService:
             monthly_data = []
             
             for student in enrolled_students:
-                # Get attendance records for the specific month
-                attendance_records = AttendanceRecord.query.filter(
-                    AttendanceRecord.student_id == student.id,
-                    AttendanceRecord.subject_id == subject_id,
-                    extract('month', AttendanceRecord.date) == month,
-                    extract('year', AttendanceRecord.date) == year
-                ).all()
-                
-                # Use the total classes from the monthly summary (database value)
+                # Read per-student monthly present from MonthlyStudentAttendance
+                msa = MonthlyStudentAttendance.query.filter_by(
+                    student_id=student.id,
+                    subject_id=subject_id,
+                    lecturer_id=lecturer_id,
+                    month=month,
+                    year=year
+                ).first()
+                month_present = msa.present_count if msa else 0
+
+                # Use the total classes for the month (delta) from summary
                 total_classes = total_classes_from_db
-                present_classes = len([r for r in attendance_records if r.status == 'present'])
-                absent_classes = total_classes - present_classes
+                present_classes = month_present
+                absent_classes = max(total_classes - present_classes, 0)
                 attendance_percentage = (present_classes / total_classes * 100) if total_classes > 0 else 0
                 
                 monthly_data.append({

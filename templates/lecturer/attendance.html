@@ -477,10 +477,6 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('blur', function() {
             validateStudentAttendance(this);
         });
-        // Immediate validation while typing
-        input.addEventListener('input', function() {
-            validateStudentAttendance(this);
-        });
     });
     
     // Re-add event listeners when new inputs are added (e.g., after search filtering)
@@ -596,31 +592,12 @@ async function validateTotalClasses() {
     
     if (!month || !year || !totalClasses) return;
     
-    // Immediate client-side check against previous cumulative
     try {
-        const priorMap = getPriorTotalsMap();
-        const key = `${year}-${String(month).padStart(2,'0')}`;
-        const priorTotal = priorMap[key] != null ? parseInt(priorMap[key]) : parseInt(document.getElementById('prior_total_classes')?.value || '0');
-        if (isFinite(priorTotal) && totalClasses < priorTotal) {
-            const monthName = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month];
-            openAlertModal(
-                'Validation Error',
-                `For ${monthName}, total classes must be at least previous cumulative.
-Previous cumulative: ${priorTotal}
-Entered: ${totalClasses}`,
-                'error'
-            );
-            document.getElementById('monthly_total_classes').classList.add('border-red-500');
-            return;
-        }
-    } catch (e) { /* ignore and continue to server validation */ }
-    
-    try {
-        const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
+        const response = await fetch(`/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-Token': document.querySelector('input[name="csrf_token"]').value
+                'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
             },
             body: JSON.stringify({
                 month: month,
@@ -633,9 +610,7 @@ Entered: ${totalClasses}`,
         
         if (!result.valid) {
             if (result.error_type === 'cumulative_total') {
-                // Include entered and prior values if provided by server, else show generic
-                const msg = result.message || 'Total classes must be at least previous cumulative.';
-                openAlertModal('Validation Error', msg, 'error');
+                openAlertModal('Validation Error', result.message, 'error');
                 document.getElementById('monthly_total_classes').classList.add('border-red-500');
             }
         } else {
@@ -652,7 +627,7 @@ async function validateStudentAttendance(inputElement) {
     const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
     const attendedClasses = parseInt(inputElement.value || '0');
     
-    if (!month || !year || !totalClasses) return;
+    if (!month || !year || !totalClasses || !attendedClasses) return;
     
     // Extract student ID from input name
     const idMatch = (inputElement.name || '').match(/attended_(\d+)/);
@@ -665,36 +640,12 @@ async function validateStudentAttendance(inputElement) {
     const studentName = studentRow ? studentRow.querySelector('p.text-sm')?.textContent?.trim() : 'Student';
     const studentRoll = studentRow ? studentRow.querySelector('p.text-xs')?.textContent?.trim() : '';
     
-    // Client-side immediate range validation based on previous presents and month classes
-    const monthClasses = computeMonthClasses(year, month);
-    const prevMap = getPrevPresentForMonth(year, month);
-    const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
-    const minAllowed = Math.max(prevPresents, 0);
-    const maxAllowed = prevPresents + monthClasses; // Cumulative upper bound for this month
-    
-    if (!Number.isNaN(attendedClasses)) {
-        if (attendedClasses < minAllowed || attendedClasses > maxAllowed || attendedClasses > totalClasses) {
-            const studentInfo = studentRoll ? `${studentName} (${studentRoll})` : studentName;
-            let reason = '';
-            if (attendedClasses > totalClasses) {
-                reason = `Cumulative attended (${attendedClasses}) cannot exceed total classes (${totalClasses}).`;
-            } else {
-                reason = `Allowed range this month: ${minAllowed} to ${maxAllowed}.`;
-            }
-            openAlertModal('Validation Error', `${studentInfo}: ${reason}`, 'error');
-            inputElement.classList.add('border-red-500');
-            return; // Stop; do not call server
-        } else {
-            inputElement.classList.remove('border-red-500');
-        }
-    }
-    
     try {
-        const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
+        const response = await fetch(`/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-Token': document.querySelector('input[name="csrf_token"]').value
+                'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
             },
             body: JSON.stringify({
                 month: month,
