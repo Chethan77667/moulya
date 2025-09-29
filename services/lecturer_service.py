@@ -80,7 +80,13 @@ class LecturerService:
             if not subject:
                 return []
             
-            return subject.get_enrolled_students()
+            # Return students ordered by roll number ascending
+            enrollments = StudentEnrollment.query\
+                .filter_by(subject_id=subject_id, is_active=True)\
+                .join(Student, Student.id == StudentEnrollment.student_id)\
+                .order_by(Student.roll_number.asc())\
+                .all()
+            return [e.student for e in enrollments]
         except Exception as e:
             return []
     
