@@ -10,6 +10,7 @@ from models.assignments import SubjectAssignment
 from database import db
 from utils.db_helpers import safe_add_and_commit, bulk_insert
 from utils.validators import *
+from utils.sorting_helpers import SortingHelpers
 from services.auth_service import AuthService
 import openpyxl
 from io import BytesIO
@@ -19,15 +20,25 @@ class ManagementService:
     
     @staticmethod
     def get_dashboard_stats():
-        """Get dashboard statistics"""
+        """Get dashboard statistics with sorted ordering"""
         try:
+            # Get lecturers with custom sorting
+            all_lecturers = Lecturer.query.filter_by(is_active=True).all()
+            sorted_lecturers = SortingHelpers.sort_lecturers(all_lecturers)
+            recent_lecturers = sorted_lecturers[:5]
+            
+            # Get students with custom sorting
+            all_students = Student.query.filter_by(is_active=True).all()
+            sorted_students = SortingHelpers.sort_students(all_students)
+            recent_students = sorted_students[:5]
+            
             stats = {
-                'total_lecturers': Lecturer.query.filter_by(is_active=True).count(),
-                'total_students': Student.query.filter_by(is_active=True).count(),
+                'total_lecturers': len(sorted_lecturers),
+                'total_students': len(sorted_students),
                 'total_courses': Course.query.filter_by(is_active=True).count(),
                 'total_subjects': Subject.query.filter_by(is_active=True).count(),
-                'recent_lecturers': Lecturer.query.filter_by(is_active=True).order_by(Lecturer.created_at.desc()).limit(5).all(),
-                'recent_students': Student.query.filter_by(is_active=True).order_by(Student.created_at.desc()).limit(5).all()
+                'recent_lecturers': recent_lecturers,
+                'recent_students': recent_students
             }
             return stats
         except Exception as e:
@@ -35,7 +46,7 @@ class ManagementService:
     
     @staticmethod
     def get_lecturers_paginated(page=1, search='', per_page=20):
-        """Get paginated lecturers list"""
+        """Get paginated lecturers list with sorted ordering"""
         try:
             query = Lecturer.query.filter_by(is_active=True)
             
@@ -48,12 +59,52 @@ class ManagementService:
                     )
                 )
             
-            pagination = query.order_by(Lecturer.name).paginate(
-                page=page, per_page=per_page, error_out=False
+            # Get all lecturers and sort them using helper
+            all_lecturers = query.all()
+            sorted_lecturers = SortingHelpers.sort_lecturers(all_lecturers)
+            
+            # Manual pagination
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            paginated_lecturers = sorted_lecturers[start_idx:end_idx]
+            
+            # Create pagination object manually
+            total = len(sorted_lecturers)
+            has_prev = page > 1
+            has_next = end_idx < total
+            
+            class PaginationObject:
+                def __init__(self, items, page, per_page, total, has_prev, has_next):
+                    self.items = items
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = (total + per_page - 1) // per_page
+                    self.has_prev = has_prev
+                    self.has_next = has_next
+                    self.prev_num = page - 1 if has_prev else None
+                    self.next_num = page + 1 if has_next else None
+                
+                def iter_pages(self, left_edge=2, right_edge=2, left_current=2, right_current=3):
+                    """Generate page numbers for pagination display"""
+                    last = self.pages
+                    for num in range(1, last + 1):
+                        if num <= left_edge or \
+                           (num > self.page - left_current - 1 and num < self.page + right_current) or \
+                           num > last - right_edge:
+                            yield num
+            
+            pagination = PaginationObject(
+                items=paginated_lecturers,
+                page=page,
+                per_page=per_page,
+                total=total,
+                has_prev=has_prev,
+                has_next=has_next
             )
             
             return {
-                'lecturers': pagination.items,
+                'lecturers': paginated_lecturers,
                 'pagination': pagination
             }
         except Exception as e:
@@ -61,7 +112,7 @@ class ManagementService:
     
     @staticmethod
     def get_students_paginated(page=1, search='', course_id=None, per_page=20):
-        """Get paginated students list"""
+        """Get paginated students list with sorted ordering by course"""
         try:
             query = Student.query.filter_by(is_active=True)
             
@@ -76,12 +127,52 @@ class ManagementService:
             if course_id:
                 query = query.filter_by(course_id=course_id)
             
-            pagination = query.order_by(Student.name).paginate(
-                page=page, per_page=per_page, error_out=False
+            # Get all students and sort them using helper
+            all_students = query.all()
+            sorted_students = SortingHelpers.sort_students(all_students)
+            
+            # Manual pagination
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            paginated_students = sorted_students[start_idx:end_idx]
+            
+            # Create pagination object manually
+            total = len(sorted_students)
+            has_prev = page > 1
+            has_next = end_idx < total
+            
+            class PaginationObject:
+                def __init__(self, items, page, per_page, total, has_prev, has_next):
+                    self.items = items
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = (total + per_page - 1) // per_page
+                    self.has_prev = has_prev
+                    self.has_next = has_next
+                    self.prev_num = page - 1 if has_prev else None
+                    self.next_num = page + 1 if has_next else None
+                
+                def iter_pages(self, left_edge=2, right_edge=2, left_current=2, right_current=3):
+                    """Generate page numbers for pagination display"""
+                    last = self.pages
+                    for num in range(1, last + 1):
+                        if num <= left_edge or \
+                           (num > self.page - left_current - 1 and num < self.page + right_current) or \
+                           num > last - right_edge:
+                            yield num
+            
+            pagination = PaginationObject(
+                items=paginated_students,
+                page=page,
+                per_page=per_page,
+                total=total,
+                has_prev=has_prev,
+                has_next=has_next
             )
             
             return {
-                'students': pagination.items,
+                'students': paginated_students,
                 'pagination': pagination
             }
         except Exception as e:
@@ -519,22 +610,7 @@ class ManagementService:
                                 course_val = m_course.group(1).upper()
                 return course_val, year_val
 
-            ROMAN_SET = { 'I', 'II', 'III' }
 
-            def normalize_course_code(raw: str):
-                """Extract a likely course code from values like 'II_BCA_B' -> 'BCA'.
-                Picks the longest alphabetic token that is not a roman year indicator.
-                """
-                if not raw:
-                    return None
-                tokens = re.findall(r"[A-Za-z]+", str(raw).upper())
-                # Filter out roman numerals used for year
-                tokens = [t for t in tokens if t not in ROMAN_SET]
-                if not tokens:
-                    return None
-                # Prefer the longest token
-                tokens.sort(key=len, reverse=True)
-                return tokens[0]
 
             for row_num, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
                 if not any(row):
@@ -544,8 +620,8 @@ class ManagementService:
                     roll_number = str(row[col_roll]).strip() if (col_roll is not None and col_roll < len(row) and row[col_roll]) else None
                     name = str(row[col_name]).strip() if col_name < len(row) and row[col_name] else None
                     course_code_raw = str(row[col_course_code]).strip() if (col_course_code is not None and col_course_code < len(row) and row[col_course_code]) else None
-                    # Normalize complex codes such as 'II_BCA_B' -> 'BCA'
-                    course_code = normalize_course_code(course_code_raw) if course_code_raw else None
+                    # Use course code exactly as it appears in Excel file
+                    course_code = course_code_raw if course_code_raw else None
                     academic_year = parse_year(row[col_ac_year] if (col_ac_year is not None and col_ac_year < len(row)) else None)
                     # If missing, try parsing from combined class column
                     if (course_code is None or academic_year is None) and col_class is not None and col_class < len(row):
@@ -555,11 +631,7 @@ class ManagementService:
                         if academic_year is None:
                             academic_year = year_from_class
 
-                    # As final fallback for course, try extracting letters from roll number prefix (e.g., BCA23081 -> BCA)
-                    if course_code is None and roll_number:
-                        m_prefix = re.match(r"^[A-Za-z]+", roll_number)
-                        if m_prefix:
-                            course_code = normalize_course_code(m_prefix.group(0))
+                    # Course code must be provided in Excel file - no fallback extraction
 
                     # If academic year is still None, default to 1 (so initial bulk upload doesn't drop rows)
                     if academic_year is None:
@@ -595,8 +667,8 @@ class ManagementService:
                     if not course and course_code:
                         try:
                             new_course = Course(
-                                name=course_code,
-                                code=course_code,
+                                name=course_code,  # This will be "I BCOM A" format
+                                code=course_code,  # This will be "I BCOM A" format
                                 description=f"Auto-created from bulk upload",
                                 duration_years=3,
                                 total_semesters=6,
@@ -650,9 +722,6 @@ class ManagementService:
 
                 except Exception as e:
                     errors.append(f"Row {row_num}: Error processing data - {str(e)}")
-            print(students_to_create)
-            print(updates_applied)
-            print(errors)
             if students_to_create or updates_applied > 0:
                 try:
                     # Commit updates to existing students
@@ -965,19 +1034,27 @@ class ManagementService:
 
     @staticmethod
     def delete_course_permanently(course_id):
-        """Hard-delete a course by first deleting its subjects and associated data, then the course itself."""
+        """Hard-delete a course by first deleting all students, subjects and associated data, then the course itself."""
         try:
             course = Course.query.get(course_id)
             if not course:
                 return False, "Course not found"
 
-            # Delete all subjects under the course (and their dependencies)
+            # First, delete all students enrolled in this course
+            students = Student.query.filter_by(course_id=course.id).all()
+            for student in students:
+                ok, msg = ManagementService.delete_student_permanently(student.id)
+                if not ok:
+                    return False, msg
+
+            # Then delete all subjects under the course (and their dependencies)
             subjects = Subject.query.filter_by(course_id=course.id).all()
             for subj in subjects:
                 ok, msg = ManagementService.delete_subject_permanently(subj.id)
                 if not ok:
                     return False, msg
 
+            # Finally delete the course itself
             db.session.delete(course)
             db.session.commit()
             return True, "Course permanently deleted"
