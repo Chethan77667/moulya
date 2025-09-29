@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ subject.name }} - Attendance - Moulya College Management{% endblock %}
+{% block title %}{{ subject.name }} - Attendance - Academic Record Management System{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-50">
@@ -24,7 +24,7 @@
                 
                 <!-- Desktop menu -->
                 <div class="hidden md:flex items-center space-x-4">
-                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <span class="text-sm text-gray-700">{{ current_user.name or current_user.username }}</span>
                     <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
@@ -35,7 +35,7 @@
             <!-- Mobile menu -->
             <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
                 <div class="space-y-2">
-                    <div class="text-sm text-gray-700 px-2">{{ current_user.username }}</div>
+                    <div class="text-sm text-gray-700 px-2">{{ current_user.name or current_user.username }}</div>
                     <form method="POST" action="{{ url_for('auth.logout') }}" class="px-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="w-full text-left py-2 text-sm text-gray-600 hover:text-black">Logout</button>
@@ -477,6 +477,10 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('blur', function() {
             validateStudentAttendance(this);
         });
+        // Immediate validation while typing
+        input.addEventListener('input', function() {
+            validateStudentAttendance(this);
+        });
     });
     
     // Re-add event listeners when new inputs are added (e.g., after search filtering)
@@ -592,6 +596,25 @@ async function validateTotalClasses() {
     
     if (!month || !year || !totalClasses) return;
     
+    // Immediate client-side check against previous cumulative
+    try {
+        const priorMap = getPriorTotalsMap();
+        const key = `${year}-${String(month).padStart(2,'0')}`;
+        const priorTotal = priorMap[key] != null ? parseInt(priorMap[key]) : parseInt(document.getElementById('prior_total_classes')?.value || '0');
+        if (isFinite(priorTotal) && totalClasses < priorTotal) {
+            const monthName = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month];
+            openAlertModal(
+                'Validation Error',
+                `For ${monthName}, total classes must be at least previous cumulative.
+Previous cumulative: ${priorTotal}
+Entered: ${totalClasses}`,
+                'error'
+            );
+            document.getElementById('monthly_total_classes').classList.add('border-red-500');
+            return;
+        }
+    } catch (e) { /* ignore and continue to server validation */ }
+    
     try {
         const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
             method: 'POST',
@@ -610,7 +633,9 @@ async function validateTotalClasses() {
         
         if (!result.valid) {
             if (result.error_type === 'cumulative_total') {
-                openAlertModal('Validation Error', result.message, 'error');
+                // Include entered and prior values if provided by server, else show generic
+                const msg = result.message || 'Total classes must be at least previous cumulative.';
+                openAlertModal('Validation Error', msg, 'error');
                 document.getElementById('monthly_total_classes').classList.add('border-red-500');
             }
         } else {
@@ -627,7 +652,7 @@ async function validateStudentAttendance(inputElement) {
     const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
     const attendedClasses = parseInt(inputElement.value || '0');
     
-    if (!month || !year || !totalClasses || !attendedClasses) return;
+    if (!month || !year || !totalClasses) return;
     
     // Extract student ID from input name
     const idMatch = (inputElement.name || '').match(/attended_(\d+)/);
@@ -639,6 +664,30 @@ async function validateStudentAttendance(inputElement) {
     const studentRow = inputElement.closest('.monthly-student-row');
     const studentName = studentRow ? studentRow.querySelector('p.text-sm')?.textContent?.trim() : 'Student';
     const studentRoll = studentRow ? studentRow.querySelector('p.text-xs')?.textContent?.trim() : '';
+    
+    // Client-side immediate range validation based on previous presents and month classes
+    const monthClasses = computeMonthClasses(year, month);
+    const prevMap = getPrevPresentForMonth(year, month);
+    const prevPresents = studentId && prevMap[String(studentId)] ? parseInt(prevMap[String(studentId)]) : 0;
+    const minAllowed = Math.max(prevPresents, 0);
+    const maxAllowed = prevPresents + monthClasses; // Cumulative upper bound for this month
+    
+    if (!Number.isNaN(attendedClasses)) {
+        if (attendedClasses < minAllowed || attendedClasses > maxAllowed || attendedClasses > totalClasses) {
+            const studentInfo = studentRoll ? `${studentName} (${studentRoll})` : studentName;
+            let reason = '';
+            if (attendedClasses > totalClasses) {
+                reason = `Cumulative attended (${attendedClasses}) cannot exceed total classes (${totalClasses}).`;
+            } else {
+                reason = `Allowed range this month: ${minAllowed} to ${maxAllowed}.`;
+            }
+            openAlertModal('Validation Error', `${studentInfo}: ${reason}`, 'error');
+            inputElement.classList.add('border-red-500');
+            return; // Stop; do not call server
+        } else {
+            inputElement.classList.remove('border-red-500');
+        }
+    }
     
     try {
         const response = await fetch('/lecturer/subjects/{{ subject.id }}/attendance/monthly/validate', {
