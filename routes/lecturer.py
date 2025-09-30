@@ -49,7 +49,11 @@ def subject_students(subject_id):
         subject = Subject.query.get_or_404(subject_id)
         
         # Get all students for enrollment - only those from the same course as the subject
-        all_students = Student.query.filter_by(is_active=True, course_id=subject.course_id).all()
+        # Sort by roll number (and name as tiebreaker) for consistent ordering in UI
+        all_students = (Student.query
+            .filter_by(is_active=True, course_id=subject.course_id)
+            .order_by(Student.roll_number.asc(), Student.name.asc())
+            .all())
         
         return render_template('lecturer/subject_students.html', 
                              subject=subject, 

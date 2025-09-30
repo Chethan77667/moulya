@@ -572,6 +572,20 @@ document.addEventListener('input', function(e) {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
+        // Custom Tab navigation: when focused on a mark input, jump directly to the next student's mark input
+        if (e.key === 'Tab' && document.activeElement.classList && document.activeElement.classList.contains('marks-input')) {
+            e.preventDefault();
+            const inputs = Array.from(document.querySelectorAll('.marks-input'));
+            const currentIndex = inputs.indexOf(document.activeElement);
+            const nextIndex = e.shiftKey ? Math.max(currentIndex - 1, 0) : Math.min(currentIndex + 1, inputs.length - 1);
+            const target = inputs[nextIndex];
+            if (target) {
+                target.focus();
+                // Select existing value for quick overwrite
+                target.select?.();
+            }
+            return;
+        }
     // Ctrl+A to fill all marks
     if (e.ctrlKey && e.key === 'a' && document.activeElement.classList.contains('marks-input')) {
         e.preventDefault();

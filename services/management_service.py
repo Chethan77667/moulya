@@ -1015,11 +1015,13 @@ class ManagementService:
                 return False, "Student not found"
 
             from models.student import StudentEnrollment
-            from models.attendance import AttendanceRecord
+            from models.attendance import AttendanceRecord, MonthlyStudentAttendance
             from models.marks import StudentMarks
 
             StudentEnrollment.query.filter_by(student_id=student.id).delete(synchronize_session=False)
             AttendanceRecord.query.filter_by(student_id=student.id).delete(synchronize_session=False)
+            # Also delete monthly per-student attendance aggregates
+            MonthlyStudentAttendance.query.filter_by(student_id=student.id).delete(synchronize_session=False)
             StudentMarks.query.filter_by(student_id=student.id).delete(synchronize_session=False)
 
             db.session.delete(student)

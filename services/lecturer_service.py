@@ -354,7 +354,13 @@ class LecturerService:
             if not subject:
                 return None, "Subject not found"
             
-            enrolled_students = subject.get_enrolled_students()
+            # Order enrolled students by roll number (and name as tiebreaker) for reports
+            enrollments_sorted = (StudentEnrollment.query
+                .filter_by(subject_id=subject_id, is_active=True)
+                .join(Student, Student.id == StudentEnrollment.student_id)
+                .order_by(Student.roll_number.asc(), Student.name.asc())
+                .all())
+            enrolled_students = [e.student for e in enrollments_sorted]
             report_data = []
             
             # Compute subject total classes cumulatively
@@ -602,7 +608,13 @@ class LecturerService:
             # Get the actual total classes from the monthly summary
             total_classes_from_db = monthly_summary.total_classes
             
-            enrolled_students = subject.get_enrolled_students()
+            # Order enrolled students by roll number (and name as tiebreaker)
+            enrollments_sorted = (StudentEnrollment.query
+                .filter_by(subject_id=subject_id, is_active=True)
+                .join(Student, Student.id == StudentEnrollment.student_id)
+                .order_by(Student.roll_number.asc(), Student.name.asc())
+                .all())
+            enrolled_students = [e.student for e in enrollments_sorted]
             monthly_data = []
             
             for student in enrolled_students:
