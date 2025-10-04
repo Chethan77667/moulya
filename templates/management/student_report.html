@@ -65,7 +65,7 @@
             </div>
         </div>
 
-        <!-- Overall Performance Summary -->
+        <!-- Overall Performance Summary
         <div class="bg-white shadow rounded-lg mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-semibold text-gray-900">Overall Performance Summary</h2>
@@ -114,7 +114,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- Subjects Report -->
         {% for subject in report.subjects %}
@@ -143,12 +143,14 @@
                                     <span class="text-sm text-gray-600 ml-2">({{ mark.percentage }}%)</span>
                                     {% if mark.performance_status %}
                                     <div class="text-xs mt-1">
-                                        {% if mark.performance_status == 'Distinction' %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Distinction</span>
-                                        {% elif mark.performance_status == 'Pass' %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Pass</span>
+                                        {% if mark.performance_status in ['Excellent', 'Very Good'] %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">{{ mark.performance_status }}</span>
+                                        {% elif mark.performance_status in ['Good', 'Average'] %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{{ mark.performance_status }}</span>
+                                        {% elif mark.performance_status == 'Below Average' %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">{{ mark.performance_status }}</span>
                                         {% else %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Fail</span>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">{{ mark.performance_status }}</span>
                                         {% endif %}
                                     </div>
                                     {% endif %}
@@ -161,14 +163,18 @@
                                 <span class="text-sm font-medium text-gray-900">Overall Performance:</span>
                                 <div class="text-right">
                                     <span class="text-lg font-bold text-gray-900">{{ subject.overall_marks_percentage }}%</span>
-                                    {% if subject.overall_marks_percentage >= 75 %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 ml-2">Distinction</span>
+                                    {% if subject.overall_marks_percentage >= 90 %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 ml-2">Excellent</span>
+                                    {% elif subject.overall_marks_percentage >= 75 %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 ml-2">Very Good</span>
+                                    {% elif subject.overall_marks_percentage >= 60 %}
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 ml-2">Good</span>
                                     {% elif subject.overall_marks_percentage >= 50 %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 ml-2">Pass</span>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 ml-2">Average</span>
                                     {% elif subject.overall_marks_percentage >= 35 %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 ml-2">Pass</span>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 ml-2">Below Average</span>
                                     {% else %}
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2">Fail</span>
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2">Poor</span>
                                     {% endif %}
                                 </div>
                             </div>

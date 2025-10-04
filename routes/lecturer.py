@@ -183,25 +183,49 @@ def attendance_management(subject_id):
             )
             .order_by(MonthlyAttendanceSummary.year.asc(), MonthlyAttendanceSummary.month.asc())
             ).all()
-        # Accumulate totals in chronological order
-        cumulative_by_year_month = {}
-        cumulative_total = 0
-        for s in summaries:
-            key = f"{s.year}-{s.month:02d}"
-            # prior for this month is current cumulative
-            prior_totals_map[key] = cumulative_total
-            cumulative_total += int(s.total_classes or 0)
-            cumulative_by_year_month[key] = cumulative_total
+
+        # Prepare a set of (year, month) pairs to compute prior totals for:
+        # - all months in the selected year
+        # - all months in any years present in summaries
+        years_to_cover = {selected_date.year}
+        years_to_cover.update({s.year for s in summaries})
+        months_to_cover = sorted({(y, m) for y in years_to_cover for m in range(1, 13)})
+
+        # Precompute cumulative totals per (year, month) from summaries
+        # cumulative_map holds cumulative up to and including that month
+        cumulative_map = {}
+        running_total = 0
+        for y, m in sorted({(s.year, s.month) for s in summaries}):
+            # Set prior (before this month) for this key first
+            key = f"{y}-{m:02d}"
+            if key not in prior_totals_map:
+                prior_totals_map[key] = running_total
+            # Add this month's classes to running total
+            month_sum = sum(int(s.total_classes or 0) for s in summaries if s.year == y and s.month == m)
+            running_total += month_sum
+            cumulative_map[key] = running_total
+
+        # For any (year, month) not present in summaries, prior is the sum of all summaries strictly before that month
+        def prior_cumulative_for(yr, mo):
+            total = 0
+            for s in summaries:
+                if (s.year < yr) or (s.year == yr and s.month < mo):
+                    total += int(s.total_classes or 0)
+            return total
+
+        for (yr, mo) in months_to_cover:
+            key = f"{yr}-{mo:02d}"
+            if key not in prior_totals_map:
+                prior_totals_map[key] = prior_cumulative_for(yr, mo)
 
         # Build previous-presents map per month-year for each student
         # Keys: 'YYYY-MM' -> { studentId: prevPresentsBeforeMonth }
         from datetime import date as _date
         from models.attendance import MonthlyStudentAttendance as MSA
         prev_present_by_month_map = {}
-        # Include months present in summaries and the current selected month
-        months_to_prepare = {(s.year, s.month) for s in summaries}
-        months_to_prepare.add((selected_date.year, selected_date.month))
-        for (yr, mo) in sorted(months_to_prepare):
+        # Cover all months in selected year and any summary years
+        months_to_prepare = months_to_cover
+        for (yr, mo) in months_to_prepare:
             cutoff = _date(yr, mo, 1)
             per_student = {}
             for s in students:

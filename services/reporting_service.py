@@ -154,15 +154,44 @@ class ReportingService:
                     subject_id=subject.id
                 ).all()
                 
-                # Get attendance for this subject
-                attendance_records = AttendanceRecord.query.filter_by(
+                # Get overall attendance for this subject - sum all monthly data
+                from models.attendance import MonthlyStudentAttendance, MonthlyAttendanceSummary
+                from datetime import datetime
+                
+                # Get all monthly attendance records for this student and subject
+                monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(
                     student_id=student_id,
                     subject_id=subject.id
                 ).all()
                 
-                total_classes = len(attendance_records)
-                present_classes = len([r for r in attendance_records if r.status == 'present'])
-                attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
+                if monthly_attendance_records:
+                    # Calculate cumulative attendance across all months
+                    total_classes = 0
+                    present_classes = 0
+                    
+                    for record in monthly_attendance_records:
+                        # Get total classes for this month
+                        monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                            subject_id=subject.id,
+                            month=record.month,
+                            year=record.year
+                        ).first()
+                        
+                        if monthly_summary:
+                            total_classes += monthly_summary.total_classes
+                            present_classes += record.present_count
+                    
+                    attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
+                else:
+                    # Fallback to daily attendance records
+                    attendance_records = AttendanceRecord.query.filter_by(
+                        student_id=student_id,
+                        subject_id=subject.id
+                    ).all()
+                    
+                    total_classes = len(attendance_records)
+                    present_classes = len([r for r in attendance_records if r.status == 'present'])
+                    attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
                 
                 # Calculate overall marks percentage for this subject
                 if marks:
@@ -349,63 +378,102 @@ class ReportingService:
             student_attendance = []
             total_classes_conducted = 0
             
-            # First, get the total number of classes conducted for this subject in the month
-            all_attendance_records = AttendanceRecord.query.filter(
-                AttendanceRecord.subject_id == subject_id,
-                db.extract('month', AttendanceRecord.date) == month,
-                db.extract('year', AttendanceRecord.date) == year
-            ).all()
+            # First, try to get data from monthly_attendance_summary table
+            from models.attendance import MonthlyAttendanceSummary
+            monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                subject_id=subject_id,
+                month=month,
+                year=year
+            ).first()
             
-            # Get unique dates to count total classes
-            unique_dates = set(record.date for record in all_attendance_records)
-            total_classes_conducted = len(unique_dates)
-            
-            from datetime import date as date_class
-            import calendar
-            prev_year = year
-            prev_month = month - 1
-            if prev_month == 0:
-                prev_month = 12
-                prev_year -= 1
-
-            for student in students:
-                # cumulative present till selected month
-                month_end = date_class(year, month, calendar.monthrange(year, month)[1])
-                prev_end = date_class(prev_year, prev_month, calendar.monthrange(prev_year, prev_month)[1])
-
-                cum_present_till_month = AttendanceRecord.query.filter(
-                    AttendanceRecord.student_id == student.id,
+            if monthly_summary:
+                total_classes_conducted = monthly_summary.total_classes
+                
+                # Get data from monthly_student_attendance table
+                from models.attendance import MonthlyStudentAttendance
+                monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(
+                    subject_id=subject_id,
+                    month=month,
+                    year=year
+                ).all()
+                
+                # Create a mapping of student_id to present_count
+                attendance_map = {record.student_id: record.present_count for record in monthly_attendance_records}
+                
+                for student in students:
+                    present_classes = attendance_map.get(student.id, 0)
+                    absent_classes = max(total_classes_conducted - present_classes, 0)
+                    
+                    # Calculate percentage
+                    attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
+                    
+                    student_data = {
+                        'student_id': student.id,
+                        'student_name': student.name,
+                        'roll_number': student.roll_number,
+                        'total_classes': total_classes_conducted,
+                        'present_classes': present_classes,
+                        'absent_classes': absent_classes,
+                        'attendance_percentage': attendance_percentage,
+                        'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
+                    }
+                    
+                    student_attendance.append(student_data)
+            else:
+                # Fallback to daily attendance records if monthly data not available
+                all_attendance_records = AttendanceRecord.query.filter(
                     AttendanceRecord.subject_id == subject_id,
-                    AttendanceRecord.date <= month_end,
-                    AttendanceRecord.status == 'present'
-                ).count()
-
-                cum_present_till_prev = AttendanceRecord.query.filter(
-                    AttendanceRecord.student_id == student.id,
-                    AttendanceRecord.subject_id == subject_id,
-                    AttendanceRecord.date <= prev_end,
-                    AttendanceRecord.status == 'present'
-                ).count()
-
-                present_classes = max(cum_present_till_month - cum_present_till_prev, 0)
-                total_classes = total_classes_conducted
-                absent_classes = max(total_classes_conducted - present_classes, 0)
+                    db.extract('month', AttendanceRecord.date) == month,
+                    db.extract('year', AttendanceRecord.date) == year
+                ).all()
                 
-                # Calculate percentage based on delta present vs conducted this month
-                attendance_percentage = round((present_classes / total_classes) * 100, 2) if total_classes > 0 else 0
+                # Get unique dates to count total classes
+                unique_dates = set(record.date for record in all_attendance_records)
+                total_classes_conducted = len(unique_dates)
                 
-                student_data = {
-                    'student_id': student.id,
-                    'student_name': student.name,
-                    'roll_number': student.roll_number,
-                    'total_classes': total_classes_conducted,  # Use consistent total
-                    'present_classes': present_classes,
-                    'absent_classes': total_classes_conducted - present_classes,
-                    'attendance_percentage': attendance_percentage,
-                    'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
-                }
-                
-                student_attendance.append(student_data)
+                # If no classes were conducted, still show students with 0 attendance
+                if total_classes_conducted == 0:
+                    for student in students:
+                        student_data = {
+                            'student_id': student.id,
+                            'student_name': student.name,
+                            'roll_number': student.roll_number,
+                            'total_classes': 0,
+                            'present_classes': 0,
+                            'absent_classes': 0,
+                            'attendance_percentage': 0,
+                            'status': 'Poor'
+                        }
+                        student_attendance.append(student_data)
+                else:
+                    # Calculate attendance for each student for the specific month
+                    for student in students:
+                        # Get attendance records for this student in this subject for this month
+                        student_records = AttendanceRecord.query.filter(
+                            AttendanceRecord.student_id == student.id,
+                            AttendanceRecord.subject_id == subject_id,
+                            db.extract('month', AttendanceRecord.date) == month,
+                            db.extract('year', AttendanceRecord.date) == year
+                        ).all()
+                        
+                        present_classes = len([r for r in student_records if r.status == 'present'])
+                        absent_classes = len([r for r in student_records if r.status == 'absent'])
+                        
+                        # Calculate percentage
+                        attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
+                        
+                        student_data = {
+                            'student_id': student.id,
+                            'student_name': student.name,
+                            'roll_number': student.roll_number,
+                            'total_classes': total_classes_conducted,
+                            'present_classes': present_classes,
+                            'absent_classes': absent_classes,
+                            'attendance_percentage': attendance_percentage,
+                            'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
+                        }
+                        
+                        student_attendance.append(student_data)
             
             # Calculate class statistics
             all_percentages = [s['attendance_percentage'] for s in student_attendance]
@@ -476,10 +544,36 @@ class ReportingService:
                 marks = StudentMarks.query.filter_by(subject_id=subject.id).all()
                 marks_percentages = [mark.percentage for mark in marks]
                 
-                # Get attendance statistics
-                attendance_records = AttendanceRecord.query.filter_by(subject_id=subject.id).all()
-                total_records = len(attendance_records)
-                present_records = len([r for r in attendance_records if r.status == 'present'])
+                # Get attendance statistics - use monthly data first, then fallback to daily records
+                from models.attendance import MonthlyStudentAttendance, MonthlyAttendanceSummary
+                
+                # Try to get monthly attendance data
+                monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(subject_id=subject.id).all()
+                
+                if monthly_attendance_records:
+                    # Calculate cumulative attendance across all months
+                    total_classes = 0
+                    total_present = 0
+                    
+                    for record in monthly_attendance_records:
+                        # Get total classes for this month
+                        monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                            subject_id=subject.id,
+                            month=record.month,
+                            year=record.year
+                        ).first()
+                        
+                        if monthly_summary:
+                            total_classes += monthly_summary.total_classes
+                            total_present += record.present_count
+                    
+                    total_records = total_classes
+                    present_records = total_present
+                else:
+                    # Fallback to daily attendance records
+                    attendance_records = AttendanceRecord.query.filter_by(subject_id=subject.id).all()
+                    total_records = len(attendance_records)
+                    present_records = len([r for r in attendance_records if r.status == 'present'])
                 
                 subject_data = {
                     'subject_id': subject.id,
