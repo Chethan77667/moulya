@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(`/lecturer/subjects/${subjectId}/attendance/deputation/total-classes?year=${year}`)
             .then(response => response.json())
             .then(data => {
-                console.log('Initial load - Received total classes data:', data);
+                console.log('Initial load - Received total classes data');
                 if (data.success && data.total_classes !== undefined) {
                     const totalClassesInput = document.getElementById('monthly_total_classes');
                     const yearInput = document.getElementById('monthly_year');
@@ -835,12 +835,7 @@ function validateDeputationInput(inputElement) {
     const cumPresent = getCumulativePresentForStudent(studentId);
     const maxAllowedDeputation = Math.max(0, totalClasses - cumPresent);
     
-    console.log(`Validating deputation for student ${studentId}:`, {
-        deputationValue,
-        totalClasses,
-        cumPresent,
-        maxAllowedDeputation
-    });
+  
     
     // Validation: deputation should not exceed (total - cumulative present)
     if (deputationValue > maxAllowedDeputation) {
@@ -1172,72 +1167,67 @@ document.getElementById('monthly-attendance-confirm')?.addEventListener('click',
 
 // Deputation submission validation
 function validateDeputationSubmission() {
-    const cumulativeTotalClasses = parseInt(document.getElementById('monthly_total_classes')?.value || '0');
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes')?.value || '0');
     const year = parseInt(document.getElementById('monthly_year')?.value || '0');
     const subjectId = (document.getElementById('subject_id')?.value || '').toString();
-    
-    // Log context
-    console.log('[Deputation] Context => Subject:', subjectId, 'Year:', year, 'Total Classes:', cumulativeTotalClasses);
-    // Log all deputation input values before validation
-    const deputationPayload = {};
-    document.querySelectorAll("input[name^='deputation_']").forEach(function(input){
-        const m = (input.name || '').match(/^deputation_(\d+)$/);
-        if (m) {
-            deputationPayload[m[1]] = parseInt((input.value || '0'), 10) || 0;
-        }
-    });
-    console.log('[Deputation] Outgoing payload:', deputationPayload);
-    
-    if (!cumulativeTotalClasses || !year) {
-        openAlertModal('Validation Error', 'Missing cumulative total classes or year data.', 'error');
+
+
+
+    if (!totalClasses || !year) {
+        // openAlertModal('Validation Error', 'Missing cumulative total classes or year data.', 'error');
         return;
     }
-    
+
+    // Iterate all deputation inputs and validate against total - cumulative present
     let invalid = false;
-    let firstErrorName = '';
+    let firstErrorTitle = 'Invalid Deputation Value';
     let firstErrorMessage = '';
-    
-    document.querySelectorAll('.monthly-attendance-input').forEach(function(input) {
-        const raw = (input.value || '').toString().trim();
-        if (raw === '') { return; }
-        
-        const deputationValue = parseInt(raw, 10);
-        const row = input.closest('.monthly-student-row');
-        const idMatch = (input.name || '').match(/deputation_(\d+)/);
-        const studentId = idMatch ? parseInt(idMatch[1]) : null;
-        
+    let firstBadInput = null;
+
+    document.querySelectorAll("input[name^='deputation_']").forEach(function(input){
+        if (invalid) return; // stop at first error
+        const match = (input.name || '').match(/^deputation_(\d+)$/);
+        const studentId = match ? parseInt(match[1]) : null;
         if (!studentId) return;
-        
-        // Basic validation: deputation value should not exceed total classes
-        if (deputationValue > cumulativeTotalClasses) {
-            if (!invalid) {
-                const nameEl = row ? row.querySelector('p.text-sm') : null;
-                firstErrorName = nameEl ? nameEl.textContent.trim() : 'This student';
-                firstErrorMessage = `Deputation (${deputationValue}) cannot exceed total classes (${cumulativeTotalClasses})`;
-            }
+        const value = parseInt((input.value || '0'), 10) || 0;
+        const cumPresent = getCumulativePresentForStudent(studentId);
+        const maxAllowed = Math.max(0, totalClasses - cumPresent);
+        if (value > maxAllowed) {
+            const row = input.closest('.monthly-student-row');
+            const nameEl = row ? row.querySelector('p.text-sm') : null;
+            const rollEl = row ? row.querySelector('p.text-xs') : null;
+            const name = nameEl ? nameEl.textContent.trim() : `Student ${studentId}`;
+            const roll = rollEl ? rollEl.textContent.trim() : '';
+            firstErrorMessage = `${name} ${roll ? '(' + roll + ')' : ''}:\n` +
+                `Entered deputation (${value}) + cumulative presents (${cumPresent}) exceeds total classes (${totalClasses}).\n\n` +
+                `Total Classes: ${totalClasses}\n` +
+                `Cumulative Presents: ${cumPresent}\n` +
+                `Maximum Deputation Allowed: ${maxAllowed}`;
             invalid = true;
+            firstBadInput = input;
             input.classList.add('border-red-500');
-            try { input.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
-            input.focus();
         } else {
             input.classList.remove('border-red-500');
         }
     });
-    
+
     if (invalid) {
-        openAlertModal('Validation Error', `${firstErrorName}: ${firstErrorMessage}`, 'error');
+        // Use the same validation popup style (single modal)
+        showValidationError(firstErrorTitle, firstErrorMessage);
+        try { firstBadInput && firstBadInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+        if (firstBadInput) firstBadInput.focus();
         return;
     }
     
     // Build confirmation summary for deputation
     const studentCount = document.getElementById('monthly-students-container') ? document.getElementById('monthly-students-container').children.length : 0;
-    const summary = `Deputation Mode\nYear: ${year}\nTotal Classes: ${cumulativeTotalClasses}\nStudents: ${studentCount}`;
+    const summary = `Deputation Mode\nYear: ${year}\nTotal Classes: ${totalClasses}\nStudents: ${studentCount}`;
     
     const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
     openAlertModal('Confirm Deputation Submission', summary, 'info', function(){
         if (form) {
             // One more log right before submit
-            console.log('[Deputation] Submitting form to:', form.action);
+           
             form.submit();
         }
     }, function(){});
