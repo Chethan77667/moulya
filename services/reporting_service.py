@@ -300,14 +300,38 @@ class ReportingService:
                     percentage = round((mark.marks_obtained / mark.max_marks) * 100, 2)
                     all_percentages.append(percentage)
             
+            # Calculate passing/failing assessments (individual assessments, not students)
+            passing_assessments = len([p for p in all_percentages if p >= 35])
+            failing_assessments = len([p for p in all_percentages if p < 35])
+            
+            # Calculate passing/failing students (unique students based on their average)
+            passing_students_count = 0
+            failing_students_count = 0
+            
+            for student_id, student_data in student_marks.items():
+                # Get all percentages for this student
+                student_percentages = []
+                for mark in marks:
+                    if mark.student_id == student_id and mark.max_marks > 0:
+                        percentage = round((mark.marks_obtained / mark.max_marks) * 100, 2)
+                        student_percentages.append(percentage)
+                
+                # A student passes if their overall average is >= 35%
+                if student_percentages:
+                    student_average = sum(student_percentages) / len(student_percentages)
+                    if student_average >= 35:
+                        passing_students_count += 1
+                    else:
+                        failing_students_count += 1
+            
             statistics = {
                 'total_students': len(student_marks),
                 'total_assessments': len(marks),
                 'class_average': round(sum(all_percentages) / len(all_percentages), 2) if all_percentages else 0,
                 'highest_score': max(all_percentages) if all_percentages else 0,
                 'lowest_score': min(all_percentages) if all_percentages else 0,
-                'passing_students': len([p for p in all_percentages if p >= 35]),
-                'failing_students': len([p for p in all_percentages if p < 35])
+                'passing_students': passing_assessments,  # This will be used for Class Pass Rate
+                'failing_students': failing_assessments
             }
             
             # Format assessment type for display
@@ -544,6 +568,27 @@ class ReportingService:
                 marks = StudentMarks.query.filter_by(subject_id=subject.id).all()
                 marks_percentages = [mark.percentage for mark in marks]
                 
+                # Calculate passing rate correctly for unique students
+                passing_students_count = 0
+                total_students_with_marks = 0
+                
+                # Group marks by student to calculate per-student averages
+                student_marks_dict = {}
+                for mark in marks:
+                    if mark.student_id not in student_marks_dict:
+                        student_marks_dict[mark.student_id] = []
+                    student_marks_dict[mark.student_id].append(mark.percentage)
+                
+                # Calculate passing rate based on student averages
+                for student_id, student_percentages in student_marks_dict.items():
+                    if student_percentages:
+                        student_average = sum(student_percentages) / len(student_percentages)
+                        total_students_with_marks += 1
+                        if student_average >= 35:
+                            passing_students_count += 1
+                
+                passing_rate = round((passing_students_count / total_students_with_marks) * 100, 2) if total_students_with_marks > 0 else 0
+                
                 # Get attendance statistics - use monthly data first, then fallback to daily records
                 from models.attendance import MonthlyStudentAttendance, MonthlyAttendanceSummary
                 
@@ -585,7 +630,7 @@ class ReportingService:
                     'marks_statistics': {
                         'total_assessments': len(marks),
                         'average_marks': round(sum(marks_percentages) / len(marks_percentages), 2) if marks_percentages else 0,
-                        'passing_rate': round((len([p for p in marks_percentages if p >= 35]) / len(marks_percentages)) * 100, 2) if marks_percentages else 0
+                        'passing_rate': passing_rate
                     },
                     'attendance_statistics': {
                         'total_classes': total_records,

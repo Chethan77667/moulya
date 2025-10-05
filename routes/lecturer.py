@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from routes.auth import login_required
 from services.lecturer_service import LecturerService
 from models.academic import Subject
+from models.assignments import SubjectAssignment
 from services.reporting_service import ReportingService
 from database import db
 from models.student import Student
@@ -243,8 +244,48 @@ def attendance_management(subject_id):
         monthly_attendance_data = None
         view_month = request.args.get('view_month', selected_date.month, type=int)
         view_year = request.args.get('view_year', selected_date.year, type=int)
+        # Map of current deputation counts per student for the selected/view year
+        deputation_counts_map = {}
+        # Map of cumulative present count per student for the selected/view year (for client-side hints)
+        cumulative_present_map = {}
+        # Always precompute deputation counts for the chosen view_year to support UI prefilling
+        try:
+            from models.attendance import MonthlyStudentAttendance as MSA
+            from sqlalchemy import func
+            for s in students:
+                deput_sum = (db.session.query(func.coalesce(func.sum(MSA.deputation_count), 0))
+                    .filter(
+                        MSA.student_id == s.id,
+                        MSA.subject_id == subject_id,
+                        MSA.lecturer_id == lecturer_id,
+                        MSA.year == view_year
+                    ).scalar() or 0)
+                deputation_counts_map[s.id] = int(deput_sum)
+                # Also compute cumulative presents for the year
+                cum_present = (db.session.query(func.coalesce(func.sum(MSA.present_count), 0))
+                    .filter(
+                        MSA.student_id == s.id,
+                        MSA.subject_id == subject_id,
+                        MSA.lecturer_id == lecturer_id,
+                        MSA.year == view_year
+                    ).scalar() or 0)
+                cumulative_present_map[s.id] = int(cum_present)
+        except Exception:
+            deputation_counts_map = {}
+            cumulative_present_map = {}
         
-        if request.args.get('view') == 'monthly' or request.args.get('view_month') or request.args.get('view_year'):
+        # Handle deputation request
+        cumulative_total_classes = None
+        if request.args.get('view_month') == 'deputation':
+            # For deputation, we need cumulative data across all months
+            monthly_attendance_data = LecturerService.get_deputation_data(
+                subject_id, lecturer_id, view_year
+            )
+            # Get cumulative total classes for deputation
+            cumulative_total_classes = LecturerService.get_cumulative_total_classes(
+                subject_id, lecturer_id, view_year
+            )
+        elif request.args.get('view') == 'monthly' or request.args.get('view_month') or request.args.get('view_year'):
             monthly_attendance_data = LecturerService.get_monthly_attendance_data(
                 subject_id, lecturer_id, view_month, view_year
             )
@@ -256,10 +297,13 @@ def attendance_management(subject_id):
                              existing_attendance=existing_attendance,
                              monthly_summary=monthly_summary,
                              monthly_attendance_data=monthly_attendance_data,
+                             cumulative_total_classes=cumulative_total_classes,
                              prior_total_classes=prior_total_classes,
                              prev_present_map=prev_present_map,
                              prior_totals_map=prior_totals_map,
-                             prev_present_by_month_map=prev_present_by_month_map)
+                             prev_present_by_month_map=prev_present_by_month_map,
+                             deputation_counts_map=deputation_counts_map,
+                             cumulative_present_map=cumulative_present_map)
     except Exception as e:
         flash(f'Error loading attendance: {str(e)}', 'error')
         return redirect(url_for('lecturer.subjects'))
@@ -711,3 +755,167 @@ def marks_deficiency_report():
         return render_template('lecturer/marks_deficiency.html', 
                              deficiency_data=[], 
                              threshold=50)
+
+@lecturer_bp.route('/subjects/<int:subject_id>/attendance/deputation/total-classes')
+@login_required('lecturer')
+def get_deputation_total_classes(subject_id):
+    """Get cumulative total classes for deputation"""
+    try:
+        lecturer_id = session.get('user_id')
+        year = request.args.get('year', type=int)
+        
+        if not year:
+            return jsonify({
+                'success': False,
+                'message': 'Year parameter is required'
+            }), 400
+        
+        # Verify lecturer is assigned to this subject
+        assignment = SubjectAssignment.query.filter_by(
+            lecturer_id=lecturer_id,
+            subject_id=subject_id,
+            is_active=True
+        ).first()
+        
+        if not assignment:
+            return jsonify({
+                'success': False,
+                'message': 'You are not assigned to this subject'
+            }), 403
+        
+        # Get cumulative total classes for the year
+        cumulative_total_classes = LecturerService.get_cumulative_total_classes(
+            subject_id, lecturer_id, year
+        )
+        
+        print(f"Deputation total classes requested - Subject: {subject_id}, Lecturer: {lecturer_id}, Year: {year}, Total Classes: {cumulative_total_classes}")
+        
+        return jsonify({
+            'success': True,
+            'total_classes': cumulative_total_classes
+        })
+        
+    except Exception as e:
+        print(f"Error getting deputation total classes: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@lecturer_bp.route('/subjects/<int:subject_id>/attendance/deputation', methods=['POST'])
+@login_required('lecturer')
+def record_deputation_attendance(subject_id):
+    """Record deputation attendance for students"""
+    try:
+        lecturer_id = session.get('user_id')
+        
+        # Verify lecturer is assigned to this subject
+        assignment = SubjectAssignment.query.filter_by(
+            lecturer_id=lecturer_id,
+            subject_id=subject_id,
+            is_active=True
+        ).first()
+        
+        if not assignment:
+            flash('You are not assigned to this subject.', 'error')
+            return redirect(url_for('lecturer.subjects'))
+        
+        # Get form data; month/year are optional for deputation flow
+        month = request.form.get('month')
+        year_str = request.form.get('year')
+        total_classes_str = request.form.get('total_classes')
+
+        # Debug: Print form data
+        print(f"Deputation form data - Month: {month}, Year: {year_str}, Total Classes: {total_classes_str}")
+        print(f"All form keys: {list(request.form.keys())}")
+        
+        # Always treat deputation as special month 13; do not require month/year inputs
+        month = 13
+        # Resolve year (optional). If not provided or invalid, default to current year
+        try:
+            year = int(year_str) if year_str not in (None, '') else date.today().year
+        except (ValueError, TypeError):
+            year = date.today().year
+
+        # Compute cumulative total classes from backend for this year
+        total_classes = LecturerService.get_cumulative_total_classes(subject_id, lecturer_id, int(year))
+        print(f"Deputation mode - Calculated total classes from backend: {total_classes} for year {year}")
+        
+        # Validate deputation entries
+        students = LecturerService.get_subject_students(subject_id, lecturer_id)
+        deputation_data = {}
+        
+        for student in students:
+            deputation_key = f'deputation_{student.id}'
+            deputation_value = request.form.get(deputation_key, '0')
+            # Debug log each incoming student value
+            try:
+                print(f"[Deputation] Incoming value for student {student.id} ({student.name}): {deputation_value}")
+            except Exception:
+                pass
+            
+            # Handle None values and empty strings
+            if deputation_value is None or deputation_value == '':
+                deputation_value = '0'
+            
+            try:
+                deputation_count = int(deputation_value)
+                # Ensure non-negative values
+                deputation_count = max(0, deputation_count)
+            except (ValueError, TypeError) as e:
+                print(f"Error parsing deputation value for student {student.id}: {deputation_value}, error: {e}")
+                deputation_count = 0
+            
+            # Get cumulative present count for validation
+            cumulative_present = LecturerService.get_cumulative_present_count(
+                student.id, subject_id, lecturer_id, year
+            )
+            
+            # Validation: cumulative present + deputation should not exceed total classes
+            if cumulative_present + deputation_count > total_classes:
+                flash(f'Student {student.name}: Cumulative present ({cumulative_present}) + Deputation ({deputation_count}) cannot exceed total classes ({total_classes})', 'error')
+                return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
+            
+            deputation_data[student.id] = deputation_count
+        
+        # Record deputation data
+        success, message = LecturerService.record_deputation_attendance(
+            subject_id, lecturer_id, month, year, deputation_data
+        )
+        
+        if success:
+            flash('Deputation attendance recorded successfully!', 'success')
+            # Diagnostics: read back a few values we just saved to ensure persistence
+            try:
+                from models.attendance import MonthlyStudentAttendance as MSA
+                from sqlalchemy import func
+                non_zero = {sid: val for sid, val in deputation_data.items() if val}
+                sample_ids = list(non_zero.keys())[:10] or list(deputation_data.keys())[:10]
+                verify_map = {}
+                for sid in sample_ids:
+                    rec = (db.session.query(MSA)
+                        .filter(
+                            MSA.student_id == sid,
+                            MSA.subject_id == subject_id,
+                            MSA.lecturer_id == lecturer_id,
+                            MSA.month == 13,
+                            MSA.year == year
+                        ).first())
+                    verify_map[sid] = int(rec.deputation_count) if rec else -1
+                total_by_year = (db.session.query(func.coalesce(func.sum(MSA.deputation_count), 0))
+                    .filter(
+                        MSA.subject_id == subject_id,
+                        MSA.lecturer_id == lecturer_id,
+                        MSA.year == year
+                    ).scalar() or 0)
+                print(f"[Deputation][SaveVerify] year={year} sample={verify_map} total_year_sum={int(total_by_year)}")
+            except Exception as _e:
+                print(f"[Deputation][SaveVerify] error: {_e}")
+        else:
+            flash(f'Error recording deputation attendance: {message}', 'error')
+        
+        return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
+        
+    except Exception as e:
+        flash(f'Error recording deputation attendance: {str(e)}', 'error')
+        return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))

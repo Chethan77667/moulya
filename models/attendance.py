@@ -232,6 +232,7 @@ class MonthlyStudentAttendance(db.Model):
     month = db.Column(db.Integer, nullable=False)
     year = db.Column(db.Integer, nullable=False)
     present_count = db.Column(db.Integer, nullable=False, default=0)
+    deputation_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -256,7 +257,8 @@ class MonthlyStudentAttendance(db.Model):
                 lecturer_id=lecturer_id,
                 month=month,
                 year=year,
-                present_count=0
+                present_count=0,
+                deputation_count=0
             )
             db.session.add(rec)
         return rec

@@ -627,6 +627,7 @@ class LecturerService:
                     year=year
                 ).first()
                 month_present = msa.present_count if msa else 0
+                month_deputation = msa.deputation_count if msa else 0
 
                 # Use the total classes for the month (delta) from summary
                 total_classes = total_classes_from_db
@@ -641,10 +642,155 @@ class LecturerService:
                     'total_classes': total_classes,
                     'present_classes': present_classes,
                     'absent_classes': absent_classes,
-                    'attendance_percentage': attendance_percentage
+                    'attendance_percentage': attendance_percentage,
+                    'deputation_count': month_deputation
                 })
             
             return monthly_data
             
         except Exception as e:
             return []
+    
+    @staticmethod
+    def get_deputation_data(subject_id, lecturer_id, year):
+        """Get cumulative deputation data for all students in a subject for a year"""
+        try:
+            # Verify lecturer is assigned to this subject
+            assignment = SubjectAssignment.query.filter_by(
+                lecturer_id=lecturer_id,
+                subject_id=subject_id,
+                is_active=True
+            ).first()
+            
+            if not assignment:
+                return []
+            
+            subject = Subject.query.get(subject_id)
+            if not subject:
+                return []
+            
+            # Get cumulative total classes for the entire year (do not depend on lecturer filter for robustness)
+            cumulative_total_classes = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
+                .filter(
+                    MonthlyAttendanceSummary.subject_id == subject_id,
+                    MonthlyAttendanceSummary.year == year
+                ).scalar() or 0)
+            
+            # Order enrolled students by roll number
+            enrollments_sorted = (StudentEnrollment.query
+                .filter_by(subject_id=subject_id, is_active=True)
+                .join(Student, Student.id == StudentEnrollment.student_id)
+                .order_by(Student.roll_number.asc(), Student.name.asc())
+                .all())
+            enrolled_students = [e.student for e in enrollments_sorted]
+            deputation_data = []
+            
+            # First pass: sum filtered by lecturer
+            per_student_deputation = {}
+            for student in enrolled_students:
+                # Get cumulative deputation count for the entire year
+                cumulative_deputation = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.deputation_count), 0))
+                    .filter(
+                        MonthlyStudentAttendance.student_id == student.id,
+                        MonthlyStudentAttendance.subject_id == subject_id,
+                        MonthlyStudentAttendance.lecturer_id == lecturer_id,
+                        MonthlyStudentAttendance.year == year
+                    ).scalar() or 0)
+                per_student_deputation[student.id] = int(cumulative_deputation)
+
+            # If everything is zero (possible lecturer_id mismatch), try a safe fallback without lecturer filter
+            if all((v == 0 for v in per_student_deputation.values())):
+                try:
+                    print(f"[Deputation][Report] All zeros with lecturer filter; applying fallback without lecturer filter for subject={subject_id}, year={year}")
+                except Exception:
+                    pass
+                for student in enrolled_students:
+                    cumulative_deputation = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.deputation_count), 0))
+                        .filter(
+                            MonthlyStudentAttendance.student_id == student.id,
+                            MonthlyStudentAttendance.subject_id == subject_id,
+                            MonthlyStudentAttendance.year == year
+                        ).scalar() or 0)
+                    per_student_deputation[student.id] = int(cumulative_deputation)
+
+            for student in enrolled_students:
+                # Debug log per-student computed deputation (post-fallback if any)
+                try:
+                    print(f"[Deputation][Report] subj={subject_id} year={year} student={student.id} -> deputation={per_student_deputation.get(student.id, 0)}")
+                except Exception:
+                    pass
+                
+                deputation_data.append({
+                    'student_id': student.id,
+                    'student_name': student.name,
+                    'roll_number': student.roll_number,
+                    'total_classes': cumulative_total_classes,
+                    'deputation_count': per_student_deputation.get(student.id, 0)
+                })
+            
+            return deputation_data
+            
+        except Exception as e:
+            return []
+    
+    @staticmethod
+    def get_cumulative_total_classes(subject_id, lecturer_id, year):
+        """Get cumulative total classes for a subject for the entire year"""
+        try:
+            cumulative_total_classes = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
+                .filter(
+                    MonthlyAttendanceSummary.subject_id == subject_id,
+                    MonthlyAttendanceSummary.lecturer_id == lecturer_id,
+                    MonthlyAttendanceSummary.year == year
+                ).scalar() or 0)
+            return cumulative_total_classes
+        except Exception as e:
+            return 0
+    
+    @staticmethod
+    def get_cumulative_present_count(student_id, subject_id, lecturer_id, year):
+        """Get cumulative present count for a student for the entire year"""
+        try:
+            cumulative_present = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.present_count), 0))
+                .filter(
+                    MonthlyStudentAttendance.student_id == student_id,
+                    MonthlyStudentAttendance.subject_id == subject_id,
+                    MonthlyStudentAttendance.lecturer_id == lecturer_id,
+                    MonthlyStudentAttendance.year == year
+                ).scalar() or 0)
+            return cumulative_present
+        except Exception as e:
+            return 0
+    
+    @staticmethod
+    def record_deputation_attendance(subject_id, lecturer_id, month, year, deputation_data):
+        """Record deputation attendance for students"""
+        try:
+            # Verify lecturer is assigned to this subject
+            assignment = SubjectAssignment.query.filter_by(
+                lecturer_id=lecturer_id,
+                subject_id=subject_id,
+                is_active=True
+            ).first()
+            
+            if not assignment:
+                return False, "Lecturer not assigned to this subject"
+            
+            # Record deputation for each student
+            for student_id, deputation_count in deputation_data.items():
+                # Get or create monthly student attendance record
+                msa = MonthlyStudentAttendance.get_or_create(
+                    student_id, subject_id, lecturer_id, month, year
+                )
+                
+                # Update deputation count
+                msa.deputation_count = deputation_count
+                msa.updated_at = datetime.utcnow()
+            
+            # Commit changes
+            db.session.commit()
+            return True, "Deputation attendance recorded successfully"
+            
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error recording deputation attendance: {str(e)}"

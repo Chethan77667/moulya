@@ -123,36 +123,41 @@
                     {% endif %}
                     {% endwith %}
 
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Mark Monthly Attendance</h3>
-                    <p class="text-sm text-gray-600 mb-6">Enter the number of classes each student attended out of total classes conducted in the month.</p>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% if request.args.get('month') == 'deputation' %}Mark Deputation Attendance{% else %}Mark Monthly Attendance{% endif %}</h3>
+                    <p class="text-sm text-gray-600 mb-6">{% if request.args.get('month') == 'deputation' %}Enter the deputation count for each student. Total classes field shows cumulative total classes till selected month.{% else %}Enter the number of classes each student attended out of total classes conducted in the month.{% endif %}</p>
                     
-                    <form method="POST" action="{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}">
+                    <form method="POST" action="{% if request.args.get('month') == 'deputation' %}{{ url_for('lecturer.record_deputation_attendance', subject_id=subject.id) }}{% else %}{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}{% endif %}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" id="subject_id" value="{{ subject.id }}" />
                         <input type="hidden" id="prior_total_classes" value="{{ prior_total_classes or 0 }}" />
                         <div id="prior_totals_map" data-json='{{ prior_totals_map|tojson|safe }}' class="hidden"></div>
                         <div id="prev_present_map" data-json='{{ prev_present_map|tojson|safe }}' class="hidden"></div>
                         <div id="prev_present_by_month_map" data-json='{{ prev_present_by_month_map|tojson|safe }}' class="hidden"></div>
+                        <div id="cumulative_total_classes" data-value="{{ cumulative_total_classes or 0 }}" class="hidden"></div>
+                        <div id="deputation_counts_map" data-json='{{ deputation_counts_map|tojson|safe if deputation_counts_map else '{}' }}' class="hidden"></div>
+                        <div id="cumulative_present_map" data-json='{{ cumulative_present_map|tojson|safe if cumulative_present_map else '{}' }}' class="hidden"></div>
                         
                         <!-- Month and Year Selection -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div>
                                 <label for="monthly_month" class="block text-sm font-medium text-gray-700">Month</label>
-                                <select name="month" id="monthly_month" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <select name="month" id="monthly_month" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm deputation-highlight">
                                     {% for i in range(1, 13) %}
                                     <option value="{{ i }}" {% if i == selected_date.month %}selected{% endif %}>
                                         {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}
                                     </option>
                                     {% endfor %}
+                                    <option value="deputation" {% if request.args.get('month') == 'deputation' %}selected{% endif %}>DEPUTATION</option>
                                 </select>
                                 <p class="mt-1 text-xs text-gray-500" id="month-helper"></p>
                             </div>
                             <div>
                                 <label for="monthly_year" class="block text-sm font-medium text-gray-700">Year</label>
-                                <input type="number" name="year" id="monthly_year" value="{{ selected_date.year }}" min="2020" max="2030" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <input type="number" name="year" id="monthly_year" value="{{ selected_date.year }}" min="2020" max="2030" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm {% if request.args.get('month') == 'deputation' %}bg-gray-100{% endif %}" {% if request.args.get('month') == 'deputation' %}readonly{% endif %}>
                             </div>
                             <div>
-                                <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">Total Classes (cumulative till selected month)</label>
-                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="400" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm" placeholder="Total Classes (Number)">
+                                <label for="monthly_total_classes" class="block text-sm font-medium text-gray-700">{% if request.args.get('month') == 'deputation' %}Total Classes (cumulative till selected month){% else %}Total Classes (cumulative till selected month){% endif %}</label>
+                                <input type="number" name="total_classes" id="monthly_total_classes" min="1" max="400" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm {% if request.args.get('month') == 'deputation' %}bg-gray-100{% endif %}" placeholder="Total Classes (Number)" {% if request.args.get('month') == 'deputation' %}readonly value="{{ cumulative_total_classes or 0 }}"{% endif %}>
                             </div>
                         </div>
 
@@ -187,9 +192,15 @@
                                     <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
                                 </div>
                                 <div class="flex items-center space-x-2">
+                                    {% if request.args.get('month') == 'deputation' %}
+                                    <input type="number" name="deputation_{{ student.id }}" min="0" max="400" 
+                                           class="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black monthly-attendance-input"
+                                           placeholder="0" value="{{ deputation_counts_map.get(student.id, 0) if deputation_counts_map else 0 }}">
+                                    {% else %}
                                     <input type="number" name="attended_{{ student.id }}" min="0" max="400" 
                                            class="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black monthly-attendance-input"
                                            placeholder="0">
+                                    {% endif %}
                                 </div>
                             </div>
                             {% endfor %}
@@ -197,7 +208,7 @@
                         
                         <div class="mt-6">
                             <button type="button" id="monthly-attendance-confirm" class="w-full bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
-                                Save Monthly Attendance
+                                {% if request.args.get('month') == 'deputation' %}Save Deputation Attendance{% else %}Save Monthly Attendance{% endif %}
                             </button>
                         </div>
                         {% else %}
@@ -221,12 +232,13 @@
                         <h3 class="text-lg font-medium text-gray-900">Monthly Attendance Reports</h3>
                         <form method="GET" class="flex flex-col sm:flex-row gap-2 sm:gap-2 w-full">
                             <input type="hidden" name="view" value="monthly">
-                            <select name="view_month" class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
+                            <select name="view_month" class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black deputation-highlight">
                                 {% for i in range(1, 13) %}
                                 <option value="{{ i }}" {% if i == (request.args.get('view_month', selected_date.month)|int) %}selected{% endif %}>
                                     {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}
                                 </option>
                                 {% endfor %}
+                                <option value="deputation" {% if request.args.get('view_month') == 'deputation' %}selected{% endif %}>DEPUTATION</option>
                             </select>
                             <select name="view_year" class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-black focus:border-black">
                                 {% for year in range(2020, 2031) %}
@@ -245,10 +257,14 @@
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll</th>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                    {% if request.args.get('view_month') == 'deputation' %}
+                                    <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Deputation</th>
+                                    {% else %}
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">%</th>
                                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -259,6 +275,9 @@
                                     </td>
                                     <td class="px-3 sm:px-6 py-4 text-sm text-gray-500">{{ data.roll_number }}</td>
                                     <td class="px-3 sm:px-6 py-4 text-sm text-gray-900">{{ data.total_classes }}</td>
+                                    {% if request.args.get('view_month') == 'deputation' %}
+                                    <td class="px-3 sm:px-6 py-4 text-sm text-blue-600 font-medium">{{ data.deputation_count or 0 }}</td>
+                                    {% else %}
                                     <td class="px-3 sm:px-6 py-4 text-sm text-green-600 font-medium">{{ data.present_classes }}</td>
                                     <td class="px-3 sm:px-6 py-4 text-sm text-red-600 font-medium">{{ data.absent_classes }}</td>
                                     <td class="px-3 sm:px-6 py-4 text-sm text-gray-900 font-medium">{{ "%.1f"|format(data.attendance_percentage) }}%</td>
@@ -271,11 +290,29 @@
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Shortage</span>
                                         {% endif %}
                                     </td>
+                                    {% endif %}
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    {% if request.args.get('view_month') == 'deputation' %}
+                    <div id="monthly_deputation_rows" data-json='{{ monthly_attendance_data|tojson|safe }}' class="hidden"></div>
+                    <script>
+                    (function(){
+                        try {
+                            const el = document.getElementById('monthly_deputation_rows');
+                            const data = el ? JSON.parse(el.getAttribute('data-json') || '[]') : [];
+                            console.log('[Deputation][Report] rows:', data);
+                            const byId = {};
+                            (data || []).forEach(function(r){ byId[String(r.student_id)] = r.deputation_count; });
+                            console.log('[Deputation][Report] deputation by student_id:', byId);
+                        } catch(e) {
+                            console.warn('[Deputation][Report] log error', e);
+                        }
+                    })();
+                    </script>
+                    {% endif %}
                     {% else %}
                     <div class="text-center py-8">
                         <p class="text-gray-500">No attendance data available for the selected month.</p>
@@ -289,6 +326,32 @@
 </div>
 
 <script>
+// Style the DEPUTATION option in select elements: black background, white text
+function styleDeputationOptions(root) {
+    try {
+        const selects = (root || document).querySelectorAll('select.deputation-highlight');
+        selects.forEach(function(sel){
+            const opts = sel.querySelectorAll('option');
+            opts.forEach(function(opt){
+                if ((opt.value || '').toString().toLowerCase() === 'deputation') {
+                    opt.style.backgroundColor = '#000000';
+                    opt.style.color = '#ffffff';
+                    // Improve contrast when hovered/selected in some browsers by duplicating styles
+                    opt.setAttribute('data-style-applied', 'true');
+                }
+            });
+        });
+    } catch(e) { /* noop */ }
+}
+document.addEventListener('DOMContentLoaded', function(){
+    styleDeputationOptions(document);
+});
+// Re-apply when month selects change (some browsers re-render options)
+document.addEventListener('change', function(e){
+    if (e.target && e.target.matches('select.deputation-highlight')) {
+        styleDeputationOptions(document);
+    }
+});
 // Lightweight modal for alerts (success/error/info)
 function openAlertModal(title, message, category, onConfirm, onCancel) {
     // Remove existing
@@ -410,6 +473,13 @@ function setAllAttendance(type) {
     const inputs = document.querySelectorAll('.monthly-attendance-input');
     const month = parseInt(document.getElementById('monthly_month').value) || 0;
     const year = parseInt(document.getElementById('monthly_year').value) || 0;
+    
+    // Check if this is deputation mode
+    if (month === 'deputation' || document.getElementById('monthly_month').value === 'deputation') {
+        setAllDeputation(type);
+        return;
+    }
+    
     const monthClasses = computeMonthClasses(year, month);
     const prevMap = getPrevPresentForMonth(year, month);
     
@@ -443,6 +513,58 @@ function setAllAttendance(type) {
     });
 }
 
+// Deputation-specific functions
+function setAllDeputation(type) {
+    const inputs = document.querySelectorAll('.monthly-attendance-input');
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+    
+    inputs.forEach(input => {
+        const idMatch = (input.name || '').match(/deputation_(\d+)/);
+        const studentId = idMatch ? parseInt(idMatch[1]) : null;
+        
+        if (!studentId) return;
+        
+        // Get cumulative present count for this student
+        const cumulativePresent = getCumulativePresentForStudent(studentId);
+        // Calculate maximum allowed deputation based on total classes and cumulative present
+        const maxAllowedDeputation = Math.max(0, totalClasses - cumulativePresent);
+        
+        let value;
+        if (type === 'zero') {
+            value = 0;
+        } else if (type === 'half') {
+            value = Math.floor(maxAllowedDeputation / 2);
+        } else if (type === 'full') {
+            value = maxAllowedDeputation;
+        }
+        
+        // Ensure value is within valid range
+        value = Math.max(0, Math.min(value, maxAllowedDeputation));
+        input.value = value;
+        
+        // Remove any error styling
+        input.classList.remove('border-red-500');
+    });
+}
+
+function getDeputationDataMap() {
+    try {
+        const el = document.getElementById('deputation_data_map');
+        if (!el) return {};
+        return JSON.parse(el.getAttribute('data-json') || '{}');
+    } catch(e) { return {}; }
+}
+
+function getCumulativePresentForStudent(studentId) {
+    try {
+        const el = document.getElementById('cumulative_present_map');
+        if (!el) return 0;
+        const map = JSON.parse(el.getAttribute('data-json') || '{}');
+        const val = map[String(studentId)];
+        return parseInt(val || '0', 10) || 0;
+    } catch(e) { return 0; }
+}
+
 // Search functionality for monthly attendance
 document.getElementById('monthly-student-search')?.addEventListener('input', function() {
     const searchTerm = this.value.toLowerCase();
@@ -470,12 +592,207 @@ document.getElementById('monthly_total_classes')?.addEventListener('blur', funct
     validateTotalClasses();
 });
 
+// Handle month dropdown change for deputation
+document.getElementById('monthly_month')?.addEventListener('change', function() {
+    const selectedMonth = this.value;
+    const totalClassesInput = document.getElementById('monthly_total_classes');
+    const yearInput = document.getElementById('monthly_year');
+    const submitBtn = document.getElementById('monthly-attendance-confirm');
+    
+    console.log('Month changed to:', selectedMonth);
+    
+    if (selectedMonth === 'deputation') {
+        // Update form action for deputation
+        const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
+        if (form) {
+            form.action = `/lecturer/subjects/{{ subject.id }}/attendance/deputation`;
+            console.log('Updated form action to deputation');
+        }
+        // Update button text to deputation mode
+        if (submitBtn) {
+            submitBtn.textContent = 'Save Deputation Attendance';
+        }
+        // Rename inputs from attended_ to deputation_ so backend receives correct fields
+        document.querySelectorAll('.monthly-attendance-input').forEach(function(input){
+            const match = (input.name || '').match(/^attended_(\d+)$/);
+            if (match) {
+                input.name = `deputation_${match[1]}`;
+                // Prefill with existing deputation value from map if available
+                try {
+                    const mapEl = document.getElementById('deputation_counts_map');
+                    const deputMap = mapEl ? JSON.parse(mapEl.getAttribute('data-json') || '{}') : {};
+                    const prefill = deputMap[String(match[1])];
+                    if (prefill != null) input.value = String(prefill);
+                } catch(e) {}
+            }
+        });
+        
+        // Fetch cumulative total classes for deputation
+        const year = yearInput.value;
+        const subjectId = (document.getElementById('subject_id')?.value || '').toString();
+        
+        console.log('Fetching cumulative total classes for deputation, year:', year, 'subject:', subjectId);
+        
+        fetch(`/lecturer/subjects/${subjectId}/attendance/deputation/total-classes?year=${year}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Received total classes data:', data);
+                if (data.success && data.total_classes !== undefined) {
+                    totalClassesInput.value = data.total_classes;
+                    totalClassesInput.readOnly = true;
+                    totalClassesInput.required = false;
+                    totalClassesInput.classList.add('bg-gray-100');
+                    // Keep year field editable for form submission
+                    yearInput.readOnly = false;
+                    yearInput.classList.remove('bg-gray-100');
+                    console.log('Set total classes to:', data.total_classes, 'and made readonly');
+                } else {
+                    console.error('Failed to fetch total classes:', data.message);
+                    totalClassesInput.value = 0;
+                    totalClassesInput.readOnly = true;
+                    totalClassesInput.required = false;
+                    totalClassesInput.classList.add('bg-gray-100');
+                    // Keep year field editable for form submission
+                    yearInput.readOnly = false;
+                    yearInput.classList.remove('bg-gray-100');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching total classes:', error);
+                totalClassesInput.value = 0;
+            });
+    } else {
+        // Update form action for regular monthly attendance
+        const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
+        if (form) {
+            form.action = `/lecturer/subjects/{{ subject.id }}/attendance/monthly`;
+            console.log('Updated form action to monthly');
+        }
+        // Update button text to monthly mode
+        if (submitBtn) {
+            submitBtn.textContent = 'Save Monthly Attendance';
+        }
+        // Rename inputs from deputation_ back to attended_
+        document.querySelectorAll('.monthly-attendance-input').forEach(function(input){
+            const match = (input.name || '').match(/^deputation_(\d+)$/);
+            if (match) {
+                input.name = `attended_${match[1]}`;
+                // Clear value to avoid mixing meanings
+                if (typeof input.value === 'string') input.value = '';
+            }
+        });
+        
+        // For regular months, clear the field and make it editable
+        totalClassesInput.value = '';
+        totalClassesInput.readOnly = false;
+        totalClassesInput.classList.remove('bg-gray-100');
+        totalClassesInput.required = true;
+        console.log('Cleared total classes field for regular month');
+    }
+});
+
 // Real-time validation for student attendance fields
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if deputation is already selected on page load
+    const monthSelect = document.getElementById('monthly_month');
+    if (monthSelect && monthSelect.value === 'deputation') {
+        console.log('Page loaded with deputation selected, fetching total classes...');
+        
+        // Update form action for deputation
+        const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
+        if (form) {
+            form.action = `/lecturer/subjects/{{ subject.id }}/attendance/deputation`;
+            console.log('Initial load - Updated form action to deputation');
+        }
+        // Ensure button text reflects deputation mode on initial load
+        const submitBtn = document.getElementById('monthly-attendance-confirm');
+        if (submitBtn) {
+            submitBtn.textContent = 'Save Deputation Attendance';
+        }
+        // Ensure inputs are named for deputation on initial load when server didn't pre-render, and prefill
+        try {
+            const mapEl = document.getElementById('deputation_counts_map');
+            const deputMap = mapEl ? JSON.parse(mapEl.getAttribute('data-json') || '{}') : {};
+            document.querySelectorAll('.monthly-attendance-input').forEach(function(input){
+                const attendedMatch = (input.name || '').match(/^attended_(\d+)$/);
+                const deputMatch = (input.name || '').match(/^deputation_(\d+)$/);
+                let studentId = null;
+                if (attendedMatch) {
+                    studentId = attendedMatch[1];
+                    input.name = `deputation_${studentId}`;
+                } else if (deputMatch) {
+                    studentId = deputMatch[1];
+                }
+                if (studentId != null && deputMap[String(studentId)] != null) {
+                    input.value = String(deputMap[String(studentId)]);
+                }
+            });
+        } catch(e) {}
+        
+        const year = document.getElementById('monthly_year').value;
+        const subjectId = (document.getElementById('subject_id')?.value || '').toString();
+        
+        fetch(`/lecturer/subjects/${subjectId}/attendance/deputation/total-classes?year=${year}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Initial load - Received total classes data:', data);
+                if (data.success && data.total_classes !== undefined) {
+                    const totalClassesInput = document.getElementById('monthly_total_classes');
+                    const yearInput = document.getElementById('monthly_year');
+                    totalClassesInput.value = data.total_classes;
+                    totalClassesInput.readOnly = true;
+                    totalClassesInput.required = false;
+                    totalClassesInput.classList.add('bg-gray-100');
+                    // Keep year field editable for form submission
+                    yearInput.readOnly = false;
+                    yearInput.classList.remove('bg-gray-100');
+                    console.log('Initial load - Set total classes to:', data.total_classes, 'and made readonly');
+                }
+            })
+            .catch(error => {
+                console.error('Initial load - Error fetching total classes:', error);
+            });
+    } else {
+        // Update form action for regular monthly attendance
+        const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
+        if (form) {
+            form.action = `/lecturer/subjects/{{ subject.id }}/attendance/monthly`;
+            console.log('Initial load - Updated form action to monthly');
+        }
+        // Ensure button text reflects monthly mode on initial load
+        const submitBtn = document.getElementById('monthly-attendance-confirm');
+        if (submitBtn) {
+            submitBtn.textContent = 'Save Monthly Attendance';
+        }
+    }
+    
     // Add blur event listeners to all student attendance inputs
     document.querySelectorAll('.monthly-attendance-input').forEach(function(input) {
         input.addEventListener('blur', function() {
-            validateStudentAttendance(this);
+            // Check if this is deputation mode
+            const month = document.getElementById('monthly_month').value;
+            if (month === 'deputation') {
+                validateDeputationInput(this);
+            } else {
+                validateStudentAttendance(this);
+            }
+        });
+        
+        // Add input event listener for real-time validation in deputation mode
+        input.addEventListener('input', function() {
+            const month = document.getElementById('monthly_month').value;
+            if (month === 'deputation') {
+                // Real-time validation for deputation
+                const deputationValue = parseInt(this.value || '0');
+                const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+                
+                // Basic validation: deputation should not exceed total classes
+                if (deputationValue > totalClasses) {
+                    this.classList.add('border-red-500');
+                } else {
+                    this.classList.remove('border-red-500');
+                }
+            }
         });
     });
     
@@ -488,7 +805,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         const inputs = node.querySelectorAll ? node.querySelectorAll('.monthly-attendance-input') : [];
                         inputs.forEach(function(input) {
                             input.addEventListener('blur', function() {
-                                validateStudentAttendance(this);
+                                const month = document.getElementById('monthly_month').value;
+                                if (month === 'deputation') {
+                                    validateDeputationInput(this);
+                                } else {
+                                    validateStudentAttendance(this);
+                                }
                             });
                         });
                     }
@@ -502,6 +824,94 @@ document.addEventListener('DOMContentLoaded', function() {
         observer.observe(studentsContainer, { childList: true, subtree: true });
     }
 });
+
+// Deputation validation function
+function validateDeputationInput(inputElement) {
+    const deputationValue = parseInt(inputElement.value || '0');
+    const studentId = parseInt(inputElement.name.replace('deputation_', ''));
+    
+    // Get total classes from the readonly field
+    const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+    const cumPresent = getCumulativePresentForStudent(studentId);
+    const maxAllowedDeputation = Math.max(0, totalClasses - cumPresent);
+    
+    console.log(`Validating deputation for student ${studentId}:`, {
+        deputationValue,
+        totalClasses,
+        cumPresent,
+        maxAllowedDeputation
+    });
+    
+    // Validation: deputation should not exceed (total - cumulative present)
+    if (deputationValue > maxAllowedDeputation) {
+        // Show popup error
+        const row = inputElement.closest('.monthly-student-row');
+        const nameEl = row ? row.querySelector('p.text-sm') : null;
+        const name = nameEl ? nameEl.textContent.trim() : `Student ${studentId}`;
+        const rollEl = row ? row.querySelector('p.text-xs') : null;
+        const roll = rollEl ? rollEl.textContent.trim() : '';
+        showValidationError(
+            `Invalid Deputation Value`,
+            `${name} ${roll ? '(' + roll + ')' : ''}:\n` +
+            `Entered deputation (${deputationValue}) + cumulative presents (${cumPresent}) exceeds total classes (${totalClasses}).\n\n` +
+            `Total Classes: ${totalClasses}\n` +
+            `Cumulative Presents: ${cumPresent}\n` +
+            `Maximum Deputation Allowed: ${maxAllowedDeputation}`
+        );
+        
+        // Reset to max allowed value
+        inputElement.value = String(maxAllowedDeputation);
+        inputElement.classList.add('border-red-500');
+        
+        // Remove error styling after 3 seconds
+        setTimeout(() => {
+            inputElement.classList.remove('border-red-500');
+        }, 3000);
+        
+        return false;
+    } else {
+        inputElement.classList.remove('border-red-500');
+        return true;
+    }
+}
+
+// Function to show validation error popup
+function showValidationError(title, message) {
+    // Create popup modal
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div class="flex items-center mb-4">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-lg font-medium text-gray-900">${title}</h3>
+                </div>
+            </div>
+            <div class="mb-4">
+                <p class="text-sm text-gray-600 whitespace-pre-line">${message}</p>
+            </div>
+            <div class="flex justify-end">
+                <button onclick="this.closest('.fixed').remove()" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                    OK
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+        if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    }, 10000);
+}
 
 // Initialize counts on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -680,13 +1090,19 @@ document.getElementById('monthly-attendance-confirm')?.addEventListener('click',
     const totalClassesInput = document.getElementById('monthly_total_classes');
     const studentsContainer = document.getElementById('monthly-students-container');
 
-    const month = parseInt(monthSelect?.value || '0');
+    const month = monthSelect?.value || '0';
     const year = parseInt(yearInput?.value || '0');
     const totalClasses = parseInt(totalClassesInput?.value || '0');
 
     // Basic required field checks
     if (!month || !year || !totalClasses) {
         openAlertModal('Validation Error', 'Please fill Month, Year and Total Classes.', 'error');
+        return;
+    }
+
+    // Check if this is deputation mode
+    if (month === 'deputation') {
+        validateDeputationSubmission();
         return;
     }
 
@@ -753,5 +1169,78 @@ document.getElementById('monthly-attendance-confirm')?.addEventListener('click',
         if (form) form.submit();
     }, function(){});
 });
+
+// Deputation submission validation
+function validateDeputationSubmission() {
+    const cumulativeTotalClasses = parseInt(document.getElementById('monthly_total_classes')?.value || '0');
+    const year = parseInt(document.getElementById('monthly_year')?.value || '0');
+    const subjectId = (document.getElementById('subject_id')?.value || '').toString();
+    
+    // Log context
+    console.log('[Deputation] Context => Subject:', subjectId, 'Year:', year, 'Total Classes:', cumulativeTotalClasses);
+    // Log all deputation input values before validation
+    const deputationPayload = {};
+    document.querySelectorAll("input[name^='deputation_']").forEach(function(input){
+        const m = (input.name || '').match(/^deputation_(\d+)$/);
+        if (m) {
+            deputationPayload[m[1]] = parseInt((input.value || '0'), 10) || 0;
+        }
+    });
+    console.log('[Deputation] Outgoing payload:', deputationPayload);
+    
+    if (!cumulativeTotalClasses || !year) {
+        openAlertModal('Validation Error', 'Missing cumulative total classes or year data.', 'error');
+        return;
+    }
+    
+    let invalid = false;
+    let firstErrorName = '';
+    let firstErrorMessage = '';
+    
+    document.querySelectorAll('.monthly-attendance-input').forEach(function(input) {
+        const raw = (input.value || '').toString().trim();
+        if (raw === '') { return; }
+        
+        const deputationValue = parseInt(raw, 10);
+        const row = input.closest('.monthly-student-row');
+        const idMatch = (input.name || '').match(/deputation_(\d+)/);
+        const studentId = idMatch ? parseInt(idMatch[1]) : null;
+        
+        if (!studentId) return;
+        
+        // Basic validation: deputation value should not exceed total classes
+        if (deputationValue > cumulativeTotalClasses) {
+            if (!invalid) {
+                const nameEl = row ? row.querySelector('p.text-sm') : null;
+                firstErrorName = nameEl ? nameEl.textContent.trim() : 'This student';
+                firstErrorMessage = `Deputation (${deputationValue}) cannot exceed total classes (${cumulativeTotalClasses})`;
+            }
+            invalid = true;
+            input.classList.add('border-red-500');
+            try { input.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            input.focus();
+        } else {
+            input.classList.remove('border-red-500');
+        }
+    });
+    
+    if (invalid) {
+        openAlertModal('Validation Error', `${firstErrorName}: ${firstErrorMessage}`, 'error');
+        return;
+    }
+    
+    // Build confirmation summary for deputation
+    const studentCount = document.getElementById('monthly-students-container') ? document.getElementById('monthly-students-container').children.length : 0;
+    const summary = `Deputation Mode\nYear: ${year}\nTotal Classes: ${cumulativeTotalClasses}\nStudents: ${studentCount}`;
+    
+    const form = document.getElementById('monthly-attendance-confirm')?.closest('form');
+    openAlertModal('Confirm Deputation Submission', summary, 'info', function(){
+        if (form) {
+            // One more log right before submit
+            console.log('[Deputation] Submitting form to:', form.action);
+            form.submit();
+        }
+    }, function(){});
+}
 </script>
 {% endblock %}

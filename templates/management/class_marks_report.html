@@ -80,7 +80,7 @@
                         <div class="text-sm text-gray-500">Lowest Score</div>
                     </div>
                 </div>
-                {% set pass_rate = (report.statistics.passing_students / report.statistics.total_students * 100) | round(2) if report.statistics.total_students > 0 else 0 %}
+                {% set pass_rate = (report.statistics.passing_students / report.statistics.total_assessments * 100) | round(2) if report.statistics.total_assessments > 0 else 0 %}
                 <div class="mt-4 p-3 bg-gray-50 rounded border">
                     <div class="text-center">
                         <div class="text-lg font-bold text-gray-900">{{ pass_rate }}%</div>
