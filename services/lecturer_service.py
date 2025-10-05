@@ -380,9 +380,18 @@ class LecturerService:
                         MonthlyStudentAttendance.lecturer_id == lecturer_id
                     ).scalar() or 0)
                 present_cumulative = int(present_cumulative)
+                # Sum student's deputation cumulatively across months (year-agnostic for overall)
+                deputation_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.deputation_count), 0))
+                    .filter(
+                        MonthlyStudentAttendance.student_id == student.id,
+                        MonthlyStudentAttendance.subject_id == subject_id,
+                        MonthlyStudentAttendance.lecturer_id == lecturer_id
+                    ).scalar() or 0)
+                deputation_cumulative = int(deputation_cumulative)
                 
                 total_classes = total_classes_cumulative
-                present_classes = min(present_cumulative, total_classes) if total_classes > 0 else present_cumulative
+                present_with_deputation = present_cumulative + deputation_cumulative
+                present_classes = min(present_with_deputation, total_classes) if total_classes > 0 else present_with_deputation
                 absent_classes = max(total_classes - present_classes, 0)
                 attendance_percentage = (present_classes / total_classes * 100) if total_classes > 0 else 0
                 

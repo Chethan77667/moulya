@@ -700,6 +700,11 @@ def attendance_shortage_report():
         lecturer_id = session.get('user_id')
         subjects = LecturerService.get_assigned_subjects(lecturer_id)
         
+        # Optional filter by subject
+        selected_subject_id = request.args.get('subject_id', type=int)
+        if selected_subject_id:
+            subjects = [s for s in subjects if s.id == selected_subject_id]
+        
         # Get threshold from query parameter, default to 75%
         threshold = request.args.get('threshold', 75, type=int)
         
@@ -717,7 +722,9 @@ def attendance_shortage_report():
         
         return render_template('lecturer/attendance_shortage.html', 
                              shortage_data=shortage_data, 
-                             threshold=threshold)
+                             threshold=threshold,
+                             subjects=LecturerService.get_assigned_subjects(lecturer_id),
+                             selected_subject_id=selected_subject_id)
     except Exception as e:
         flash(f'Error loading attendance shortage report: {str(e)}', 'error')
         return render_template('lecturer/attendance_shortage.html', 
@@ -731,6 +738,11 @@ def marks_deficiency_report():
     try:
         lecturer_id = session.get('user_id')
         subjects = LecturerService.get_assigned_subjects(lecturer_id)
+        
+        # Optional filter by subject
+        selected_subject_id = request.args.get('subject_id', type=int)
+        if selected_subject_id:
+            subjects = [s for s in subjects if s.id == selected_subject_id]
         
         # Get threshold from query parameter, default to 50%
         threshold = request.args.get('threshold', 50, type=int)
@@ -749,7 +761,9 @@ def marks_deficiency_report():
         
         return render_template('lecturer/marks_deficiency.html', 
                              deficiency_data=deficiency_data, 
-                             threshold=threshold)
+                             threshold=threshold,
+                             subjects=LecturerService.get_assigned_subjects(lecturer_id),
+                             selected_subject_id=selected_subject_id)
     except Exception as e:
         flash(f'Error loading marks deficiency report: {str(e)}', 'error')
         return render_template('lecturer/marks_deficiency.html', 
@@ -788,7 +802,7 @@ def get_deputation_total_classes(subject_id):
             subject_id, lecturer_id, year
         )
         
-        print(f"Deputation total classes requested - Subject: {subject_id}, Lecturer: {lecturer_id}, Year: {year}, Total Classes: {cumulative_total_classes}")
+        
         
         return jsonify({
             'success': True,
@@ -826,8 +840,7 @@ def record_deputation_attendance(subject_id):
         total_classes_str = request.form.get('total_classes')
 
         # Debug: Print form data
-        print(f"Deputation form data - Month: {month}, Year: {year_str}, Total Classes: {total_classes_str}")
-        print(f"All form keys: {list(request.form.keys())}")
+       
         
         # Always treat deputation as special month 13; do not require month/year inputs
         month = 13
@@ -839,7 +852,7 @@ def record_deputation_attendance(subject_id):
 
         # Compute cumulative total classes from backend for this year
         total_classes = LecturerService.get_cumulative_total_classes(subject_id, lecturer_id, int(year))
-        print(f"Deputation mode - Calculated total classes from backend: {total_classes} for year {year}")
+     
         
         # Validate deputation entries
         students = LecturerService.get_subject_students(subject_id, lecturer_id)
@@ -908,7 +921,7 @@ def record_deputation_attendance(subject_id):
                         MSA.lecturer_id == lecturer_id,
                         MSA.year == year
                     ).scalar() or 0)
-                print(f"[Deputation][SaveVerify] year={year} sample={verify_map} total_year_sum={int(total_by_year)}")
+               
             except Exception as _e:
                 print(f"[Deputation][SaveVerify] error: {_e}")
         else:
