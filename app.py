@@ -35,6 +35,28 @@ def create_app():
     # Initialize database
     init_db(app)
     
+    # Jinja filter: format numbers so 34.0 -> 34, keep 34.5 as 34.5
+    @app.template_filter('format_mark')
+    def format_mark(value):
+        try:
+            # Handle None or empty gracefully
+            if value is None or value == "":
+                return ""
+            number = float(value)
+            # If it's an integer value (like 34.0), return without decimals
+            if number.is_integer():
+                return str(int(number))
+            # Otherwise, return as minimal float string (avoids trailing zeros)
+            # Using rstrip to avoid cases like '34.500000'
+            text = ("%s" % number)
+            # Normalize scientific notation if any
+            if 'e' in text or 'E' in text:
+                text = ("%.15f" % number).rstrip('0').rstrip('.')
+            return text
+        except Exception:
+            # Fallback to original value if not a number
+            return value
+    
     return app
 
 if __name__ == '__main__':

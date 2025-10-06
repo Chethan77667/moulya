@@ -572,18 +572,36 @@ def add_marks(subject_id):
     try:
         lecturer_id = session.get('user_id')
         assessment_type = request.form.get('assessment_type')
-        max_marks = float(request.form.get('max_marks'))
+        # Validate and parse max_marks
+        max_marks_raw = request.form.get('max_marks')
+        try:
+            max_marks = float(max_marks_raw) if max_marks_raw not in (None, '') else None
+        except Exception:
+            max_marks = None
+        if not assessment_type or max_marks is None:
+            flash('Please select assessment type and enter valid maximum marks.', 'error')
+            return redirect(url_for('lecturer.marks_management', subject_id=subject_id))
         
         # Build marks data
         marks_data = []
+        import re
         for key, value in request.form.items():
-            if key.startswith('marks_'):
-                student_id = int(key.replace('marks_', ''))
-                if value:  # Only process if marks are provided
+            # Only accept keys like marks_<digits> (ignore fields like marks_file)
+            if re.fullmatch(r'marks_\d+', key):
+                try:
+                    student_id = int(key.split('_', 1)[1])
+                except Exception:
+                    continue
+                if value not in (None, ''):
+                    try:
+                        obtained = float(value)
+                    except Exception:
+                        # Skip invalid numeric entries silently; frontend may send stray values
+                        continue
                     marks_data.append({
                         'student_id': student_id,
                         'assessment_type': assessment_type,
-                        'marks_obtained': float(value),
+                        'marks_obtained': obtained,
                         'max_marks': max_marks,
                         'assessment_date': date.today()
                     })
