@@ -125,6 +125,21 @@
 
                     <h3 class="text-lg font-medium text-gray-900 mb-4">{% if request.args.get('month') == 'deputation' %}Mark Deputation Attendance{% else %}Mark Monthly Attendance{% endif %}</h3>
                     <p class="text-sm text-gray-600 mb-6">{% if request.args.get('month') == 'deputation' %}Enter the deputation count for each student. Total classes field shows cumulative total classes till selected month.{% else %}Enter the number of classes each student attended out of total classes conducted in the month.{% endif %}</p>
+
+                    <!-- Excel: Download / Upload (Mobile-friendly) -->
+                    <form method="POST" action="{{ url_for('lecturer.upload_attendance_excel', subject_id=subject.id) }}" enctype="multipart/form-data" class="mb-4" id="excel-upload-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                            <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                                <button type="button" id="download-att-template-btn" class="bg-white text-black border border-black px-4 py-2 rounded text-sm hover:bg-gray-50" onclick="downloadAttendanceTemplate()">Download Excel Template</button>
+                                <input type="file" name="attendance_file" id="attendance_file" accept=".xlsx,.xls" class="text-sm block w-full sm:w-auto h-10">
+                                <input type="hidden" name="month" id="upload_month">
+                                <input type="hidden" name="year" id="upload_year">
+                                <input type="hidden" name="total_classes" id="upload_total">
+                                <button type="submit" id="upload-att-btn" class="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800">Upload Excel</button>
+                            </div>
+                        </div>
+                    </form>
                     
                     <form method="POST" action="{% if request.args.get('month') == 'deputation' %}{{ url_for('lecturer.record_deputation_attendance', subject_id=subject.id) }}{% else %}{{ url_for('lecturer.record_monthly_attendance', subject_id=subject.id) }}{% endif %}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -1231,6 +1246,96 @@ function validateDeputationSubmission() {
             form.submit();
         }
     }, function(){});
+}
+</script>
+<script>
+// Attendance Excel: download template action
+function downloadAttendanceTemplate(){
+    try {
+        // Use the main Month/Year selectors so there is only one set on the page
+        var mEl = document.getElementById('monthly_month');
+        var yEl = document.getElementById('monthly_year');
+        var m = mEl ? mEl.value : '';
+        var y = yEl ? yEl.value : '';
+        var url = `{{ url_for('lecturer.download_attendance_template', subject_id=subject.id) }}?month=${encodeURIComponent(m)}&year=${encodeURIComponent(y)}`;
+        window.location.href = url;
+    } catch(e) { console.error(e); }
+}
+
+// Prevent real submit; front-end may parse/prefill instead
+document.addEventListener('DOMContentLoaded', function(){
+    var uploadForm = document.getElementById('excel-upload-form');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function(e){
+            e.preventDefault(); e.stopPropagation();
+            try { parseAttendanceExcelAndFill(); } catch(err) { console.error(err); }
+        });
+    }
+});
+// Lazy-load SheetJS and parse Excel to fill month/year and student values
+function ensureXLSX(callback){
+    if (window.XLSX) { callback(); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = callback; document.head.appendChild(s);
+}
+function parseAttendanceExcelAndFill(){
+    var fileInput = document.getElementById('attendance_file');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if (!file) { openAlertModal('Upload Excel', 'Please choose an Excel file first.', 'error'); return; }
+    ensureXLSX(function(){
+        var reader = new FileReader();
+        reader.onload = function(e){
+            try {
+                var data = new Uint8Array(e.target.result);
+                var wb = XLSX.read(data, {type:'array'});
+                var ws = wb.Sheets[wb.SheetNames[0]];
+                var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true});
+                if (!rows || rows.length < 5) { openAlertModal('Upload Excel', 'Template seems empty.', 'error'); return; }
+
+                var period = (rows[1] && rows[1][0]) ? String(rows[1][0]) : '';
+                var monthSelect = document.getElementById('monthly_month');
+                var yearInput = document.getElementById('monthly_year');
+                var detectedMonth = null, detectedYear = null;
+                var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+                for (var i=1;i<=12;i++){ if (period.includes(monthNames[i])) detectedMonth = i; }
+                var yearMatch = period.match(/(19|20)\d{2}/);
+                if (yearMatch) detectedYear = parseInt(yearMatch[0]);
+                if (detectedMonth){ monthSelect.value = String(detectedMonth); }
+                if (detectedYear){ yearInput.value = String(detectedYear); }
+
+                // locate header row (Student ID | Name | Attended/Deputation)
+                var headerRowIdx = -1;
+                for (var r=0; r<rows.length; r++){
+                    var row = rows[r]; if (!row) continue;
+                    var a = (row[0]||'').toString().toLowerCase();
+                    var b = (row[1]||'').toString().toLowerCase();
+                    var c = (row[2]||'').toString().toLowerCase();
+                    if (a.includes('student') && b.includes('name') && (c.includes('attended') || c.includes('deputation'))){ headerRowIdx = r; break; }
+                }
+                if (headerRowIdx === -1){ openAlertModal('Upload Excel', 'Could not find header row in Excel.', 'error'); return; }
+
+                var rollToValue = {};
+                for (var i=headerRowIdx+1; i<rows.length; i++){
+                    var row = rows[i]; if (!row) continue;
+                    var roll = row[0]; var value = row[2];
+                    if (roll == null || value == null || value === '') continue;
+                    rollToValue[String(roll).trim()] = parseInt(value) || 0;
+                }
+
+                var container = document.getElementById('monthly-students-container');
+                var rowsDom = container ? container.querySelectorAll('.monthly-student-row') : [];
+                rowsDom.forEach(function(domRow){
+                    var rollEl = domRow.querySelector('p.text-xs');
+                    var roll = rollEl ? rollEl.textContent.trim() : null;
+                    var input = domRow.querySelector('.monthly-attendance-input');
+                    if (roll && rollToValue.hasOwnProperty(roll) && input){ input.value = String(rollToValue[roll]); }
+                });
+                openAlertModal('Upload Excel', 'Values filled from Excel. Please review and click Save.', 'info');
+            } catch(err){ console.error(err); openAlertModal('Upload Excel', 'Failed to parse Excel. Please check template.', 'error'); }
+        };
+        reader.readAsArrayBuffer(file);
+    });
 }
 </script>
 {% endblock %}
