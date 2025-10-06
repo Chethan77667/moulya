@@ -295,7 +295,7 @@
                                     {% else %}
                                     <td class="px-3 sm:px-6 py-4 text-sm text-green-600 font-medium">{{ data.present_classes }}</td>
                                     <td class="px-3 sm:px-6 py-4 text-sm text-red-600 font-medium">{{ data.absent_classes }}</td>
-                                    <td class="px-3 sm:px-6 py-4 text-sm text-gray-900 font-medium">{{ "%.1f"|format(data.attendance_percentage) }}%</td>
+                                    <td class="px-3 sm:px-6 py-4 text-sm text-gray-900 font-medium">{{ "%.2f"|format(data.attendance_percentage) }}%</td>
                                     <td class="px-3 sm:px-6 py-4 whitespace-nowrap">
                                         {% if data.attendance_percentage >= 75 %}
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Good</span>
@@ -580,6 +580,27 @@ function getCumulativePresentForStudent(studentId) {
     } catch(e) { return 0; }
 }
 
+    // Deputation: update input min/max for each student so browser enforces range
+    function updateDeputationConstraints() {
+        try {
+            const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
+            if (!totalClasses || isNaN(totalClasses)) return;
+            document.querySelectorAll("input[name^='deputation_']").forEach(function(input){
+                const match = (input.name || '').match(/^deputation_(\d+)$/);
+                const studentId = match ? parseInt(match[1]) : null;
+                if (!studentId) return;
+                const cumPresent = getCumulativePresentForStudent(studentId);
+                const maxAllowed = Math.max(0, totalClasses - cumPresent);
+                input.min = '0';
+                input.max = String(maxAllowed);
+                let val = parseInt((input.value || '0'), 10) || 0;
+                if (val < 0) val = 0;
+                if (val > maxAllowed) val = maxAllowed;
+                input.value = String(val);
+            });
+        } catch(e) {}
+    }
+
 // Search functionality for monthly attendance
 document.getElementById('monthly-student-search')?.addEventListener('input', function() {
     const searchTerm = this.value.toLowerCase();
@@ -798,7 +819,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const month = document.getElementById('monthly_month').value;
             if (month === 'deputation') {
                 // Real-time validation for deputation
-                const deputationValue = parseInt(this.value || '0');
+                let deputationValue = parseInt(this.value || '0');
+                if (isNaN(deputationValue) || deputationValue < 0) deputationValue = 0;
                 const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
                 
                 // Basic validation: deputation should not exceed total classes
@@ -807,6 +829,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     this.classList.remove('border-red-500');
                 }
+                // Enforce per-student max (total - cumulative present)
+                try {
+                    const match = (this.name || '').match(/^deputation_(\d+)$/);
+                    const studentId = match ? parseInt(match[1]) : null;
+                    if (studentId) {
+                        const cumPresent = getCumulativePresentForStudent(studentId);
+                        const maxAllowed = Math.max(0, totalClasses - cumPresent);
+                        this.min = '0';
+                        this.max = String(maxAllowed);
+                        if (deputationValue > maxAllowed) {
+                            this.classList.add('border-red-500');
+                        }
+                    }
+                } catch(e) {}
             }
         });
     });
@@ -942,10 +978,20 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('monthly_month')?.addEventListener('change', updateMonthHelper);
     document.getElementById('monthly_year')?.addEventListener('input', updateMonthHelper);
     // Update constraints whenever month/year/total changes
-    document.getElementById('monthly_month')?.addEventListener('change', updatePerStudentConstraints);
-    document.getElementById('monthly_year')?.addEventListener('input', updatePerStudentConstraints);
-    document.getElementById('monthly_total_classes')?.addEventListener('input', updatePerStudentConstraints);
+    document.getElementById('monthly_month')?.addEventListener('change', function(){
+        updatePerStudentConstraints();
+        if (this.value === 'deputation') updateDeputationConstraints();
+    });
+    document.getElementById('monthly_year')?.addEventListener('input', function(){
+        updatePerStudentConstraints();
+        if (document.getElementById('monthly_month')?.value === 'deputation') updateDeputationConstraints();
+    });
+    document.getElementById('monthly_total_classes')?.addEventListener('input', function(){
+        updatePerStudentConstraints();
+        if (document.getElementById('monthly_month')?.value === 'deputation') updateDeputationConstraints();
+    });
     updatePerStudentConstraints();
+    if (document.getElementById('monthly_month')?.value === 'deputation') updateDeputationConstraints();
 });
 
 // Helpers to get prior totals and prev presents

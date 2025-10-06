@@ -58,7 +58,7 @@
                         <div class="text-sm text-gray-500">Total Students</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900">{{ report.statistics.class_average }}%</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ "%.2f"|format(report.statistics.class_average) }}%</div>
                         <div class="text-sm text-gray-500">Class Average</div>
                     </div>
                     <div class="text-center">
@@ -72,11 +72,11 @@
                 </div>
                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="text-center">
-                        <div class="text-xl font-bold text-gray-900">{{ report.statistics.highest_score }}%</div>
+                        <div class="text-xl font-bold text-gray-900">{{ "%.2f"|format(report.statistics.highest_score) }}%</div>
                         <div class="text-sm text-gray-500">Highest Score</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-xl font-bold text-gray-900">{{ report.statistics.lowest_score }}%</div>
+                        <div class="text-xl font-bold text-gray-900">{{ "%.2f"|format(report.statistics.lowest_score) }}%</div>
                         <div class="text-sm text-gray-500">Lowest Score</div>
                     </div>
                 </div>

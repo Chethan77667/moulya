@@ -117,7 +117,7 @@
                                     <div>Total</div>
                                 </div>
                                 <div class="text-center">
-                                    <div class="font-medium text-gray-900">{{ record.attendance_percentage }}%</div>
+                                    <div class="font-medium text-gray-900">{{ "%.2f"|format(record.attendance_percentage) }}%</div>
                                     <div>Percentage</div>
                                 </div>
                             </div>
@@ -147,7 +147,7 @@
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.present_classes }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.total_classes }}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ record.attendance_percentage }}%</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ "%.2f"|format(record.attendance_percentage) }}%</td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     {% if record.has_shortage %}
                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -260,35 +260,35 @@
                 
                 <!-- Desktop Table View -->
                 <div class="hidden sm:block overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 table-print">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider student-col">Student</th>
                                 {% for record in marks_report %}
                                     {% if loop.first %}
                                         {% if record.marks_summary.internal1.obtained > 0 %}
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal 1</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Internal 1</th>
                                         {% endif %}
                                         {% if record.marks_summary.internal2.obtained > 0 %}
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Internal 2</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Internal 2</th>
                                         {% endif %}
                                         {% if record.marks_summary.assignment.obtained > 0 %}
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignment</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Assignment</th>
                                         {% endif %}
                                         {% if record.marks_summary.project.obtained > 0 %}
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Project</th>
                                         {% endif %}
                                     {% endif %}
                                 {% endfor %}
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Overall %</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Overall %</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Status</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             {% for record in marks_report %}
                             <tr class="{% if record.has_deficiency %}bg-red-50{% endif %}">
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900">{{ record.student.name }}</div>
+                                <td class="px-4 py-3 whitespace-normal break-words student-col">
+                                    <div class="text-sm font-medium text-gray-900 break-words">{{ record.student.name }}</div>
                                     <div class="text-xs text-gray-500">{{ record.student.roll_number }}</div>
                                 </td>
                                 {% if record.marks_summary.internal1.obtained > 0 %}
@@ -351,8 +351,11 @@
                    class="inline-flex items-center justify-center bg-white text-black border border-black py-2 px-4 rounded-md hover:bg-gray-50 active:bg-gray-100 text-sm">
                     Manage Marks
                 </a>
-                <button onclick="window.print()" class="inline-flex items-center justify-center bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 text-sm">
-                    Print Report
+                <button onclick="printSection('attendance')" class="inline-flex items-center justify-center bg-gray-900 text-white py-2 px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 text-sm">
+                    Print Attendance
+                </button>
+                <button onclick="printSection('marks')" class="inline-flex items-center justify-center bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 text-sm">
+                    Print Marks
                 </button>
             </div>
         </div>
@@ -384,6 +387,29 @@ function showTab(tabName) {
     const activeTab = document.getElementById(tabName + '-tab');
     activeTab.classList.remove('border-transparent', 'text-gray-500');
     activeTab.classList.add('border-black', 'text-black');
+}
+
+// Print helpers: print only one section (attendance or marks)
+function printSection(section) {
+    try {
+        const attendance = document.getElementById('attendance-content');
+        const marks = document.getElementById('marks-content');
+        if (!attendance || !marks) { window.print(); return; }
+        // Hide the opposite section during print
+        if (section === 'attendance') {
+            marks.classList.add('print-hide');
+            attendance.classList.remove('print-hide');
+        } else if (section === 'marks') {
+            attendance.classList.add('print-hide');
+            marks.classList.remove('print-hide');
+        }
+        window.print();
+        // Restore after print
+        setTimeout(function(){
+            attendance.classList.remove('print-hide');
+            marks.classList.remove('print-hide');
+        }, 100);
+    } catch(e) { window.print(); }
 }
 
 // Search functionality for attendance cards
@@ -435,8 +461,17 @@ document.addEventListener('click', function(event) {
 @media print {
     nav, .no-print, .tab-button { display: none !important; }
     body { background: white !important; }
+    /* By default, show all content when printing, but if we mark a section, hide the other */
     .tab-content { display: block !important; }
     .hidden { display: block !important; }
+    /* Print helpers */
+    .print-only { display: block !important; }
+    .print-hide { display: none !important; }
 }
+
+/* Ensure header titles stay on one line and student column wraps names */
+.table-print th.whitespace-nowrap { white-space: nowrap; }
+.table-print td.student-col, .table-print th.student-col { max-width: 220px; }
+.table-print td.student-col div { word-break: break-word; white-space: normal; }
 </style>
 {% endblock %}

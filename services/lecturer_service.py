@@ -432,7 +432,24 @@ class LecturerService:
             
             for student in enrolled_students:
                 marks_summary = student.get_subject_marks_summary(subject_id)
-                overall_percentage = StudentMarks.get_student_overall_percentage(student.id, subject_id)
+                # Compute overall strictly from what is displayed in marks_summary so UI columns
+                # and the Overall % stay consistent (ignores assessments with no max set).
+                try:
+                    total_obtained = 0.0
+                    total_max = 0.0
+                    for key in ('internal1', 'internal2', 'assignment', 'project'):
+                        entry = marks_summary.get(key) if isinstance(marks_summary, dict) else None
+                        if not entry:
+                            continue
+                        obtained = entry.get('obtained') if isinstance(entry, dict) else None
+                        max_marks = entry.get('max') if isinstance(entry, dict) else None
+                        if max_marks not in (None, 0, 0.0):
+                            total_max += float(max_marks)
+                            total_obtained += float(obtained or 0)
+                    overall_percentage = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0.0
+                except Exception:
+                    # Fallback to DB-based computation if summary parsing fails
+                    overall_percentage = StudentMarks.get_student_overall_percentage(student.id, subject_id)
                 
                 report_data.append({
                     'student': student,

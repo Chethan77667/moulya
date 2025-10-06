@@ -140,7 +140,7 @@
                                 </div>
                                 <div class="text-right">
                                     <span class="text-sm font-bold">{{ mark.marks_obtained|format_mark }}/{{ mark.max_marks|format_mark }}</span>
-                                    <span class="text-sm text-gray-600 ml-2">({{ mark.percentage }}%)</span>
+                                    <span class="text-sm text-gray-600 ml-2">({{ "%.2f"|format(mark.percentage) }}%)</span>
                                     {% if mark.performance_status %}
                                     <div class="text-xs mt-1">
                                         {% if mark.performance_status in ['Excellent', 'Very Good'] %}
@@ -162,7 +162,7 @@
                             <div class="flex justify-between items-center">
                                 <span class="text-sm font-medium text-gray-900">Overall Performance:</span>
                                 <div class="text-right">
-                                    <span class="text-lg font-bold text-gray-900">{{ subject.overall_marks_percentage }}%</span>
+                                    <span class="text-lg font-bold text-gray-900">{{ "%.2f"|format(subject.overall_marks_percentage) }}%</span>
                                     {% if subject.overall_marks_percentage >= 90 %}
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 ml-2">Excellent</span>
                                     {% elif subject.overall_marks_percentage >= 75 %}
@@ -207,7 +207,7 @@
                             <div class="flex justify-between items-center">
                                 <span class="text-sm font-medium text-gray-900">Attendance Percentage:</span>
                                 <div class="text-right">
-                                    <span class="text-lg font-bold text-gray-900">{{ subject.attendance.attendance_percentage }}%</span>
+                                    <span class="text-lg font-bold text-gray-900">{{ "%.2f"|format(subject.attendance.attendance_percentage) }}%</span>
                                     {% if subject.attendance.attendance_percentage >= 75 %}
                                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 ml-2">Good</span>
                                     {% elif subject.attendance.attendance_percentage >= 50 %}
