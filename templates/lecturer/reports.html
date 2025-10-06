@@ -219,7 +219,7 @@
                                     <div class="bg-gray-50 p-2 rounded">
                                         <div class="font-medium text-gray-700">Internal 1</div>
                                         <div class="text-gray-900">
-                                            {{ record.marks_summary.internal1.obtained }}/{{ record.marks_summary.internal1.max }}
+                                            {{ record.marks_summary.internal1.obtained|format_mark }}/{{ record.marks_summary.internal1.max|format_mark }}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -227,7 +227,7 @@
                                     <div class="bg-gray-50 p-2 rounded">
                                         <div class="font-medium text-gray-700">Internal 2</div>
                                         <div class="text-gray-900">
-                                            {{ record.marks_summary.internal2.obtained }}/{{ record.marks_summary.internal2.max }}
+                                            {{ record.marks_summary.internal2.obtained|format_mark }}/{{ record.marks_summary.internal2.max|format_mark }}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -235,7 +235,7 @@
                                     <div class="bg-gray-50 p-2 rounded">
                                         <div class="font-medium text-gray-700">Assignment</div>
                                         <div class="text-gray-900">
-                                            {{ record.marks_summary.assignment.obtained }}/{{ record.marks_summary.assignment.max }}
+                                            {{ record.marks_summary.assignment.obtained|format_mark }}/{{ record.marks_summary.assignment.max|format_mark }}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -243,7 +243,7 @@
                                     <div class="bg-gray-50 p-2 rounded">
                                         <div class="font-medium text-gray-700">Project</div>
                                         <div class="text-gray-900">
-                                            {{ record.marks_summary.project.obtained }}/{{ record.marks_summary.project.max }}
+                                            {{ record.marks_summary.project.obtained|format_mark }}/{{ record.marks_summary.project.max|format_mark }}
                                         </div>
                                     </div>
                                     {% endif %}
@@ -293,22 +293,22 @@
                                 </td>
                                 {% if record.marks_summary.internal1.obtained > 0 %}
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                    {{ record.marks_summary.internal1.obtained }}/{{ record.marks_summary.internal1.max }}
+                                    {{ record.marks_summary.internal1.obtained|format_mark }}/{{ record.marks_summary.internal1.max|format_mark }}
                                 </td>
                                 {% endif %}
                                 {% if record.marks_summary.internal2.obtained > 0 %}
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                    {{ record.marks_summary.internal2.obtained }}/{{ record.marks_summary.internal2.max }}
+                                    {{ record.marks_summary.internal2.obtained|format_mark }}/{{ record.marks_summary.internal2.max|format_mark }}
                                 </td>
                                 {% endif %}
                                 {% if record.marks_summary.assignment.obtained > 0 %}
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                    {{ record.marks_summary.assignment.obtained }}/{{ record.marks_summary.assignment.max }}
+                                    {{ record.marks_summary.assignment.obtained|format_mark }}/{{ record.marks_summary.assignment.max|format_mark }}
                                 </td>
                                 {% endif %}
                                 {% if record.marks_summary.project.obtained > 0 %}
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                    {{ record.marks_summary.project.obtained }}/{{ record.marks_summary.project.max }}
+                                    {{ record.marks_summary.project.obtained|format_mark }}/{{ record.marks_summary.project.max|format_mark }}
                                 </td>
                                 {% endif %}
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{{ record.overall_percentage }}%</td>
