@@ -911,13 +911,44 @@ class ReportingService:
         ]))
         elements.extend([Spacer(1, 10), Paragraph('Marks Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
 
-        # Marks table (Student | Roll | Overall % | Status)
-        rows = [['Student', 'Roll Number', 'Overall %', 'Status']]
+        # Marks table (Student | Internal 1 | Internal 2 | Assignment | Project | Overall % | Status)
+        def _fmt_mark_pair(obt, mx):
+            try:
+                if obt is None or mx is None:
+                    return ''
+                fo = float(obt)
+                fm = float(mx)
+                obt_s = str(int(fo)) if fo.is_integer() else str(fo)
+                max_s = str(int(fm)) if fm.is_integer() else str(fm)
+                return f"{obt_s}/{max_s}"
+            except Exception:
+                try:
+                    return f"{obt}/{mx}"
+                except Exception:
+                    return ''
+
+        header = ['Student', 'Internal 1', 'Internal 2', 'Assignment', 'Project', 'Overall %', 'Status']
+        rows = [header]
         for record in marks_report or []:
             student = record['student']
+            ms = record.get('marks_summary', {})
+            def _cell(assess):
+                a = getattr(ms, assess, None) if hasattr(ms, assess) else (ms.get(assess) if isinstance(ms, dict) else None)
+                if not a:
+                    return ''
+                obtained = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else a.get('obtained') if isinstance(a, dict) else None
+                max_marks = getattr(a, 'max', None) if hasattr(a, 'max') else a.get('max') if isinstance(a, dict) else None
+                if obtained in (None, 0, '0', '0.0') and max_marks in (None, 0, '0', '0.0'):
+                    return ''
+                return _fmt_mark_pair(obtained, max_marks)
+
+            i1 = _cell('internal1')
+            i2 = _cell('internal2')
+            asg = _cell('assignment')
+            prj = _cell('project')
             overall = record.get('overall_percentage') or 0
             status = 'Good' if overall >= 50 else 'Deficient'
-            rows.append([student.name, student.roll_number, f"{overall}%", status])
+            rows.append([student.name, i1, i2, asg, prj, f"{overall}%", status])
         if len(rows) == 1:
             rows.append(['No data', '', '', ''])
         # Wrap text in table data
@@ -1093,7 +1124,7 @@ class ReportingService:
         spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
 
         # Table headers
-        headers = ['Student', 'Roll Number', 'Overall %', 'Status']
+        headers = ['Student', 'Roll Number', 'Internal 1', 'Internal 2', 'Assignment', 'Project', 'Overall %', 'Status']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=header_row, column=col, value=header)
             cell.font = Font(bold=True, color='FFFFFF')
@@ -1104,13 +1135,41 @@ class ReportingService:
         row = data_start_row
         for record in marks_report or []:
             student = record['student']
+            ms = record.get('marks_summary', {})
+            def _pair(assess):
+                a = getattr(ms, assess, None) if hasattr(ms, assess) else (ms.get(assess) if isinstance(ms, dict) else None)
+                if not a:
+                    return ''
+                obtained = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else a.get('obtained') if isinstance(a, dict) else None
+                max_marks = getattr(a, 'max', None) if hasattr(a, 'max') else a.get('max') if isinstance(a, dict) else None
+                try:
+                    if obtained is None or max_marks is None:
+                        return ''
+                    fo = float(obtained); fm = float(max_marks)
+                    obt_s = str(int(fo)) if fo.is_integer() else str(fo)
+                    max_s = str(int(fm)) if fm.is_integer() else str(fm)
+                    return f"{obt_s}/{max_s}"
+                except Exception:
+                    try:
+                        return f"{obtained}/{max_marks}"
+                    except Exception:
+                        return ''
+
+            i1 = _pair('internal1')
+            i2 = _pair('internal2')
+            asg = _pair('assignment')
+            prj = _pair('project')
             overall = record.get('overall_percentage') or 0
             status = 'Good' if overall >= 50 else 'Deficient'
-            
+
             ws.cell(row=row, column=1, value=student.name)
             ws.cell(row=row, column=2, value=student.roll_number)
-            ws.cell(row=row, column=3, value=f"{overall}%")
-            ws.cell(row=row, column=4, value=status)
+            ws.cell(row=row, column=3, value=i1)
+            ws.cell(row=row, column=4, value=i2)
+            ws.cell(row=row, column=5, value=asg)
+            ws.cell(row=row, column=6, value=prj)
+            ws.cell(row=row, column=7, value=f"{overall}%")
+            ws.cell(row=row, column=8, value=status)
             row += 1
         
         if not marks_report:
