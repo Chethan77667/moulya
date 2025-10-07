@@ -35,6 +35,177 @@ def dashboard():
         flash(f'Error loading dashboard: {str(e)}', 'error')
         return render_template('management/dashboard.html', stats={})
 
+@management_bp.route('/tracking')
+@login_required('management')
+def tracking_dashboard():
+    """Tracking Lecturer Updates (Marks & Attendance) page."""
+    try:
+        # Provide basic lookups for filters/selects
+        courses = Course.query.filter_by(is_active=True).order_by(Course.name).all()
+        subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+        lecturers = Lecturer.query.filter_by(is_active=True).order_by(Lecturer.name).all()
+        from datetime import datetime
+        now_dt = datetime.now()
+        return render_template(
+            'management/tracking.html',
+            courses=courses,
+            subjects=subjects,
+            lecturers=lecturers,
+            current_month=now_dt.month,
+            current_year=now_dt.year,
+        )
+    except Exception as e:
+        flash(f'Error loading tracking page: {str(e)}', 'error')
+        from datetime import datetime
+        now_dt = datetime.now()
+        return render_template(
+            'management/tracking.html',
+            courses=[],
+            subjects=[],
+            lecturers=[],
+            current_month=now_dt.month,
+            current_year=now_dt.year,
+        )
+
+@management_bp.route('/tracking/marks')
+@login_required('management')
+def tracking_marks():
+    """Return updated vs pending lecturers for marks by assessment/filters."""
+    try:
+        assessment_type = request.args.get('assessment_type')
+        course_id = request.args.get('course_id', type=int)
+        subject_id = request.args.get('subject_id', type=int)
+        lecturer_id = request.args.get('lecturer_id', type=int)
+
+        result = ManagementService.get_marks_tracking(assessment_type, course_id, subject_id, lecturer_id)
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error fetching marks tracking: {str(e)}'}), 500
+
+@management_bp.route('/tracking/attendance')
+@login_required('management')
+def tracking_attendance():
+    """Return updated vs pending lecturers for attendance by month/year/filters."""
+    try:
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        course_id = request.args.get('course_id', type=int)
+        subject_id = request.args.get('subject_id', type=int)
+        lecturer_id = request.args.get('lecturer_id', type=int)
+
+        result = ManagementService.get_attendance_tracking(month, year, course_id, subject_id, lecturer_id)
+        return jsonify({'success': True, **result})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error fetching attendance tracking: {str(e)}'}), 500
+
+@management_bp.route('/tracking/export/marks')
+@login_required('management')
+def tracking_export_marks():
+    """Export tracking list (marks) to Excel."""
+    try:
+        from flask import make_response
+        assessment_type = request.args.get('assessment_type')
+        course_id = request.args.get('course_id', type=int)
+        subject_id = request.args.get('subject_id', type=int)
+        lecturer_id = request.args.get('lecturer_id', type=int)
+        status = request.args.get('status')  # 'updated' or 'pending'
+
+        data = ManagementService.get_marks_tracking(assessment_type, course_id, subject_id, lecturer_id)
+        wb = ExcelExportService.create_workbook()
+        ws = wb.active
+        ws.title = 'Marks Tracking'
+
+        # Remove the "Pending Items" column and always include a Status column
+        if status in ['updated', 'pending']:
+            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+        else:
+            title_suffix = None
+        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Assessment', 'Status']
+        ExcelExportService.style_header_row(ws, 1, headers)
+
+        row = 2
+        keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
+        for status_key in keys_to_iterate:
+            for item in data.get(status_key, []):
+                col = 1
+                ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
+                ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
+                ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
+                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
+                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
+                ws.cell(row=row, column=col, value=item.get('assessment_type')); col += 1
+                # Status as the last column
+                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
+                row += 1
+
+        ExcelExportService.auto_adjust_columns(ws)
+        excel_data = ExcelExportService.workbook_to_bytes(wb)
+        response = make_response(excel_data)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        fname = 'marks_tracking'
+        if title_suffix:
+            fname += f'_{title_suffix.lower()}'
+        fname += '.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename={fname}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting marks tracking: {str(e)}', 'error')
+        return redirect(url_for('management.tracking_dashboard'))
+
+@management_bp.route('/tracking/export/attendance')
+@login_required('management')
+def tracking_export_attendance():
+    """Export tracking list (attendance) to Excel."""
+    try:
+        from flask import make_response
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        course_id = request.args.get('course_id', type=int)
+        subject_id = request.args.get('subject_id', type=int)
+        lecturer_id = request.args.get('lecturer_id', type=int)
+        status = request.args.get('status')  # 'updated' or 'pending'
+
+        data = ManagementService.get_attendance_tracking(month, year, course_id, subject_id, lecturer_id)
+        wb = ExcelExportService.create_workbook()
+        ws = wb.active
+        ws.title = 'Attendance Tracking'
+
+        if status in ['updated', 'pending']:
+            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+        else:
+            title_suffix = None
+        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Month', 'Year', 'Status']
+        ExcelExportService.style_header_row(ws, 1, headers)
+
+        row = 2
+        keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
+        for status_key in keys_to_iterate:
+            for item in data.get(status_key, []):
+                col = 1
+                ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
+                ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
+                ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
+                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
+                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
+                ws.cell(row=row, column=col, value=item.get('month')); col += 1
+                ws.cell(row=row, column=col, value=item.get('year')); col += 1
+                # Status last
+                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
+                row += 1
+
+        ExcelExportService.auto_adjust_columns(ws)
+        excel_data = ExcelExportService.workbook_to_bytes(wb)
+        response = make_response(excel_data)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        fname = 'attendance_tracking'
+        if title_suffix:
+            fname += f'_{title_suffix.lower()}'
+        fname += '.xlsx'
+        response.headers['Content-Disposition'] = f'attachment; filename={fname}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting attendance tracking: {str(e)}', 'error')
+        return redirect(url_for('management.tracking_dashboard'))
 @management_bp.route('/lecturers')
 @login_required('management')
 def lecturers():

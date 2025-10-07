@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Tracking Lecturer Updates - Academic Record Management System{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Tracking Lecturer Updates</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ current_user.username }}</span>
+                    <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="text-sm text-gray-600 hover:text-black">Logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-4 sm:px-6">
+                <div class="flex flex-wrap gap-3 mb-4 justify-center">
+                    <button id="tab-marks" class="px-4 py-2 rounded-md bg-black text-white">Marks</button>
+                    <button id="tab-attendance" class="px-4 py-2 rounded-md bg-white text-black border border-black">Attendance</button>
+                </div>
+
+                <!-- Marks Filters -->
+                <div id="marks-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Assessment Type</label>
+                        <select id="marks-assessment" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">Any</option>
+                            <option value="internal1">Internal 1</option>
+                            <option value="internal2">Internal 2</option>
+                            <option value="assignment">Assignment</option>
+                            <option value="project">Project</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Course</label>
+                        <select id="marks-course" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for c in courses %}<option value="{{ c.id }}">{{ c.code }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Subject</label>
+                        <select id="marks-subject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} - {{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Lecturer</label>
+                        <select id="marks-lecturer" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for l in lecturers %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="marks-actions" class="flex items-center gap-3 mb-4">
+                    <button id="marks-refresh" class="px-4 py-2 rounded-md bg-gray-800 text-white">OK</button>
+                    <a id="marks-export" href="#" class="px-4 py-2 rounded-md bg-green-600 text-white">Export Excel</a>
+                </div>
+
+                <div id="marks-results" class="mb-8">
+                    <div class="flex gap-2 mb-3">
+                        <button id="marks-tab-updated" class="px-3 py-1 rounded-md bg-black text-white text-sm">Updated</button>
+                        <button id="marks-tab-pending" class="px-3 py-1 rounded-md bg-white text-black border border-black text-sm">Pending</button>
+                    </div>
+                    <div id="marks-updated-wrap" class="space-y-2"></div>
+                    <div id="marks-pending-wrap" class="space-y-2 hidden"></div>
+                </div>
+
+                <!-- Attendance Filters -->
+                <div id="att-filters" class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Month</label>
+                        <select id="att-month" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            {% set month_names = ['January','February','March','April','May','June','July','August','September','October','November','December'] %}
+                            {% for idx in range(1,13) %}
+                                <option value="{{ idx }}" {% if idx == current_month %}selected{% endif %}>{{ month_names[idx-1] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Year</label>
+                        <input id="att-year" type="number" value="{{ current_year }}" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm"/>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Course</label>
+                        <select id="att-course" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for c in courses %}<option value="{{ c.id }}">{{ c.code }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Subject</label>
+                        <select id="att-subject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} - {{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Lecturer</label>
+                        <select id="att-lecturer" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
+                            <option value="">All</option>
+                            {% for l in lecturers %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="att-actions" class="flex items-center gap-3 mb-4 hidden">
+                    <button id="att-refresh" class="px-4 py-2 rounded-md bg-gray-800 text-white">OK</button>
+                    <a id="att-export" href="#" class="px-4 py-2 rounded-md bg-green-600 text-white">Export Excel</a>
+                </div>
+
+                <div id="att-results" class="mb-8 hidden">
+                    <div class="flex gap-2 mb-3">
+                        <button id="att-tab-updated" class="px-3 py-1 rounded-md bg-black text-white text-sm">Updated</button>
+                        <button id="att-tab-pending" class="px-3 py-1 rounded-md bg-white text-black border border-black text-sm">Pending</button>
+                    </div>
+                    <div id="att-updated-wrap" class="space-y-2"></div>
+                    <div id="att-pending-wrap" class="space-y-2 hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function qs(id){return document.getElementById(id)}
+function buildQuery(params){
+  const p = new URLSearchParams()
+  Object.entries(params).forEach(([k,v])=>{ if(v!==undefined && v!==null && v!=='') p.append(k,v) })
+  return p.toString()
+}
+
+// Tabs
+qs('tab-marks').addEventListener('click', ()=>{
+  qs('tab-marks').className='px-4 py-2 rounded-md bg-black text-white'
+  qs('tab-attendance').className='px-4 py-2 rounded-md bg-white text-black border border-black'
+  qs('marks-filters').classList.remove('hidden'); qs('marks-actions').classList.remove('hidden'); qs('marks-results').classList.remove('hidden')
+  qs('att-filters').classList.add('hidden'); qs('att-actions').classList.add('hidden'); qs('att-results').classList.add('hidden')
+})
+qs('tab-attendance').addEventListener('click', ()=>{
+  qs('tab-attendance').className='px-4 py-2 rounded-md bg-black text-white'
+  qs('tab-marks').className='px-4 py-2 rounded-md bg-white text-black border border-black'
+  qs('att-filters').classList.remove('hidden'); qs('att-actions').classList.remove('hidden'); qs('att-results').classList.remove('hidden')
+  qs('marks-filters').classList.add('hidden'); qs('marks-actions').classList.add('hidden'); qs('marks-results').classList.add('hidden')
+})
+
+function renderList(containerId, items){
+  const c = qs(containerId)
+  c.innerHTML = ''
+  if(!items || items.length===0){ c.innerHTML = '<div class="text-sm text-gray-500">No data</div>'; return }
+  items.forEach(it=>{
+    const div = document.createElement('div')
+    div.className = 'border border-gray-200 rounded-md p-3 text-sm bg-white'
+    div.innerHTML = `<div class="font-medium text-gray-900">${it.lecturer_name || 'N/A'}</div>
+      <div class="text-gray-700">Course: <span class="font-medium">${it.course_code || 'N/A'}</span></div>
+      <div class="text-gray-700">Class: <span class="font-medium">${it.class_display || 'N/A'}</span></div>
+      <div class="text-gray-600">Subject: ${it.subject_code || ''} ${it.subject_name || ''}</div>`
+    c.appendChild(div)
+  })
+}
+
+async function fetchMarks(){
+  const params = {
+    assessment_type: qs('marks-assessment').value,
+    course_id: qs('marks-course').value,
+    subject_id: qs('marks-subject').value,
+    lecturer_id: qs('marks-lecturer').value,
+  }
+  const res = await fetch(`/management/tracking/marks?${buildQuery(params)}`)
+  const data = await res.json()
+  if(data.success){
+    renderList('marks-updated-wrap', data.updated)
+    renderList('marks-pending-wrap', data.pending)
+    const q = buildQuery(params)
+    // Use active tab for export filter
+    const active = !qs('marks-pending-wrap').classList.contains('hidden') ? 'pending' : 'updated'
+    qs('marks-export').href = `/management/tracking/export/marks?${q}&status=${active}`
+  }
+}
+qs('marks-refresh').addEventListener('click', fetchMarks)
+
+async function fetchAttendance(){
+  const params = {
+    month: qs('att-month').value,
+    year: qs('att-year').value,
+    course_id: qs('att-course').value,
+    subject_id: qs('att-subject').value,
+    lecturer_id: qs('att-lecturer').value,
+  }
+  const res = await fetch(`/management/tracking/attendance?${buildQuery(params)}`)
+  const data = await res.json()
+  if(data.success){
+    renderList('att-updated-wrap', data.updated)
+    renderList('att-pending-wrap', data.pending)
+    const q = buildQuery(params)
+    const active = !qs('att-pending-wrap').classList.contains('hidden') ? 'pending' : 'updated'
+    qs('att-export').href = `/management/tracking/export/attendance?${q}&status=${active}`
+  }
+}
+qs('att-refresh').addEventListener('click', fetchAttendance)
+
+// Toggle Updated/Pending (Marks)
+qs('marks-tab-updated').addEventListener('click', ()=>{
+  qs('marks-tab-updated').className='px-3 py-1 rounded-md bg-black text-white text-sm'
+  qs('marks-tab-pending').className='px-3 py-1 rounded-md bg-white text-black border border-black text-sm'
+  qs('marks-updated-wrap').classList.remove('hidden')
+  qs('marks-pending-wrap').classList.add('hidden')
+  // Do not auto-fetch; export link will refresh on next OK
+})
+qs('marks-tab-pending').addEventListener('click', ()=>{
+  qs('marks-tab-pending').className='px-3 py-1 rounded-md bg-black text-white text-sm'
+  qs('marks-tab-updated').className='px-3 py-1 rounded-md bg-white text-black border border-black text-sm'
+  qs('marks-updated-wrap').classList.add('hidden')
+  qs('marks-pending-wrap').classList.remove('hidden')
+  // Do not auto-fetch; export link will refresh on next OK
+})
+
+// Toggle Updated/Pending (Attendance)
+qs('att-tab-updated').addEventListener('click', ()=>{
+  qs('att-tab-updated').className='px-3 py-1 rounded-md bg-black text-white text-sm'
+  qs('att-tab-pending').className='px-3 py-1 rounded-md bg-white text-black border border-black text-sm'
+  qs('att-updated-wrap').classList.remove('hidden')
+  qs('att-pending-wrap').classList.add('hidden')
+  // Do not auto-fetch; export link will refresh on next OK
+})
+qs('att-tab-pending').addEventListener('click', ()=>{
+  qs('att-tab-pending').className='px-3 py-1 rounded-md bg-black text-white text-sm'
+  qs('att-tab-updated').className='px-3 py-1 rounded-md bg-white text-black border border-black text-sm'
+  qs('att-updated-wrap').classList.add('hidden')
+  qs('att-pending-wrap').classList.remove('hidden')
+  // Do not auto-fetch; export link will refresh on next OK
+})
+</script>
+{% endblock %}
+
+

@@ -1086,3 +1086,124 @@ class ManagementService:
         except Exception as e:
             db.session.rollback()
             return False, f"Error deleting course: {str(e)}"
+
+    # ============================ TRACKING QUERIES ============================
+    @staticmethod
+    def _course_and_class_from_subject(subject):
+        """Best-effort course short code and class/year display from subject/course details."""
+        course_code = None
+        class_display = None
+        try:
+            if subject and subject.course:
+                course_code = subject.course.code
+                if getattr(subject, 'year', None):
+                    class_display = f"Year {subject.year}"
+        except Exception:
+            pass
+        return course_code, class_display
+
+    @staticmethod
+    def get_marks_tracking(assessment_type=None, course_id=None, subject_id=None, lecturer_id=None):
+        """Compute lecturers who updated vs pending marks for given filters.
+
+        Returns:
+            { 'updated': [...], 'pending': [...] }
+        """
+        from models.assignments import SubjectAssignment
+        from models.marks import StudentMarks
+        from datetime import datetime
+
+        current_year = datetime.now().year
+        q = SubjectAssignment.query.filter_by(is_active=True, academic_year=current_year)
+        if course_id:
+            q = q.join(Subject).filter(Subject.course_id == course_id)
+        if subject_id:
+            q = q.filter(SubjectAssignment.subject_id == subject_id)
+        if lecturer_id:
+            q = q.filter(SubjectAssignment.lecturer_id == lecturer_id)
+
+        assignments = q.all()
+        updated, pending = [], []
+
+        for a in assignments:
+            subj = a.subject
+            lect = a.lecturer
+            if not subj or not lect:
+                continue
+
+            marks_q = StudentMarks.query.filter(StudentMarks.subject_id == subj.id)
+            if assessment_type:
+                marks_q = marks_q.filter(StudentMarks.assessment_type == assessment_type)
+            has_any = marks_q.first() is not None
+
+            course_code, class_display = ManagementService._course_and_class_from_subject(subj)
+            base_item = {
+                'lecturer_name': lect.name,
+                'subject_name': subj.name,
+                'subject_code': subj.code,
+                'course_code': course_code,
+                'class_display': class_display,
+                'assessment_type': assessment_type or 'Any',
+            }
+
+            if has_any:
+                updated.append(base_item)
+            else:
+                try:
+                    pending_count = subj.get_enrolled_students_count()
+                except Exception:
+                    pending_count = None
+                pending.append({**base_item, 'pending_count': pending_count})
+
+        return {'updated': updated, 'pending': pending}
+
+    @staticmethod
+    def get_attendance_tracking(month, year, course_id=None, subject_id=None, lecturer_id=None):
+        """Compute lecturers who updated vs pending attendance summaries for a given month/year."""
+        from models.assignments import SubjectAssignment
+        from models.attendance import MonthlyAttendanceSummary
+        from datetime import datetime
+
+        today = datetime.now()
+        m = month or today.month
+        y = year or today.year
+
+        # Filter assignments for the same calendar year as a best-effort for academic year
+        q = SubjectAssignment.query.filter_by(is_active=True, academic_year=y)
+        if course_id:
+            q = q.join(Subject).filter(Subject.course_id == course_id)
+        if subject_id:
+            q = q.filter(SubjectAssignment.subject_id == subject_id)
+        if lecturer_id:
+            q = q.filter(SubjectAssignment.lecturer_id == lecturer_id)
+
+        assignments = q.all()
+        updated, pending = [], []
+
+        for a in assignments:
+            subj = a.subject
+            lect = a.lecturer
+            if not subj or not lect:
+                continue
+
+            summary = MonthlyAttendanceSummary.query.filter_by(
+                subject_id=subj.id, lecturer_id=lect.id, month=m, year=y
+            ).first()
+
+            course_code, class_display = ManagementService._course_and_class_from_subject(subj)
+            item = {
+                'lecturer_name': lect.name,
+                'subject_name': subj.name,
+                'subject_code': subj.code,
+                'course_code': course_code,
+                'class_display': class_display,
+                'month': m,
+                'year': y,
+                'has_summary': bool(summary)
+            }
+            if summary:
+                updated.append(item)
+            else:
+                pending.append(item)
+
+        return {'updated': updated, 'pending': pending}
