@@ -239,6 +239,7 @@
 
         <!-- Existing Marks Overview - Mobile Optimized -->
         {% if students and existing_marks %}
+        {% set _per = per_subject_overall if per_subject_overall is defined else {} %}
         <div class="bg-white shadow overflow-hidden sm:rounded-md">
             <div class="px-4 py-4 sm:py-5 sm:px-6">
                 <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Marks Overview</h3>
@@ -261,7 +262,7 @@
                                 <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
                             </div>
                             <div class="ml-2 text-right">
-                                <div class="text-sm font-medium text-gray-900">{{ student.get_overall_marks_percentage() }}%</div>
+                                <div class="text-sm font-medium text-gray-900">{{ _per.get(student.id, 0) }}%</div>
                                 <div class="text-xs text-gray-500">Overall</div>
                             </div>
                         </div>
@@ -377,7 +378,7 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                <span class="font-medium">{{ "%.2f"|format(student.get_overall_marks_percentage()) }}%</span>
+                                <span class="font-medium">{{ "%.2f"|format(_per.get(student.id, 0)) }}%</span>
                             </td>
                         </tr>
                         {% endfor %}

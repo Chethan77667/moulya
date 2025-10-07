@@ -547,20 +547,30 @@ def marks_management(subject_id):
         students = LecturerService.get_subject_students(subject_id, lecturer_id)
         subject = Subject.query.get_or_404(subject_id)
         
-        # Get existing marks for students
+        # Get existing marks for students and compute per-subject overall %
         from models.marks import StudentMarks
         existing_marks = {}
+        per_subject_overall = {}
         for student in students:
             marks = StudentMarks.query.filter_by(
                 student_id=student.id,
                 subject_id=subject_id
             ).all()
+            # map assessment_type -> mark row
             existing_marks[student.id] = {mark.assessment_type: mark for mark in marks}
+            # compute overall for this subject only
+            if marks:
+                total_obtained = sum(mark.marks_obtained for mark in marks)
+                total_max = sum(mark.max_marks for mark in marks)
+                per_subject_overall[student.id] = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0.0
+            else:
+                per_subject_overall[student.id] = 0.0
         
         return render_template('lecturer/marks.html', 
                              subject=subject, 
                              students=students,
-                             existing_marks=existing_marks)
+                             existing_marks=existing_marks,
+                             per_subject_overall=per_subject_overall)
     except Exception as e:
         flash(f'Error loading marks: {str(e)}', 'error')
         return redirect(url_for('lecturer.subjects'))
