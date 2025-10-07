@@ -9,7 +9,7 @@
             <div class="flex justify-between h-16">
                 <div class="flex items-center space-x-4">
                     <a href="{{ url_for('management.dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Dashboard</a>
-                    <h1 class="text-xl font-semibold text-gray-900">Tracking Lecturer Updates</h1>
+                    <h1 class="text-xl font-semibold text-gray-900">Track Lecturer Updates</h1>
                 </div>
                 <div class="flex items-center space-x-4">
                     <span class="text-sm text-gray-700">{{ current_user.username }}</span>
@@ -35,8 +35,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Assessment Type</label>
                         <select id="marks-assessment" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
-                            <option value="">Any</option>
-                            <option value="internal1">Internal 1</option>
+                            <option value="internal1" selected>Internal 1</option>
                             <option value="internal2">Internal 2</option>
                             <option value="assignment">Assignment</option>
                             <option value="project">Project</option>
@@ -88,6 +87,7 @@
                             {% for idx in range(1,13) %}
                                 <option value="{{ idx }}" {% if idx == current_month %}selected{% endif %}>{{ month_names[idx-1] }}</option>
                             {% endfor %}
+                            <option value="deputation">DEPUTATION</option>
                         </select>
                     </div>
                     <div>
@@ -157,19 +157,48 @@ qs('tab-attendance').addEventListener('click', ()=>{
   qs('marks-filters').classList.add('hidden'); qs('marks-actions').classList.add('hidden'); qs('marks-results').classList.add('hidden')
 })
 
-function renderList(containerId, items){
+function renderTable(containerId, items, statusLabel, view){
   const c = qs(containerId)
   c.innerHTML = ''
   if(!items || items.length===0){ c.innerHTML = '<div class="text-sm text-gray-500">No data</div>'; return }
-  items.forEach(it=>{
-    const div = document.createElement('div')
-    div.className = 'border border-gray-200 rounded-md p-3 text-sm bg-white'
-    div.innerHTML = `<div class="font-medium text-gray-900">${it.lecturer_name || 'N/A'}</div>
-      <div class="text-gray-700">Course: <span class="font-medium">${it.course_code || 'N/A'}</span></div>
-      <div class="text-gray-700">Class: <span class="font-medium">${it.class_display || 'N/A'}</span></div>
-      <div class="text-gray-600">Subject: ${it.subject_code || ''} ${it.subject_name || ''}</div>`
-    c.appendChild(div)
+  const table = document.createElement('table')
+  table.className = 'min-w-full border border-gray-200 text-sm bg-white'
+  const thead = document.createElement('thead')
+  const trHead = document.createElement('tr')
+  const headers = view === 'marks'
+    ? ['Lecturer','Subject','Code','Course','Class/Year','Assessment','Status']
+    : ['Lecturer','Subject','Code','Course','Class/Year','Month','Year','Status']
+  headers.forEach(h=>{
+    const th = document.createElement('th')
+    th.className = 'border-b border-gray-200 px-3 py-2 text-left bg-gray-50'
+    th.textContent = h
+    trHead.appendChild(th)
   })
+  thead.appendChild(trHead)
+  table.appendChild(thead)
+  const tbody = document.createElement('tbody')
+  items.forEach(it=>{
+    const tr = document.createElement('tr')
+    tr.innerHTML = view === 'marks'
+      ? `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
+         <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
+         <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
+         <td class="px-3 py-2 border-b">${it.course_code || ''}</td>
+         <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
+         <td class="px-3 py-2 border-b">${it.assessment_type || ''}</td>
+         <td class="px-3 py-2 border-b">${statusLabel}</td>`
+      : `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
+         <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
+         <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
+         <td class="px-3 py-2 border-b">${it.course_code || ''}</td>
+         <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
+         <td class="px-3 py-2 border-b">${it.month || ''}</td>
+         <td class="px-3 py-2 border-b">${it.year || ''}</td>
+         <td class="px-3 py-2 border-b">${statusLabel}</td>`
+    tbody.appendChild(tr)
+  })
+  table.appendChild(tbody)
+  c.appendChild(table)
 }
 
 async function fetchMarks(){
@@ -182,8 +211,8 @@ async function fetchMarks(){
   const res = await fetch(`/management/tracking/marks?${buildQuery(params)}`)
   const data = await res.json()
   if(data.success){
-    renderList('marks-updated-wrap', data.updated)
-    renderList('marks-pending-wrap', data.pending)
+    renderTable('marks-updated-wrap', data.updated, 'Updated', 'marks')
+    renderTable('marks-pending-wrap', data.pending, 'Pending', 'marks')
     const q = buildQuery(params)
     // Use active tab for export filter
     const active = !qs('marks-pending-wrap').classList.contains('hidden') ? 'pending' : 'updated'
@@ -193,18 +222,21 @@ async function fetchMarks(){
 qs('marks-refresh').addEventListener('click', fetchMarks)
 
 async function fetchAttendance(){
+  const monthVal = qs('att-month').value
+  const isDep = monthVal === 'deputation'
   const params = {
-    month: qs('att-month').value,
+    month: isDep ? '' : monthVal,
     year: qs('att-year').value,
     course_id: qs('att-course').value,
     subject_id: qs('att-subject').value,
     lecturer_id: qs('att-lecturer').value,
+    deputation: isDep ? '1' : '',
   }
   const res = await fetch(`/management/tracking/attendance?${buildQuery(params)}`)
   const data = await res.json()
   if(data.success){
-    renderList('att-updated-wrap', data.updated)
-    renderList('att-pending-wrap', data.pending)
+    renderTable('att-updated-wrap', data.updated, 'Updated', 'attendance')
+    renderTable('att-pending-wrap', data.pending, 'Pending', 'attendance')
     const q = buildQuery(params)
     const active = !qs('att-pending-wrap').classList.contains('hidden') ? 'pending' : 'updated'
     qs('att-export').href = `/management/tracking/export/attendance?${q}&status=${active}`
