@@ -948,9 +948,11 @@ class ReportingService:
             prj = _cell('project')
             overall = record.get('overall_percentage') or 0
             status = 'Good' if overall >= 50 else 'Deficient'
-            rows.append([student.name, i1, i2, asg, prj, f"{overall}%", status])
+            # Combine name and roll in one cell (two lines)
+            combined_student = f"{student.name}\n{getattr(student, 'roll_number', '') or ''}".strip()
+            rows.append([combined_student, i1, i2, asg, prj, f"{overall}%", status])
         if len(rows) == 1:
-            rows.append(['No data', '', '', ''])
+            rows.append(['No data', '', '', '', '', '', ''])
         # Wrap text in table data
         rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
 

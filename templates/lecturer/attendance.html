@@ -820,7 +820,27 @@ document.addEventListener('DOMContentLoaded', function() {
             if (month === 'deputation') {
                 // Real-time validation for deputation
                 let deputationValue = parseInt(this.value || '0');
-                if (isNaN(deputationValue) || deputationValue < 0) deputationValue = 0;
+                if (isNaN(deputationValue)) deputationValue = 0;
+                // Negative not allowed -> snap to 0 and show popup once per event
+                if (deputationValue < 0) {
+                    this.value = '0';
+                    this.classList.add('border-red-500');
+                    // Find student details for context
+                    let msg = 'Negative deputation is not allowed. Value reset to 0.';
+                    try {
+                        const row = this.closest('.monthly-student-row');
+                        const nameEl = row ? row.querySelector('p.text-sm') : null;
+                        const rollEl = row ? row.querySelector('p.text-xs') : null;
+                        const name = nameEl ? nameEl.textContent.trim() : '';
+                        const roll = rollEl ? rollEl.textContent.trim() : '';
+                        if (name || roll) {
+                            msg = `${name}${roll ? ' (' + roll + ')' : ''}: Negative deputation is not allowed. Value reset to 0.`;
+                        }
+                    } catch(e) {}
+                    showValidationError('Invalid Deputation Value', msg);
+                    setTimeout(() => this.classList.remove('border-red-500'), 2000);
+                    return;
+                }
                 const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
                 
                 // Basic validation: deputation should not exceed total classes
@@ -880,7 +900,26 @@ document.addEventListener('DOMContentLoaded', function() {
 function validateDeputationInput(inputElement) {
     const deputationValue = parseInt(inputElement.value || '0');
     const studentId = parseInt(inputElement.name.replace('deputation_', ''));
-    
+    // Negative values not allowed
+    if (deputationValue < 0) {
+        // Include student details for easier debugging
+        let msg = 'Negative deputation is not allowed. Value reset to 0.';
+        try {
+            const row = inputElement.closest('.monthly-student-row');
+            const nameEl = row ? row.querySelector('p.text-sm') : null;
+            const rollEl = row ? row.querySelector('p.text-xs') : null;
+            const name = nameEl ? nameEl.textContent.trim() : '';
+            const roll = rollEl ? rollEl.textContent.trim() : '';
+            if (name || roll) {
+                msg = `${name}${roll ? ' (' + roll + ')' : ''}: Negative deputation is not allowed. Value reset to 0.`;
+            }
+        } catch(e) {}
+        showValidationError('Invalid Deputation Value', msg);
+        inputElement.value = '0';
+        inputElement.classList.add('border-red-500');
+        setTimeout(() => { inputElement.classList.remove('border-red-500'); }, 3000);
+        return false;
+    }
     // Get total classes from the readonly field
     const totalClasses = parseInt(document.getElementById('monthly_total_classes').value || '0');
     const cumPresent = getCumulativePresentForStudent(studentId);
@@ -1251,6 +1290,18 @@ function validateDeputationSubmission() {
         const studentId = match ? parseInt(match[1]) : null;
         if (!studentId) return;
         const value = parseInt((input.value || '0'), 10) || 0;
+        if (value < 0) {
+            const row = input.closest('.monthly-student-row');
+            const nameEl = row ? row.querySelector('p.text-sm') : null;
+            const rollEl = row ? row.querySelector('p.text-xs') : null;
+            const name = nameEl ? nameEl.textContent.trim() : `Student ${studentId}`;
+            const roll = rollEl ? rollEl.textContent.trim() : '';
+            firstErrorMessage = `${name} ${roll ? '(' + roll + ')' : ''}: Negative deputation is not allowed. Value must be 0 or more.`;
+            invalid = true;
+            firstBadInput = input;
+            input.classList.add('border-red-500');
+            return;
+        }
         const cumPresent = getCumulativePresentForStudent(studentId);
         const maxAllowed = Math.max(0, totalClasses - cumPresent);
         if (value > maxAllowed) {
