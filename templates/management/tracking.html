@@ -165,9 +165,12 @@ function renderTable(containerId, items, statusLabel, view){
   table.className = 'min-w-full border border-gray-200 text-sm bg-white'
   const thead = document.createElement('thead')
   const trHead = document.createElement('tr')
+  const isDep = (view === 'attendance') && (qs('att-month')?.value === 'deputation')
   const headers = view === 'marks'
     ? ['Lecturer','Subject','Code','Course','Class/Year','Assessment','Status']
-    : ['Lecturer','Subject','Code','Course','Class/Year','Month','Year','Status']
+    : (isDep
+        ? ['Lecturer','Subject','Code','Course','Class/Year','Status']
+        : ['Lecturer','Subject','Code','Course','Class/Year','Month','Year','Status'])
   headers.forEach(h=>{
     const th = document.createElement('th')
     th.className = 'border-b border-gray-200 px-3 py-2 text-left bg-gray-50'
@@ -187,14 +190,21 @@ function renderTable(containerId, items, statusLabel, view){
          <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
          <td class="px-3 py-2 border-b">${it.assessment_type || ''}</td>
          <td class="px-3 py-2 border-b">${statusLabel}</td>`
-      : `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
+      : (isDep
+        ? `<td class=\"px-3 py-2 border-b\">${it.lecturer_name || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${it.subject_name || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${it.subject_code || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${it.course_code || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${it.class_display || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${statusLabel}</td>`
+        : `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
          <td class="px-3 py-2 border-b">${it.course_code || ''}</td>
          <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
          <td class="px-3 py-2 border-b">${it.month || ''}</td>
          <td class="px-3 py-2 border-b">${it.year || ''}</td>
-         <td class="px-3 py-2 border-b">${statusLabel}</td>`
+         <td class="px-3 py-2 border-b">${statusLabel}</td>`)
     tbody.appendChild(tr)
   })
   table.appendChild(tbody)

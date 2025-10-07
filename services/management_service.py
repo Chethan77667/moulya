@@ -1158,10 +1158,14 @@ class ManagementService:
         return {'updated': updated, 'pending': pending}
 
     @staticmethod
-    def get_attendance_tracking(month, year, course_id=None, subject_id=None, lecturer_id=None):
-        """Compute lecturers who updated vs pending attendance summaries for a given month/year."""
+    def get_attendance_tracking(month, year, course_id=None, subject_id=None, lecturer_id=None, deputation=False):
+        """Compute lecturers who updated vs pending attendance summaries for a given month/year.
+
+        If deputation is True, only include subjects/lecturers that have deputation activity
+        (MonthlyStudentAttendance.deputation_count > 0) for the month/year.
+        """
         from models.assignments import SubjectAssignment
-        from models.attendance import MonthlyAttendanceSummary
+        from models.attendance import MonthlyAttendanceSummary, MonthlyStudentAttendance
         from datetime import datetime
 
         today = datetime.now()
@@ -1189,6 +1193,15 @@ class ManagementService:
             summary = MonthlyAttendanceSummary.query.filter_by(
                 subject_id=subj.id, lecturer_id=lect.id, month=m, year=y
             ).first()
+
+            # Deputation filter: ensure there exists any monthly student attendance
+            # record with deputation_count > 0 for this subject/lecturer/month/year
+            if deputation:
+                dep_exists = MonthlyStudentAttendance.query.filter_by(
+                    subject_id=subj.id, lecturer_id=lect.id, month=m, year=y
+                ).filter(MonthlyStudentAttendance.deputation_count > 0).first() is not None
+                if not dep_exists:
+                    continue
 
             course_code, class_display = ManagementService._course_and_class_from_subject(subj)
             item = {

@@ -92,10 +92,11 @@ def tracking_attendance():
         course_id = request.args.get('course_id', type=int)
         subject_id = request.args.get('subject_id', type=int)
         lecturer_id = request.args.get('lecturer_id', type=int)
-        deputation = request.args.get('deputation')  # optional flag; currently informational only
+        deputation = request.args.get('deputation')
 
-        result = ManagementService.get_attendance_tracking(month, year, course_id, subject_id, lecturer_id)
-        # Echo the deputation flag back for UI/reference without changing existing behavior
+        result = ManagementService.get_attendance_tracking(
+            month, year, course_id, subject_id, lecturer_id, bool(deputation)
+        )
         return jsonify({'success': True, 'deputation': bool(deputation), **result})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error fetching attendance tracking: {str(e)}'}), 500
