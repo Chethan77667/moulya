@@ -626,6 +626,20 @@ class ReportingService:
                         
                         student_attendance.append(student_data)
             
+            # Sort students by last 3 digits of roll number
+            def get_roll_sort_key(student):
+                roll_number = student.get('roll_number', '')
+                # Extract last 3 digits from roll number (e.g., BCA25001 -> 001)
+                if len(roll_number) >= 3:
+                    last_three = roll_number[-3:]
+                    try:
+                        return int(last_three)
+                    except ValueError:
+                        return 999  # Put non-numeric at end
+                return 999  # Put short roll numbers at end
+            
+            student_attendance.sort(key=get_roll_sort_key)
+            
             # Calculate class statistics
             all_percentages = [s['attendance_percentage'] for s in student_attendance]
             valid_percentages = [p for p in all_percentages if p > 0]
