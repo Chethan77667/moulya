@@ -256,7 +256,40 @@ class ReportingService:
         try:
             subject = Subject.query.get(subject_id)
             if not subject:
-                return None
+                # Gracefully return an empty report shell so UI can still render
+                is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+                if not is_overall:
+                    if not month:
+                        month = datetime.now().month
+                    if not year:
+                        year = datetime.now().year
+                month_name = 'Overall' if (is_overall) else (
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month]
+                    if isinstance(month, int) and 1 <= month <= 12 else str(month)
+                )
+                return {
+                    'subject': {
+                        'id': subject_id,
+                        'name': 'Subject',
+                        'code': '',
+                        'course': None,
+                        'course_display': None,
+                        'section': None,
+                        'year': None,
+                        'semester': None,
+                        'lecturers': []
+                    },
+                    'month': month_name,
+                    'year': year,
+                    'statistics': {
+                        'total_students': 0,
+                        'total_classes_conducted': 0,
+                        'class_average_attendance': 0,
+                        'students_with_good_attendance': 0,
+                        'students_with_poor_attendance': 0
+                    },
+                    'student_attendance': []
+                }
             
             from models.marks import StudentMarks
             query = StudentMarks.query.filter_by(subject_id=subject_id)
@@ -382,9 +415,51 @@ class ReportingService:
     def get_class_attendance_report(subject_id, month=None, year=None):
         """Get attendance report for entire class in a subject"""
         try:
+            print(f"[DEBUG] Service called with subject_id={subject_id}, month={month}, year={year}")
+            
             subject = Subject.query.get(subject_id)
+            print(f"[DEBUG] Subject found: {subject is not None}")
+            if subject:
+                print(f"[DEBUG] Subject name: {subject.name}, code: {subject.code}")
+            
             if not subject:
-                return None
+                print(f"[DEBUG] Subject not found, returning empty report structure")
+                # Gracefully return an empty report shell so UI can still render
+                is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+                if not is_overall:
+                    if not month:
+                        month = datetime.now().month
+                    if not year:
+                        year = datetime.now().year
+                month_name = 'Overall' if (is_overall) else (
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month]
+                    if isinstance(month, int) and 1 <= month <= 12 else str(month)
+                )
+                empty_report = {
+                    'subject': {
+                        'id': subject_id,
+                        'name': 'Subject',
+                        'code': '',
+                        'course': None,
+                        'course_display': None,
+                        'section': None,
+                        'year': None,
+                        'semester': None,
+                        'lecturers': []
+                    },
+                    'month': month_name,
+                    'year': year,
+                    'statistics': {
+                        'total_students': 0,
+                        'total_classes_conducted': 0,
+                        'class_average_attendance': 0,
+                        'students_with_good_attendance': 0,
+                        'students_with_poor_attendance': 0
+                    },
+                    'student_attendance': []
+                }
+                print(f"[DEBUG] Returning empty report with month_name: {month_name}")
+                return empty_report
             
             # If month is 'overall', compute cumulative across all months/years
             is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
@@ -483,6 +558,12 @@ class ReportingService:
                         db.extract('year', AttendanceRecord.date) == year
                     ).all()
                 
+                # For overall case, get all attendance records across all months/years
+                if is_overall:
+                    all_attendance_records = AttendanceRecord.query.filter(
+                        AttendanceRecord.subject_id == subject_id
+                    ).all()
+                
                 # Get unique dates to count total classes
                 unique_dates = set(record.date for record in all_attendance_records)
                 total_classes_conducted = len(unique_dates)
@@ -577,9 +658,11 @@ class ReportingService:
                 'student_attendance': student_attendance
             }
             
+            print(f"[DEBUG] Returning valid report with {len(student_attendance)} students")
             return report
             
         except Exception as e:
+            print(f"[DEBUG] Exception in service: {str(e)}")
             print(f"Error generating class attendance report: {e}")
             return None
     

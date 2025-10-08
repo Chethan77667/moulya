@@ -1046,6 +1046,8 @@ def class_attendance_report(subject_id):
     """Class attendance report"""
     try:
         raw_month = request.args.get('month')
+        print(f"[DEBUG] Raw month from request: {raw_month}")
+        
         # Support "overall" to show cumulative attendance across all months
         if raw_month and str(raw_month).lower() == 'overall':
             month = 'overall'
@@ -1053,14 +1055,24 @@ def class_attendance_report(subject_id):
             month = request.args.get('month', type=int)
         year = request.args.get('year', type=int)
         
+        print(f"[DEBUG] Processed month: {month}, year: {year}, subject_id: {subject_id}")
+        
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         
-        if not report:
+        print(f"[DEBUG] Report returned: {type(report)}, is None: {report is None}")
+        if report:
+            print(f"[DEBUG] Report keys: {list(report.keys()) if isinstance(report, dict) else 'Not a dict'}")
+        
+        # Only flash error if report is None (service couldn't create even empty structure)
+        if report is None:
+            print(f"[DEBUG] Report is None, flashing error")
             flash('Subject not found', 'error')
             return redirect(url_for('management.reports_dashboard'))
         
+        print(f"[DEBUG] Rendering template with report")
         return render_template('management/class_attendance_report.html', report=report)
     except Exception as e:
+        print(f"[DEBUG] Exception in route: {str(e)}")
         flash(f'Error generating class attendance report: {str(e)}', 'error')
         return redirect(url_for('management.reports_dashboard'))
 
