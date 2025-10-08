@@ -26,6 +26,20 @@ class ReportingService:
     """Service for generating reports"""
     
     @staticmethod
+    def _format_number(value):
+        """Format number: whole numbers without decimals, fractional numbers with 2 decimal places."""
+        try:
+            if value is None:
+                return None
+            num = float(value)
+            if num == int(num):
+                return int(num)  # 32.0 -> 32
+            else:
+                return round(num, 2)  # 32.43 -> 32.43, 32.05 -> 32.05
+        except (ValueError, TypeError):
+            return value
+    
+    @staticmethod
     def _get_paragraph_style():
         """Return a compact cell Paragraph style to enable auto word-wrap in table cells."""
         styles = getSampleStyleSheet()
@@ -826,7 +840,7 @@ class ReportingService:
             for m in subj.get('marks', []):
                 marks_rows.append([
                     subj.get('subject_name',''), subj.get('subject_code',''), m.get('assessment_type',''),
-                    m.get('marks_obtained',''), m.get('max_marks',''), m.get('percentage',''), m.get('grade',''), m.get('performance_status','')
+                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(m.get('percentage')), m.get('grade',''), m.get('performance_status','')
                 ])
         if len(marks_rows) == 1:
             marks_rows.append(['No data'] + ['']*7)
@@ -856,8 +870,8 @@ class ReportingService:
         for subj in report.get('subjects', []):
             a = subj.get('attendance', {})
             att_rows.append([
-                subj.get('subject_name',''), subj.get('subject_code',''), a.get('total_classes',''),
-                a.get('present_classes',''), a.get('absent_classes',''), a.get('attendance_percentage',''),
+                subj.get('subject_name',''), subj.get('subject_code',''), ReportingService._format_number(a.get('total_classes')),
+                ReportingService._format_number(a.get('present_classes')), ReportingService._format_number(a.get('absent_classes')), ReportingService._format_number(a.get('attendance_percentage')),
                 'Good' if a.get('attendance_percentage',0) >= 75 else 'Average' if a.get('attendance_percentage',0) >= 50 else 'Poor'
             ])
         if len(att_rows) == 1:
@@ -951,11 +965,9 @@ class ReportingService:
             try:
                 if obt is None or mx is None:
                     return ''
-                fo = float(obt)
-                fm = float(mx)
-                obt_s = str(int(fo)) if fo.is_integer() else str(fo)
-                max_s = str(int(fm)) if fm.is_integer() else str(fm)
-                return f"{obt_s}/{max_s}"
+                fo = ReportingService._format_number(obt)
+                fm = ReportingService._format_number(mx)
+                return f"{fo}/{fm}"
             except Exception:
                 try:
                     return f"{obt}/{mx}"
@@ -1421,7 +1433,7 @@ class ReportingService:
                 )
                 rows.append([
                     sm.get('student_name',''), sm.get('roll_number',''), m.get('assessment_type',''),
-                    m.get('marks_obtained',''), m.get('max_marks',''), percent
+                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(percent)
                 ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
@@ -1503,11 +1515,11 @@ class ReportingService:
 
         stats = report.get('statistics', {})
         stats_rows = [
-            ['Total Students', stats.get('total_students', 0)],
-            ['Classes Conducted', stats.get('total_classes_conducted', 0)],
-            ['Class Average (%)', stats.get('class_average_attendance', 0)],
-            ['Good Attendance (≥75%)', stats.get('students_with_good_attendance', 0)],
-            ['Poor Attendance (<50%)', stats.get('students_with_poor_attendance', 0)],
+            ['Total Students', ReportingService._format_number(stats.get('total_students', 0))],
+            ['Classes Conducted', ReportingService._format_number(stats.get('total_classes_conducted', 0))],
+            ['Class Average (%)', ReportingService._format_number(stats.get('class_average_attendance', 0))],
+            ['Good Attendance (≥75%)', ReportingService._format_number(stats.get('students_with_good_attendance', 0))],
+            ['Poor Attendance (<50%)', ReportingService._format_number(stats.get('students_with_poor_attendance', 0))],
         ]
         stats_table = Table(stats_rows, colWidths=[60*mm, 100*mm])
         stats_table.setStyle(TableStyle([
@@ -1520,8 +1532,8 @@ class ReportingService:
         rows = [header]
         for st in report.get('student_attendance', []):
             rows.append([
-                st.get('student_name',''), st.get('roll_number',''), st.get('total_classes',''),
-                st.get('present_classes',''), st.get('absent_classes',''), st.get('attendance_percentage',''), st.get('status','')
+                st.get('student_name',''), st.get('roll_number',''), ReportingService._format_number(st.get('total_classes')),
+                ReportingService._format_number(st.get('present_classes')), ReportingService._format_number(st.get('absent_classes')), ReportingService._format_number(st.get('attendance_percentage')), st.get('status','')
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
@@ -1580,10 +1592,10 @@ class ReportingService:
         c = report.get('course', {})
         meta_rows = [
             ['Course', f"{c.get('name','')} ({c.get('code','')})"],
-            ['Duration (years)', c.get('duration_years','')],
-            ['Total Semesters', c.get('total_semesters','')],
-            ['Total Students', report.get('total_students','')],
-            ['Total Subjects', report.get('total_subjects','')],
+            ['Duration (years)', ReportingService._format_number(c.get('duration_years'))],
+            ['Total Semesters', ReportingService._format_number(c.get('total_semesters'))],
+            ['Total Students', ReportingService._format_number(report.get('total_students'))],
+            ['Total Subjects', ReportingService._format_number(report.get('total_subjects'))],
         ]
         meta_table = Table(meta_rows, colWidths=[55*mm, 105*mm])
         meta_table.setStyle(TableStyle([
@@ -1598,8 +1610,8 @@ class ReportingService:
         for s in report.get('subjects', []):
             rows.append([
                 s.get('subject_name',''), s.get('subject_code',''), f"{s.get('year','')}/{s.get('semester','')}",
-                s.get('enrolled_students',''), s.get('marks_statistics',{}).get('average_marks',0),
-                s.get('marks_statistics',{}).get('passing_rate',0), s.get('attendance_statistics',{}).get('average_attendance',0)
+                ReportingService._format_number(s.get('enrolled_students')), ReportingService._format_number(s.get('marks_statistics',{}).get('average_marks',0)),
+                ReportingService._format_number(s.get('marks_statistics',{}).get('passing_rate',0)), ReportingService._format_number(s.get('attendance_statistics',{}).get('average_attendance',0))
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
