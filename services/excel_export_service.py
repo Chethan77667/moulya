@@ -63,9 +63,23 @@ class ExcelExportService:
             pass
 
     @staticmethod
+    def format_number(value):
+        """Format number: whole numbers without decimals, fractional numbers with 2 decimal places."""
+        try:
+            if value is None:
+                return None
+            num = float(value)
+            if num == int(num):
+                return int(num)  # 32.0 -> 32
+            else:
+                return round(num, 2)  # 32.43 -> 32.43, 32.05 -> 32.05
+        except (ValueError, TypeError):
+            return value
+
+    @staticmethod
     def set_number(cell, value, align_right=False):
         """Set an integer/float number with alignment preferences."""
-        cell.value = value
+        cell.value = ExcelExportService.format_number(value)
         cell.alignment = Alignment(horizontal=("right" if align_right else "left"), vertical="center")
         return cell
 
@@ -247,8 +261,8 @@ class ExcelExportService:
                     ws.cell(row=row, column=1, value=student.roll_number)
                     ws.cell(row=row, column=2, value=student.name)
                     ws.cell(row=row, column=3, value=mark['assessment_type'])
-                    ws.cell(row=row, column=4, value=mark['marks_obtained'])
-                    ws.cell(row=row, column=5, value=mark['max_marks'])
+                    ws.cell(row=row, column=4, value=ExcelExportService.format_number(mark['marks_obtained']))
+                    ws.cell(row=row, column=5, value=ExcelExportService.format_number(mark['max_marks']))
                     ExcelExportService.set_percentage(ws.cell(row=row, column=6), mark['percentage'], align_left=True)
                     ws.cell(row=row, column=7, value=mark['grade'])
                     ws.cell(row=row, column=8, value=mark['performance_status'])
