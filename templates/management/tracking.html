@@ -167,10 +167,10 @@ function renderTable(containerId, items, statusLabel, view){
   const trHead = document.createElement('tr')
   const isDep = (view === 'attendance') && (qs('att-month')?.value === 'deputation')
   const headers = view === 'marks'
-    ? ['Lecturer','Subject','Code','Course','Class/Year','Assessment','Status']
+    ? ['Lecturer','Subject','Code','Class','Assessment','Status']
     : (isDep
-        ? ['Lecturer','Subject','Code','Course','Class/Year','Status']
-        : ['Lecturer','Subject','Code','Course','Class/Year','Month','Year','Status'])
+        ? ['Lecturer','Subject','Code','Class','Status']
+        : ['Lecturer','Subject','Code','Class','Month','Status'])
   headers.forEach(h=>{
     const th = document.createElement('th')
     th.className = 'border-b border-gray-200 px-3 py-2 text-left bg-gray-50'
@@ -180,30 +180,34 @@ function renderTable(containerId, items, statusLabel, view){
   thead.appendChild(trHead)
   table.appendChild(thead)
   const tbody = document.createElement('tbody')
+  function prettyAssessment(val){
+    const map = { internal1:'Internal 1', internal2:'Internal 2', assignment:'Assignment', project:'Project', Any:'Any' }
+    return map[val] || (val ? String(val).charAt(0).toUpperCase()+String(val).slice(1) : '')
+  }
+  function prettyClass(code){
+    if(!code) return ''
+    return String(code).replaceAll('_',' ').trim()
+  }
   items.forEach(it=>{
     const tr = document.createElement('tr')
     tr.innerHTML = view === 'marks'
       ? `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
-         <td class="px-3 py-2 border-b">${it.course_code || ''}</td>
-         <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
-         <td class="px-3 py-2 border-b">${it.assessment_type || ''}</td>
+         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>
+         <td class="px-3 py-2 border-b">${prettyAssessment(it.assessment_type)}</td>
          <td class="px-3 py-2 border-b">${statusLabel}</td>`
       : (isDep
         ? `<td class=\"px-3 py-2 border-b\">${it.lecturer_name || ''}</td>
            <td class=\"px-3 py-2 border-b\">${it.subject_name || ''}</td>
            <td class=\"px-3 py-2 border-b\">${it.subject_code || ''}</td>
-           <td class=\"px-3 py-2 border-b\">${it.course_code || ''}</td>
-           <td class=\"px-3 py-2 border-b\">${it.class_display || ''}</td>
+           <td class=\"px-3 py-2 border-b\">${prettyClass(it.course_code)}</td>
            <td class=\"px-3 py-2 border-b\">${statusLabel}</td>`
         : `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
-         <td class="px-3 py-2 border-b">${it.course_code || ''}</td>
-         <td class="px-3 py-2 border-b">${it.class_display || ''}</td>
+         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>
          <td class="px-3 py-2 border-b">${it.month || ''}</td>
-         <td class="px-3 py-2 border-b">${it.year || ''}</td>
          <td class="px-3 py-2 border-b">${statusLabel}</td>`)
     tbody.appendChild(tr)
   })
