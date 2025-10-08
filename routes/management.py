@@ -123,7 +123,8 @@ def tracking_export_marks():
             title_suffix = 'Updated' if status == 'updated' else 'Pending'
         else:
             title_suffix = None
-        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Assessment', 'Status']
+        # Updated headers: remove Course and Class/Year -> single Class; pretty Assessment names
+        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Assessment', 'Status']
         ExcelExportService.style_header_row(ws, 1, headers)
 
         row = 2
@@ -134,9 +135,24 @@ def tracking_export_marks():
                 ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
-                ws.cell(row=row, column=col, value=item.get('assessment_type')); col += 1
+                # Build pretty class from course_code; remove underscores
+                class_text = None
+                try:
+                    cc = item.get('course_code') or ''
+                    class_text = str(cc).replace('_', ' ').strip() if cc else ''
+                except Exception:
+                    class_text = item.get('class_display') or ''
+                ws.cell(row=row, column=col, value=class_text); col += 1
+                # Pretty assessment label
+                at = (item.get('assessment_type') or '').lower()
+                pretty_map = {
+                    'internal1': 'Internal 1',
+                    'internal2': 'Internal 2',
+                    'assignment': 'Assignment',
+                    'project': 'Project',
+                    'any': 'Any'
+                }
+                ws.cell(row=row, column=col, value=pretty_map.get(at, (item.get('assessment_type') or ''))); col += 1
                 # Status as the last column
                 ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
@@ -177,7 +193,8 @@ def tracking_export_attendance():
             title_suffix = 'Updated' if status == 'updated' else 'Pending'
         else:
             title_suffix = None
-        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Month', 'Year', 'Status']
+        # Updated headers for attendance export: single Class column (no underscores), remove Year column
+        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Month', 'Status']
         ExcelExportService.style_header_row(ws, 1, headers)
 
         row = 2
@@ -188,10 +205,15 @@ def tracking_export_attendance():
                 ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
+                # Build pretty class from course_code (e.g., I_BCA_A -> I BCA A)
+                class_text = None
+                try:
+                    cc = item.get('course_code') or ''
+                    class_text = str(cc).replace('_', ' ').strip() if cc else ''
+                except Exception:
+                    class_text = item.get('class_display') or ''
+                ws.cell(row=row, column=col, value=class_text); col += 1
                 ws.cell(row=row, column=col, value=item.get('month')); col += 1
-                ws.cell(row=row, column=col, value=item.get('year')); col += 1
                 # Status last
                 ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
