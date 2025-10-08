@@ -1023,7 +1023,12 @@ def class_marks_report(subject_id):
 def class_attendance_report(subject_id):
     """Class attendance report"""
     try:
-        month = request.args.get('month', type=int)
+        raw_month = request.args.get('month')
+        # Support "overall" to show cumulative attendance across all months
+        if raw_month and str(raw_month).lower() == 'overall':
+            month = 'overall'
+        else:
+            month = request.args.get('month', type=int)
         year = request.args.get('year', type=int)
         
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
