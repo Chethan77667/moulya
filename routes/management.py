@@ -193,8 +193,8 @@ def tracking_export_attendance():
             title_suffix = 'Updated' if status == 'updated' else 'Pending'
         else:
             title_suffix = None
-        # Updated headers for attendance export: single Class column (no underscores), remove Year column
-        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Month', 'Status']
+        # Updated headers for attendance export: single Class column (no underscores), remove Month column
+        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Status']
         ExcelExportService.style_header_row(ws, 1, headers)
 
         row = 2
@@ -213,7 +213,6 @@ def tracking_export_attendance():
                 except Exception:
                     class_text = item.get('class_display') or ''
                 ws.cell(row=row, column=col, value=class_text); col += 1
-                ws.cell(row=row, column=col, value=item.get('month')); col += 1
                 # Status last
                 ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
