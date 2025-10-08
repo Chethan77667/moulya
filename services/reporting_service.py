@@ -386,11 +386,14 @@ class ReportingService:
             if not subject:
                 return None
             
-            # Default to current month/year if not specified
-            if not month:
-                month = datetime.now().month
-            if not year:
-                year = datetime.now().year
+            # If month is 'overall', compute cumulative across all months/years
+            is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+            # Default to current month/year if not specified and not overall
+            if not is_overall:
+                if not month:
+                    month = datetime.now().month
+                if not year:
+                    year = datetime.now().year
             
             # Get all students enrolled in this subject
             from models.student import StudentEnrollment
@@ -403,12 +406,15 @@ class ReportingService:
             total_classes_conducted = 0
             
             # First, try to get data from monthly_attendance_summary table
-            from models.attendance import MonthlyAttendanceSummary
-            monthly_summary = MonthlyAttendanceSummary.query.filter_by(
-                subject_id=subject_id,
-                month=month,
-                year=year
-            ).first()
+            from models.attendance import MonthlyAttendanceSummary, MonthlyStudentAttendance
+            if is_overall:
+                monthly_summary = None
+            else:
+                monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                    subject_id=subject_id,
+                    month=month,
+                    year=year
+                ).first()
             
             if monthly_summary:
                 total_classes_conducted = monthly_summary.total_classes
@@ -445,11 +451,37 @@ class ReportingService:
                     student_attendance.append(student_data)
             else:
                 # Fallback to daily attendance records if monthly data not available
-                all_attendance_records = AttendanceRecord.query.filter(
-                    AttendanceRecord.subject_id == subject_id,
-                    db.extract('month', AttendanceRecord.date) == month,
-                    db.extract('year', AttendanceRecord.date) == year
-                ).all()
+                if is_overall:
+                    # Compute using MonthlyStudentAttendance + MonthlyAttendanceSummary across all months/years
+                    # Aggregate total classes from summaries and present+deputation from student records
+                    summaries = MonthlyAttendanceSummary.query.filter_by(subject_id=subject_id).all()
+                    total_classes_conducted = sum(s.total_classes for s in summaries)
+                    # Map student -> present (including deputation)
+                    student_present_map = {s.id: 0 for s in students}
+                    monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(subject_id=subject_id).all()
+                    for rec in monthly_attendance_records:
+                        student_present_map[rec.student_id] = student_present_map.get(rec.student_id, 0) + int(rec.present_count or 0) + int(rec.deputation_count or 0)
+                    # Build rows
+                    for student in students:
+                        present_classes = student_present_map.get(student.id, 0)
+                        absent_classes = max(total_classes_conducted - present_classes, 0)
+                        attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
+                        student_attendance.append({
+                            'student_id': student.id,
+                            'student_name': student.name,
+                            'roll_number': student.roll_number,
+                            'total_classes': total_classes_conducted,
+                            'present_classes': present_classes,
+                            'absent_classes': absent_classes,
+                            'attendance_percentage': attendance_percentage,
+                            'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
+                        })
+                else:
+                    all_attendance_records = AttendanceRecord.query.filter(
+                        AttendanceRecord.subject_id == subject_id,
+                        db.extract('month', AttendanceRecord.date) == month,
+                        db.extract('year', AttendanceRecord.date) == year
+                    ).all()
                 
                 # Get unique dates to count total classes
                 unique_dates = set(record.date for record in all_attendance_records)
@@ -512,9 +544,12 @@ class ReportingService:
             }
             
             # Get month name for display
-            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                          'July', 'August', 'September', 'October', 'November', 'December']
-            month_name = month_names[month] if 1 <= month <= 12 else str(month)
+            if is_overall:
+                month_name = 'Overall'
+            else:
+                month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December']
+                month_name = month_names[month] if 1 <= month <= 12 else str(month)
             
             course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
 
