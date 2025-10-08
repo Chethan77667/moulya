@@ -38,6 +38,46 @@ class ReportingService:
                 return round(num, 2)  # 32.43 -> 32.43, 32.05 -> 32.05
         except (ValueError, TypeError):
             return value
+
+    @staticmethod
+    def _extract_year_from_class(class_name):
+        """Extract year from class name like 'I BCA B' -> 1, 'II BCA B' -> 2, 'III BCA B' -> 3"""
+        if not class_name:
+            return None
+        
+        class_name = str(class_name).strip().upper()
+        
+        # Check for Roman numerals
+        if class_name.startswith('I '):
+            return 1
+        elif class_name.startswith('II '):
+            return 2
+        elif class_name.startswith('III '):
+            return 3
+        elif class_name.startswith('IV '):
+            return 4
+        
+        # Check for Arabic numerals
+        if class_name.startswith('1 '):
+            return 1
+        elif class_name.startswith('2 '):
+            return 2
+        elif class_name.startswith('3 '):
+            return 3
+        elif class_name.startswith('4 '):
+            return 4
+        
+        # Check for words
+        if class_name.startswith('FIRST '):
+            return 1
+        elif class_name.startswith('SECOND '):
+            return 2
+        elif class_name.startswith('THIRD '):
+            return 3
+        elif class_name.startswith('FOURTH '):
+            return 4
+        
+        return None
     
     @staticmethod
     def _get_paragraph_style():
@@ -1034,6 +1074,10 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
+        # Extract year from course name and add Year row
+        year = ReportingService._extract_year_from_class(course_name)
+        year_display = f"Year {year}" if year else "Year N/A"
+        subj_rows.append(['Year', year_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -1158,6 +1202,10 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
+        # Extract year from course name and add Year row
+        year = ReportingService._extract_year_from_class(course_name)
+        year_display = f"Year {year}" if year else "Year N/A"
+        subj_rows.append(['Year', year_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -1241,11 +1289,21 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A8'] = 'Year'
+            ws['B8'] = year_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A7'] = 'Year'
+            ws['B7'] = year_display
         # Determine where to place spacer row and headers
-        last_info_row = 7 if has_section else 6
+        last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
         header_row = spacer_row + 1
         data_start_row = header_row + 1
@@ -1367,11 +1425,21 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A8'] = 'Year'
+            ws['B8'] = year_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A7'] = 'Year'
+            ws['B7'] = year_display
         # Determine where to place spacer row and headers
-        last_info_row = 7 if has_section else 6
+        last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
         header_row = spacer_row + 1
         data_start_row = header_row + 1

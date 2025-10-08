@@ -992,8 +992,8 @@ def attendance_shortage_report():
         for subject in subjects:
             report, message = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                # Filter students based on custom threshold
-                shortage_students = [r for r in report if r['attendance_percentage'] < threshold]
+                # Filter students based on custom threshold (include 100% when threshold is 100)
+                shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
                 if shortage_students:
                     shortage_data.append({
                         'subject': subject,
@@ -1027,7 +1027,7 @@ def export_attendance_shortage_excel():
         for subject in subjects:
             report, _ = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                shortage_students = [r for r in report if r['attendance_percentage'] < threshold]
+                shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
                 if shortage_students:
                     shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
 
@@ -1064,8 +1064,8 @@ def marks_deficiency_report():
         for subject in subjects:
             report, message = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                # Filter students based on custom threshold
-                deficient_students = [r for r in report if r['overall_percentage'] < threshold]
+                # Filter students based on custom threshold (include 100% when threshold is 100)
+                deficient_students = [r for r in report if r['overall_percentage'] <= threshold]
                 if deficient_students:
                     deficiency_data.append({
                         'subject': subject,
@@ -1099,7 +1099,7 @@ def export_marks_deficiency_excel():
         for subject in subjects:
             report, _ = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                deficient_students = [r for r in report if r['overall_percentage'] < threshold]
+                deficient_students = [r for r in report if r['overall_percentage'] <= threshold]
                 if deficient_students:
                     deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
 
