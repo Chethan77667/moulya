@@ -83,6 +83,10 @@
                                 class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                             Apply Filter
                         </button>
+                        <button onclick="exportMarksDeficiency()" 
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                            📥 Export Excel
+                        </button>
                     </div>
                     <div class="mt-2 text-xs text-gray-500">
                         Students with marks below <span id="threshold-text">{{ "%.2f"|format(threshold) }}%</span> will be shown
@@ -278,6 +282,15 @@ function applyMarksFilter() {
         currentUrl.searchParams.delete('subject_id');
     }
     window.location.href = currentUrl.toString();
+}
+
+function exportMarksDeficiency() {
+    const threshold = document.getElementById('threshold-slider').value;
+    const subjectId = document.getElementById('subject-select').value;
+    const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export');
+    url.searchParams.set('threshold', threshold);
+    if (subjectId) url.searchParams.set('subject_id', subjectId);
+    window.location.href = url.toString();
 }
 </script>
 

@@ -386,6 +386,116 @@ class ExcelExportService:
             print(f"Error exporting course overview report: {e}")
             return None
     
+    # ======================== LECTURER SHORTAGE/DEFICIENCY EXPORTS ========================
+    @staticmethod
+    def export_attendance_shortage(threshold, shortage_data):
+        """Export Attendance Shortage (lecturer view) to Excel.
+        shortage_data: [{ 'subject': Subject, 'shortage_students': [ {student, present_classes, total_classes, attendance_percentage}, ... ] }]
+        Returns workbook bytes.
+        """
+        try:
+            wb = ExcelExportService.create_workbook()
+            ws = wb.active
+            ws.title = "Attendance Shortage"
+
+            # Header row
+            headers = [
+                'Subject', 'Code', 'Course', 'Student', 'Roll Number',
+                'Present', 'Total', 'Percent', 'Shortage vs Threshold'
+            ]
+            ExcelExportService.style_header_row(ws, 1, headers)
+
+            row = 2
+            for block in shortage_data or []:
+                subj = block.get('subject')
+                course_name = subj.course.name if getattr(subj, 'course', None) else ''
+                for rec in block.get('shortage_students') or []:
+                    ws.cell(row=row, column=1, value=subj.name)
+                    ws.cell(row=row, column=2, value=subj.code)
+                    ws.cell(row=row, column=3, value=course_name)
+                    ws.cell(row=row, column=4, value=rec['student'].name)
+                    ws.cell(row=row, column=5, value=rec['student'].roll_number)
+                    ExcelExportService.set_number(ws.cell(row=row, column=6), rec.get('present_classes') or 0, align_right=True)
+                    ExcelExportService.set_number(ws.cell(row=row, column=7), rec.get('total_classes') or 0, align_right=True)
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=8), rec.get('attendance_percentage') or 0, align_left=True)
+                    shortage_pct = max(0.0, float(threshold) - float(rec.get('attendance_percentage') or 0))
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=9), shortage_pct, align_left=True)
+                    row += 1
+
+            ExcelExportService.center_all_cells(ws)
+            ExcelExportService.auto_adjust_columns(ws)
+
+            # Wrap and left-align Student column (D) so long names stay within the cell
+            from openpyxl.styles import Alignment
+            last_row = ws.max_row or row - 1
+            for r in range(2, last_row + 1):
+                cell = ws.cell(row=r, column=4)
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+            return ExcelExportService.workbook_to_bytes(wb)
+        except Exception as e:
+            print(f"Error exporting attendance shortage: {e}")
+            return None
+
+    @staticmethod
+    def export_marks_deficiency(threshold, deficiency_data):
+        """Export Marks Deficiency (lecturer view) to Excel.
+        deficiency_data: [{ 'subject': Subject, 'deficient_students': [ {student, overall_percentage, marks_summary}, ... ] }]
+        Returns workbook bytes.
+        """
+        try:
+            wb = ExcelExportService.create_workbook()
+            ws = wb.active
+            ws.title = "Marks Deficiency"
+
+            headers = [
+                'Subject', 'Code', 'Course', 'Student', 'Roll Number',
+                'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project'
+            ]
+            ExcelExportService.style_header_row(ws, 1, headers)
+
+            row = 2
+            for block in deficiency_data or []:
+                subj = block.get('subject')
+                course_name = subj.course.name if getattr(subj, 'course', None) else ''
+                for rec in block.get('deficient_students') or []:
+                    ms = rec.get('marks_summary') or {}
+                    def _fmt(a):
+                        try:
+                            obt = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else (a.get('obtained') if isinstance(a, dict) else None)
+                            mx = getattr(a, 'max', None) if hasattr(a, 'max') else (a.get('max') if isinstance(a, dict) else None)
+                            if not obt and not mx:
+                                return ''
+                            return f"{obt}/{mx}"
+                        except Exception:
+                            return ''
+                    ws.cell(row=row, column=1, value=subj.name)
+                    ws.cell(row=row, column=2, value=subj.code)
+                    ws.cell(row=row, column=3, value=course_name)
+                    ws.cell(row=row, column=4, value=rec['student'].name)
+                    ws.cell(row=row, column=5, value=rec['student'].roll_number)
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=6), rec.get('overall_percentage') or 0, align_left=True)
+                    ws.cell(row=row, column=7, value=_fmt(ms.get('internal1')))
+                    ws.cell(row=row, column=8, value=_fmt(ms.get('internal2')))
+                    ws.cell(row=row, column=9, value=_fmt(ms.get('assignment')))
+                    ws.cell(row=row, column=10, value=_fmt(ms.get('project')))
+                    row += 1
+
+            ExcelExportService.center_all_cells(ws)
+            ExcelExportService.auto_adjust_columns(ws)
+
+            # Wrap and left-align Student column (D)
+            from openpyxl.styles import Alignment
+            last_row = ws.max_row or row - 1
+            for r in range(2, last_row + 1):
+                cell = ws.cell(row=r, column=4)
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+            return ExcelExportService.workbook_to_bytes(wb)
+        except Exception as e:
+            print(f"Error exporting marks deficiency: {e}")
+            return None
+    
     @staticmethod
     def workbook_to_bytes(workbook):
         """Convert workbook to bytes for download"""

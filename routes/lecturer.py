@@ -1011,6 +1011,39 @@ def attendance_shortage_report():
                              shortage_data=[], 
                              threshold=75)
 
+@lecturer_bp.route('/reports/attendance-shortage/export')
+@login_required('lecturer')
+def export_attendance_shortage_excel():
+    """Export Attendance Shortage to Excel with current filters."""
+    try:
+        lecturer_id = session.get('user_id')
+        subjects = LecturerService.get_assigned_subjects(lecturer_id)
+        selected_subject_id = request.args.get('subject_id', type=int)
+        if selected_subject_id:
+            subjects = [s for s in subjects if s.id == selected_subject_id]
+        threshold = request.args.get('threshold', 75, type=int)
+
+        shortage_data = []
+        for subject in subjects:
+            report, _ = LecturerService.generate_attendance_report(subject.id, lecturer_id)
+            if report:
+                shortage_students = [r for r in report if r['attendance_percentage'] < threshold]
+                if shortage_students:
+                    shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
+
+        from flask import make_response
+        excel_bytes = ExcelExportService.export_attendance_shortage(threshold, shortage_data)
+        response = make_response(excel_bytes or b'')
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        fname = 'attendance_shortage'
+        if selected_subject_id:
+            fname += f'_{selected_subject_id}'
+        response.headers['Content-Disposition'] = f'attachment; filename={fname}.xlsx'
+        return response
+    except Exception as e:
+        flash(f'Error exporting attendance shortage: {str(e)}', 'error')
+        return redirect(url_for('lecturer.attendance_shortage_report'))
+
 @lecturer_bp.route('/reports/marks-deficiency')
 @login_required('lecturer')
 def marks_deficiency_report():
@@ -1049,6 +1082,39 @@ def marks_deficiency_report():
         return render_template('lecturer/marks_deficiency.html', 
                              deficiency_data=[], 
                              threshold=50)
+
+@lecturer_bp.route('/reports/marks-deficiency/export')
+@login_required('lecturer')
+def export_marks_deficiency_excel():
+    """Export Marks Deficiency to Excel with current filters."""
+    try:
+        lecturer_id = session.get('user_id')
+        subjects = LecturerService.get_assigned_subjects(lecturer_id)
+        selected_subject_id = request.args.get('subject_id', type=int)
+        if selected_subject_id:
+            subjects = [s for s in subjects if s.id == selected_subject_id]
+        threshold = request.args.get('threshold', 50, type=int)
+
+        deficiency_data = []
+        for subject in subjects:
+            report, _ = LecturerService.generate_marks_report(subject.id, lecturer_id)
+            if report:
+                deficient_students = [r for r in report if r['overall_percentage'] < threshold]
+                if deficient_students:
+                    deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
+
+        from flask import make_response
+        excel_bytes = ExcelExportService.export_marks_deficiency(threshold, deficiency_data)
+        response = make_response(excel_bytes or b'')
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        fname = 'marks_deficiency'
+        if selected_subject_id:
+            fname += f'_{selected_subject_id}'
+        response.headers['Content-Disposition'] = f'attachment; filename={fname}.xlsx'
+        return response
+    except Exception as e:
+        flash(f'Error exporting marks deficiency: {str(e)}', 'error')
+        return redirect(url_for('lecturer.marks_deficiency_report'))
 
 @lecturer_bp.route('/subjects/<int:subject_id>/attendance/deputation/total-classes')
 @login_required('lecturer')
