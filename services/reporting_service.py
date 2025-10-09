@@ -26,6 +26,60 @@ class ReportingService:
     """Service for generating reports"""
     
     @staticmethod
+    def _format_number(value):
+        """Format number: whole numbers without decimals, fractional numbers with 2 decimal places."""
+        try:
+            if value is None:
+                return None
+            num = float(value)
+            if num == int(num):
+                return int(num)  # 32.0 -> 32
+            else:
+                return round(num, 2)  # 32.43 -> 32.43, 32.05 -> 32.05
+        except (ValueError, TypeError):
+            return value
+
+    @staticmethod
+    def _extract_year_from_class(class_name):
+        """Extract year from class name like 'I BCA B' -> 1, 'II BCA B' -> 2, 'III BCA B' -> 3"""
+        if not class_name:
+            return None
+        
+        class_name = str(class_name).strip().upper()
+        
+        # Check for Roman numerals
+        if class_name.startswith('I '):
+            return 1
+        elif class_name.startswith('II '):
+            return 2
+        elif class_name.startswith('III '):
+            return 3
+        elif class_name.startswith('IV '):
+            return 4
+        
+        # Check for Arabic numerals
+        if class_name.startswith('1 '):
+            return 1
+        elif class_name.startswith('2 '):
+            return 2
+        elif class_name.startswith('3 '):
+            return 3
+        elif class_name.startswith('4 '):
+            return 4
+        
+        # Check for words
+        if class_name.startswith('FIRST '):
+            return 1
+        elif class_name.startswith('SECOND '):
+            return 2
+        elif class_name.startswith('THIRD '):
+            return 3
+        elif class_name.startswith('FOURTH '):
+            return 4
+        
+        return None
+    
+    @staticmethod
     def _get_paragraph_style():
         """Return a compact cell Paragraph style to enable auto word-wrap in table cells."""
         styles = getSampleStyleSheet()
@@ -256,7 +310,40 @@ class ReportingService:
         try:
             subject = Subject.query.get(subject_id)
             if not subject:
-                return None
+                # Gracefully return an empty report shell so UI can still render
+                is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+                if not is_overall:
+                    if not month:
+                        month = datetime.now().month
+                    if not year:
+                        year = datetime.now().year
+                month_name = 'Overall' if (is_overall) else (
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month]
+                    if isinstance(month, int) and 1 <= month <= 12 else str(month)
+                )
+                return {
+                    'subject': {
+                        'id': subject_id,
+                        'name': 'Subject',
+                        'code': '',
+                        'course': None,
+                        'course_display': None,
+                        'section': None,
+                        'year': None,
+                        'semester': None,
+                        'lecturers': []
+                    },
+                    'month': month_name,
+                    'year': year,
+                    'statistics': {
+                        'total_students': 0,
+                        'total_classes_conducted': 0,
+                        'class_average_attendance': 0,
+                        'students_with_good_attendance': 0,
+                        'students_with_poor_attendance': 0
+                    },
+                    'student_attendance': []
+                }
             
             from models.marks import StudentMarks
             query = StudentMarks.query.filter_by(subject_id=subject_id)
@@ -382,15 +469,60 @@ class ReportingService:
     def get_class_attendance_report(subject_id, month=None, year=None):
         """Get attendance report for entire class in a subject"""
         try:
-            subject = Subject.query.get(subject_id)
-            if not subject:
-                return None
+            print(f"[DEBUG] Service called with subject_id={subject_id}, month={month}, year={year}")
             
-            # Default to current month/year if not specified
-            if not month:
-                month = datetime.now().month
-            if not year:
-                year = datetime.now().year
+            subject = Subject.query.get(subject_id)
+            print(f"[DEBUG] Subject found: {subject is not None}")
+            if subject:
+                print(f"[DEBUG] Subject name: {subject.name}, code: {subject.code}")
+            
+            if not subject:
+                print(f"[DEBUG] Subject not found, returning empty report structure")
+                # Gracefully return an empty report shell so UI can still render
+                is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+                if not is_overall:
+                    if not month:
+                        month = datetime.now().month
+                    if not year:
+                        year = datetime.now().year
+                month_name = 'Overall' if (is_overall) else (
+                    ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month]
+                    if isinstance(month, int) and 1 <= month <= 12 else str(month)
+                )
+                empty_report = {
+                    'subject': {
+                        'id': subject_id,
+                        'name': 'Subject',
+                        'code': '',
+                        'course': None,
+                        'course_display': None,
+                        'section': None,
+                        'year': None,
+                        'semester': None,
+                        'lecturers': []
+                    },
+                    'month': month_name,
+                    'year': year,
+                    'statistics': {
+                        'total_students': 0,
+                        'total_classes_conducted': 0,
+                        'class_average_attendance': 0,
+                        'students_with_good_attendance': 0,
+                        'students_with_poor_attendance': 0
+                    },
+                    'student_attendance': []
+                }
+                print(f"[DEBUG] Returning empty report with month_name: {month_name}")
+                return empty_report
+            
+            # If month is 'overall', compute cumulative across all months/years
+            is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+            # Default to current month/year if not specified and not overall
+            if not is_overall:
+                if not month:
+                    month = datetime.now().month
+                if not year:
+                    year = datetime.now().year
             
             # Get all students enrolled in this subject
             from models.student import StudentEnrollment
@@ -403,12 +535,15 @@ class ReportingService:
             total_classes_conducted = 0
             
             # First, try to get data from monthly_attendance_summary table
-            from models.attendance import MonthlyAttendanceSummary
-            monthly_summary = MonthlyAttendanceSummary.query.filter_by(
-                subject_id=subject_id,
-                month=month,
-                year=year
-            ).first()
+            from models.attendance import MonthlyAttendanceSummary, MonthlyStudentAttendance
+            if is_overall:
+                monthly_summary = None
+            else:
+                monthly_summary = MonthlyAttendanceSummary.query.filter_by(
+                    subject_id=subject_id,
+                    month=month,
+                    year=year
+                ).first()
             
             if monthly_summary:
                 total_classes_conducted = monthly_summary.total_classes
@@ -445,11 +580,43 @@ class ReportingService:
                     student_attendance.append(student_data)
             else:
                 # Fallback to daily attendance records if monthly data not available
-                all_attendance_records = AttendanceRecord.query.filter(
-                    AttendanceRecord.subject_id == subject_id,
-                    db.extract('month', AttendanceRecord.date) == month,
-                    db.extract('year', AttendanceRecord.date) == year
-                ).all()
+                if is_overall:
+                    # Compute using MonthlyStudentAttendance + MonthlyAttendanceSummary across all months/years
+                    # Aggregate total classes from summaries and present+deputation from student records
+                    summaries = MonthlyAttendanceSummary.query.filter_by(subject_id=subject_id).all()
+                    total_classes_conducted = sum(s.total_classes for s in summaries)
+                    # Map student -> present (including deputation)
+                    student_present_map = {s.id: 0 for s in students}
+                    monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(subject_id=subject_id).all()
+                    for rec in monthly_attendance_records:
+                        student_present_map[rec.student_id] = student_present_map.get(rec.student_id, 0) + int(rec.present_count or 0) + int(rec.deputation_count or 0)
+                    # Build rows
+                    for student in students:
+                        present_classes = student_present_map.get(student.id, 0)
+                        absent_classes = max(total_classes_conducted - present_classes, 0)
+                        attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
+                        student_attendance.append({
+                            'student_id': student.id,
+                            'student_name': student.name,
+                            'roll_number': student.roll_number,
+                            'total_classes': total_classes_conducted,
+                            'present_classes': present_classes,
+                            'absent_classes': absent_classes,
+                            'attendance_percentage': attendance_percentage,
+                            'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
+                        })
+                else:
+                    all_attendance_records = AttendanceRecord.query.filter(
+                        AttendanceRecord.subject_id == subject_id,
+                        db.extract('month', AttendanceRecord.date) == month,
+                        db.extract('year', AttendanceRecord.date) == year
+                    ).all()
+                
+                # For overall case, get all attendance records across all months/years
+                if is_overall:
+                    all_attendance_records = AttendanceRecord.query.filter(
+                        AttendanceRecord.subject_id == subject_id
+                    ).all()
                 
                 # Get unique dates to count total classes
                 unique_dates = set(record.date for record in all_attendance_records)
@@ -499,6 +666,20 @@ class ReportingService:
                         
                         student_attendance.append(student_data)
             
+            # Sort students by last 3 digits of roll number
+            def get_roll_sort_key(student):
+                roll_number = student.get('roll_number', '')
+                # Extract last 3 digits from roll number (e.g., BCA25001 -> 001)
+                if len(roll_number) >= 3:
+                    last_three = roll_number[-3:]
+                    try:
+                        return int(last_three)
+                    except ValueError:
+                        return 999  # Put non-numeric at end
+                return 999  # Put short roll numbers at end
+            
+            student_attendance.sort(key=get_roll_sort_key)
+            
             # Calculate class statistics
             all_percentages = [s['attendance_percentage'] for s in student_attendance]
             valid_percentages = [p for p in all_percentages if p > 0]
@@ -512,9 +693,12 @@ class ReportingService:
             }
             
             # Get month name for display
-            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                          'July', 'August', 'September', 'October', 'November', 'December']
-            month_name = month_names[month] if 1 <= month <= 12 else str(month)
+            if is_overall:
+                month_name = 'Overall'
+            else:
+                month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                              'July', 'August', 'September', 'October', 'November', 'December']
+                month_name = month_names[month] if 1 <= month <= 12 else str(month)
             
             course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
 
@@ -542,9 +726,11 @@ class ReportingService:
                 'student_attendance': student_attendance
             }
             
+            print(f"[DEBUG] Returning valid report with {len(student_attendance)} students")
             return report
             
         except Exception as e:
+            print(f"[DEBUG] Exception in service: {str(e)}")
             print(f"Error generating class attendance report: {e}")
             return None
     
@@ -791,7 +977,7 @@ class ReportingService:
             for m in subj.get('marks', []):
                 marks_rows.append([
                     subj.get('subject_name',''), subj.get('subject_code',''), m.get('assessment_type',''),
-                    m.get('marks_obtained',''), m.get('max_marks',''), m.get('percentage',''), m.get('grade',''), m.get('performance_status','')
+                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(m.get('percentage')), m.get('grade',''), m.get('performance_status','')
                 ])
         if len(marks_rows) == 1:
             marks_rows.append(['No data'] + ['']*7)
@@ -821,8 +1007,8 @@ class ReportingService:
         for subj in report.get('subjects', []):
             a = subj.get('attendance', {})
             att_rows.append([
-                subj.get('subject_name',''), subj.get('subject_code',''), a.get('total_classes',''),
-                a.get('present_classes',''), a.get('absent_classes',''), a.get('attendance_percentage',''),
+                subj.get('subject_name',''), subj.get('subject_code',''), ReportingService._format_number(a.get('total_classes')),
+                ReportingService._format_number(a.get('present_classes')), ReportingService._format_number(a.get('absent_classes')), ReportingService._format_number(a.get('attendance_percentage')),
                 'Good' if a.get('attendance_percentage',0) >= 75 else 'Average' if a.get('attendance_percentage',0) >= 50 else 'Poor'
             ])
         if len(att_rows) == 1:
@@ -902,6 +1088,10 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
+        # Extract year from course name and add Year row
+        year = ReportingService._extract_year_from_class(course_name)
+        year_display = f"Year {year}" if year else "Year N/A"
+        subj_rows.append(['Year', year_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -916,11 +1106,9 @@ class ReportingService:
             try:
                 if obt is None or mx is None:
                     return ''
-                fo = float(obt)
-                fm = float(mx)
-                obt_s = str(int(fo)) if fo.is_integer() else str(fo)
-                max_s = str(int(fm)) if fm.is_integer() else str(fm)
-                return f"{obt_s}/{max_s}"
+                fo = ReportingService._format_number(obt)
+                fm = ReportingService._format_number(mx)
+                return f"{fo}/{fm}"
             except Exception:
                 try:
                     return f"{obt}/{mx}"
@@ -1028,6 +1216,10 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
+        # Extract year from course name and add Year row
+        year = ReportingService._extract_year_from_class(course_name)
+        year_display = f"Year {year}" if year else "Year N/A"
+        subj_rows.append(['Year', year_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -1111,11 +1303,21 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A8'] = 'Year'
+            ws['B8'] = year_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A7'] = 'Year'
+            ws['B7'] = year_display
         # Determine where to place spacer row and headers
-        last_info_row = 7 if has_section else 6
+        last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
         header_row = spacer_row + 1
         data_start_row = header_row + 1
@@ -1237,11 +1439,21 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A8'] = 'Year'
+            ws['B8'] = year_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
+            # Extract year from course name and add Year row
+            year = ReportingService._extract_year_from_class(course_name)
+            year_display = f"Year {year}" if year else "Year N/A"
+            ws['A7'] = 'Year'
+            ws['B7'] = year_display
         # Determine where to place spacer row and headers
-        last_info_row = 7 if has_section else 6
+        last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
         header_row = spacer_row + 1
         data_start_row = header_row + 1
@@ -1386,7 +1598,7 @@ class ReportingService:
                 )
                 rows.append([
                     sm.get('student_name',''), sm.get('roll_number',''), m.get('assessment_type',''),
-                    m.get('marks_obtained',''), m.get('max_marks',''), percent
+                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(percent)
                 ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
@@ -1468,11 +1680,11 @@ class ReportingService:
 
         stats = report.get('statistics', {})
         stats_rows = [
-            ['Total Students', stats.get('total_students', 0)],
-            ['Classes Conducted', stats.get('total_classes_conducted', 0)],
-            ['Class Average (%)', stats.get('class_average_attendance', 0)],
-            ['Good Attendance (≥75%)', stats.get('students_with_good_attendance', 0)],
-            ['Poor Attendance (<50%)', stats.get('students_with_poor_attendance', 0)],
+            ['Total Students', ReportingService._format_number(stats.get('total_students', 0))],
+            ['Classes Conducted', ReportingService._format_number(stats.get('total_classes_conducted', 0))],
+            ['Class Average (%)', ReportingService._format_number(stats.get('class_average_attendance', 0))],
+            ['Good Attendance (≥75%)', ReportingService._format_number(stats.get('students_with_good_attendance', 0))],
+            ['Poor Attendance (<50%)', ReportingService._format_number(stats.get('students_with_poor_attendance', 0))],
         ]
         stats_table = Table(stats_rows, colWidths=[60*mm, 100*mm])
         stats_table.setStyle(TableStyle([
@@ -1485,8 +1697,8 @@ class ReportingService:
         rows = [header]
         for st in report.get('student_attendance', []):
             rows.append([
-                st.get('student_name',''), st.get('roll_number',''), st.get('total_classes',''),
-                st.get('present_classes',''), st.get('absent_classes',''), st.get('attendance_percentage',''), st.get('status','')
+                st.get('student_name',''), st.get('roll_number',''), ReportingService._format_number(st.get('total_classes')),
+                ReportingService._format_number(st.get('present_classes')), ReportingService._format_number(st.get('absent_classes')), ReportingService._format_number(st.get('attendance_percentage')), st.get('status','')
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
@@ -1545,10 +1757,10 @@ class ReportingService:
         c = report.get('course', {})
         meta_rows = [
             ['Course', f"{c.get('name','')} ({c.get('code','')})"],
-            ['Duration (years)', c.get('duration_years','')],
-            ['Total Semesters', c.get('total_semesters','')],
-            ['Total Students', report.get('total_students','')],
-            ['Total Subjects', report.get('total_subjects','')],
+            ['Duration (years)', ReportingService._format_number(c.get('duration_years'))],
+            ['Total Semesters', ReportingService._format_number(c.get('total_semesters'))],
+            ['Total Students', ReportingService._format_number(report.get('total_students'))],
+            ['Total Subjects', ReportingService._format_number(report.get('total_subjects'))],
         ]
         meta_table = Table(meta_rows, colWidths=[55*mm, 105*mm])
         meta_table.setStyle(TableStyle([
@@ -1563,8 +1775,8 @@ class ReportingService:
         for s in report.get('subjects', []):
             rows.append([
                 s.get('subject_name',''), s.get('subject_code',''), f"{s.get('year','')}/{s.get('semester','')}",
-                s.get('enrolled_students',''), s.get('marks_statistics',{}).get('average_marks',0),
-                s.get('marks_statistics',{}).get('passing_rate',0), s.get('attendance_statistics',{}).get('average_attendance',0)
+                ReportingService._format_number(s.get('enrolled_students')), ReportingService._format_number(s.get('marks_statistics',{}).get('average_marks',0)),
+                ReportingService._format_number(s.get('marks_statistics',{}).get('passing_rate',0)), ReportingService._format_number(s.get('attendance_statistics',{}).get('average_attendance',0))
             ])
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])

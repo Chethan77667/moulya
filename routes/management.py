@@ -123,7 +123,8 @@ def tracking_export_marks():
             title_suffix = 'Updated' if status == 'updated' else 'Pending'
         else:
             title_suffix = None
-        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Assessment', 'Status']
+        # Updated headers: remove Course and Class/Year -> single Class; pretty Assessment names
+        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Assessment', 'Status']
         ExcelExportService.style_header_row(ws, 1, headers)
 
         row = 2
@@ -134,9 +135,24 @@ def tracking_export_marks():
                 ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
-                ws.cell(row=row, column=col, value=item.get('assessment_type')); col += 1
+                # Build pretty class from course_code; remove underscores
+                class_text = None
+                try:
+                    cc = item.get('course_code') or ''
+                    class_text = str(cc).replace('_', ' ').strip() if cc else ''
+                except Exception:
+                    class_text = item.get('class_display') or ''
+                ws.cell(row=row, column=col, value=class_text); col += 1
+                # Pretty assessment label
+                at = (item.get('assessment_type') or '').lower()
+                pretty_map = {
+                    'internal1': 'Internal 1',
+                    'internal2': 'Internal 2',
+                    'assignment': 'Assignment',
+                    'project': 'Project',
+                    'any': 'Any'
+                }
+                ws.cell(row=row, column=col, value=pretty_map.get(at, (item.get('assessment_type') or ''))); col += 1
                 # Status as the last column
                 ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
@@ -177,7 +193,8 @@ def tracking_export_attendance():
             title_suffix = 'Updated' if status == 'updated' else 'Pending'
         else:
             title_suffix = None
-        headers = ['Lecturer', 'Subject', 'Code', 'Course', 'Class/Year', 'Month', 'Year', 'Status']
+        # Updated headers for attendance export: single Class column (no underscores), remove Month column
+        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Status']
         ExcelExportService.style_header_row(ws, 1, headers)
 
         row = 2
@@ -188,10 +205,14 @@ def tracking_export_attendance():
                 ws.cell(row=row, column=col, value=item.get('lecturer_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_name')); col += 1
                 ws.cell(row=row, column=col, value=item.get('subject_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('course_code')); col += 1
-                ws.cell(row=row, column=col, value=item.get('class_display')); col += 1
-                ws.cell(row=row, column=col, value=item.get('month')); col += 1
-                ws.cell(row=row, column=col, value=item.get('year')); col += 1
+                # Build pretty class from course_code (e.g., I_BCA_A -> I BCA A)
+                class_text = None
+                try:
+                    cc = item.get('course_code') or ''
+                    class_text = str(cc).replace('_', ' ').strip() if cc else ''
+                except Exception:
+                    class_text = item.get('class_display') or ''
+                ws.cell(row=row, column=col, value=class_text); col += 1
                 # Status last
                 ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
@@ -1023,17 +1044,34 @@ def class_marks_report(subject_id):
 def class_attendance_report(subject_id):
     """Class attendance report"""
     try:
-        month = request.args.get('month', type=int)
+        raw_month = request.args.get('month')
+        print(f"[DEBUG] Raw month from request: {raw_month}")
+        
+        # Support "overall" to show cumulative attendance across all months
+        if raw_month and str(raw_month).lower() == 'overall':
+            month = 'overall'
+        else:
+            month = request.args.get('month', type=int)
         year = request.args.get('year', type=int)
+        
+        print(f"[DEBUG] Processed month: {month}, year: {year}, subject_id: {subject_id}")
         
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         
-        if not report:
+        print(f"[DEBUG] Report returned: {type(report)}, is None: {report is None}")
+        if report:
+            print(f"[DEBUG] Report keys: {list(report.keys()) if isinstance(report, dict) else 'Not a dict'}")
+        
+        # Only flash error if report is None (service couldn't create even empty structure)
+        if report is None:
+            print(f"[DEBUG] Report is None, flashing error")
             flash('Subject not found', 'error')
             return redirect(url_for('management.reports_dashboard'))
         
+        print(f"[DEBUG] Rendering template with report")
         return render_template('management/class_attendance_report.html', report=report)
     except Exception as e:
+        print(f"[DEBUG] Exception in route: {str(e)}")
         flash(f'Error generating class attendance report: {str(e)}', 'error')
         return redirect(url_for('management.reports_dashboard'))
 

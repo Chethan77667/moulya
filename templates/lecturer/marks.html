@@ -176,7 +176,7 @@
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto" id="marks-students-container">
+                        <div class="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto will-change-transform" id="marks-students-container">
                             {% for student in students %}
                             <div class="marks-student-row bg-white border border-gray-200 rounded-lg p-3 sm:p-4 hover:bg-gray-50 transition-colors" 
                                  data-name="{{ student.name.lower() }}" data-roll="{{ student.roll_number.lower() }}">
@@ -224,9 +224,11 @@
                         </div>
                     </div>
                     
-                    <button type="submit" class="w-full bg-black text-white py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black text-sm sm:text-sm transition-colors touch-manipulation">
-                        Save Marks
-                    </button>
+                    <div class="mobile-sticky-actions">
+                        <button type="submit" class="w-full bg-black text-white py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black text-sm sm:text-sm transition-colors touch-manipulation">
+                            Save Marks
+                        </button>
+                    </div>
                     {% else %}
                     <div class="text-center py-8">
                         <p class="text-gray-500">No students enrolled in this subject.</p>
