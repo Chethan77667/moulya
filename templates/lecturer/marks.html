@@ -108,18 +108,18 @@
                         </div>
 
                         <!-- Excel actions (mobile responsive) -->
-                        <div class="mt-2 flex flex-col sm:flex-row gap-2 sm:gap-2">
+                        <div class="mt-2 flex flex-col gap-3">
                             <button type="button" id="download-template-btn"
-                                    class="bg-white text-black border border-black px-4 py-2 rounded text-sm hover:bg-gray-50"
+                                    class="w-full sm:w-auto bg-white text-black border border-black px-4 py-3 sm:py-2 rounded text-sm hover:bg-gray-50 touch-manipulation"
                                     onclick="downloadMarksTemplate()">
                                 Download Excel Template
                             </button>
-                            <div class="flex items-center gap-2">
+                            <div class="flex flex-col sm:flex-row gap-2">
                                 <input type="file" name="marks_file" id="marks_file" accept=".xlsx,.xls"
-                                       class="text-sm">
+                                       class="w-full sm:w-auto text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100">
                                 <button type="submit" formaction="{{ url_for('lecturer.upload_marks_excel', subject_id=subject.id) }}"
                                         id="upload-btn"
-                                        class="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800">
+                                        class="w-full sm:w-auto bg-black text-white px-4 py-3 sm:py-2 rounded text-sm hover:bg-gray-800 touch-manipulation">
                                     Upload Excel
                                 </button>
                             </div>
@@ -131,33 +131,35 @@
                                 <div class="text-sm font-medium text-gray-700" id="selected-count">0 students selected</div>
                                 <div class="flex flex-col sm:flex-row gap-2 sm:gap-2">
                                     <!-- Quick Actions Row -->
-                                    <div class="flex flex-wrap gap-2">
+                                    <div class="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
                                         <button type="button" onclick="applyMarksToSelected(0)" 
-                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
+                                                class="bg-white text-black border border-black px-3 py-2 sm:px-3 sm:py-1 rounded text-xs sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation">
                                             Set 0
                                         </button>
                                         <button type="button" onclick="applyMarksToSelected('half')" 
-                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
-                                            Half Marks
+                                                class="bg-white text-black border border-black px-3 py-2 sm:px-3 sm:py-1 rounded text-xs sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation">
+                                            Half
                                         </button>
                                         <button type="button" onclick="applyMarksToSelected('full')" 
-                                                class="bg-white text-black border border-black px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation flex-1 sm:flex-none">
-                                            Full Marks
+                                                class="bg-white text-black border border-black px-3 py-2 sm:px-3 sm:py-1 rounded text-xs sm:text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors touch-manipulation">
+                                            Full
                                         </button>
                                     </div>
                                     
                                     <!-- Custom Input and Actions Row -->
-                                    <div class="flex gap-2">
+                                    <div class="flex flex-col sm:flex-row gap-2">
                                         <input type="number" id="bulk-marks-value" placeholder="Custom marks" min="0" step="0.5"
-                                               class="flex-1 sm:w-24 px-3 py-2 sm:px-2 sm:py-1 border border-gray-300 rounded text-sm sm:text-sm focus:outline-none focus:ring-black focus:border-black touch-manipulation">
-                                        <button type="button" onclick="applyCustomMarksToSelected()" 
-                                                class="bg-black text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-800 active:bg-gray-900 transition-colors touch-manipulation">
-                                            Apply
-                                        </button>
-                                        <button type="button" onclick="clearSelectedMarks()" 
-                                                class="bg-gray-600 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm sm:text-sm hover:bg-gray-700 active:bg-gray-800 transition-colors touch-manipulation">
-                                            Clear
-                                        </button>
+                                               class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-black focus:border-black touch-manipulation">
+                                        <div class="flex gap-2">
+                                            <button type="button" onclick="applyCustomMarksToSelected()" 
+                                                    class="flex-1 bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800 active:bg-gray-900 transition-colors touch-manipulation">
+                                                Apply
+                                            </button>
+                                            <button type="button" onclick="clearSelectedMarks()" 
+                                                    class="flex-1 bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700 active:bg-gray-800 transition-colors touch-manipulation">
+                                                Clear
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -191,28 +193,28 @@
                                     </div>
                                     
                                     <!-- Marks Input Section -->
-                                    <div class="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
-                                        <!-- Preset Buttons - Mobile: Larger, Desktop: Compact -->
-                                        <div class="flex space-x-1 sm:space-x-1">
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4">
+                                        <!-- Preset Buttons - Mobile: Grid, Desktop: Row -->
+                                        <div class="grid grid-cols-3 gap-2 sm:flex sm:space-x-1">
                                             <button type="button" onclick="setStudentMark({{ student.id }}, 0)" 
-                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                    class="text-xs bg-gray-100 text-gray-700 px-3 py-2 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
                                                 0
                                             </button>
                                             <button type="button" onclick="setStudentMark({{ student.id }}, 'half')" 
-                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                    class="text-xs bg-gray-100 text-gray-700 px-3 py-2 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
                                                 ½
                                             </button>
                                             <button type="button" onclick="setStudentMark({{ student.id }}, 'full')" 
-                                                    class="text-xs sm:text-xs bg-gray-100 text-gray-700 px-3 py-2 sm:px-2 sm:py-1 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
+                                                    class="text-xs bg-gray-100 text-gray-700 px-3 py-2 rounded hover:bg-gray-200 active:bg-gray-300 transition-colors touch-manipulation">
                                                 ✓
                                             </button>
                                         </div>
                                         
-                                        <!-- Marks Input - Mobile: Larger -->
-                                        <div class="w-24 sm:w-20">
+                                        <!-- Marks Input - Mobile: Full width, Desktop: Fixed width -->
+                                        <div class="w-full sm:w-20">
                                             <input type="number" name="marks_{{ student.id }}" 
                                                    placeholder="0" min="0" step="0.5"
-                                                   class="block w-full px-3 py-2 sm:px-2 sm:py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm sm:text-sm marks-input touch-manipulation"
+                                                   class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm marks-input touch-manipulation"
                                                    data-student-id="{{ student.id }}">
                                         </div>
                                     </div>
@@ -411,18 +413,45 @@ function toggleMobileMenu() {
 }
 
 // Auto-calculate and validate marks
-document.getElementById('max_marks').addEventListener('input', function() {
-    const maxMarks = parseFloat(this.value) || 0;
-    const marksInputs = document.querySelectorAll('input[name^="marks_"]');
-    
-    marksInputs.forEach(input => {
-        input.max = maxMarks;
-        if (parseFloat(input.value) > maxMarks) {
-            input.value = maxMarks;
+(function(){
+    const maxEl = document.getElementById('max_marks');
+    if (!maxEl) return;
+
+    function setInputsMax(maxVal){
+        const marksInputs = document.querySelectorAll('input[name^="marks_"]');
+        marksInputs.forEach(input => { input.max = maxVal; });
+    }
+
+    function clampInputsToMax(maxVal){
+        const marksInputs = document.querySelectorAll('.marks-input');
+        marksInputs.forEach(input => {
+            const v = parseFloat(input.value);
+            if (!isNaN(v) && v > maxVal) {
+                input.value = String(maxVal);
+            }
+        });
+        updateProgress();
+    }
+
+    // While typing: only update the max attribute; do not clamp existing entries per keystroke
+    maxEl.addEventListener('input', function(){
+        const maxVal = parseFloat(this.value);
+        if (!isNaN(maxVal)) {
+            setInputsMax(maxVal);
         }
     });
-    updateProgress();
-});
+
+    // On commit (blur/change): clamp values exceeding the final max
+    ['change','blur'].forEach(evt => {
+        maxEl.addEventListener(evt, function(){
+            const maxVal = parseFloat(this.value);
+            if (!isNaN(maxVal)) {
+                setInputsMax(maxVal);
+                clampInputsToMax(maxVal);
+            }
+        });
+    });
+})();
 
 // Search functionality for marks entry
 document.getElementById('marks-student-search')?.addEventListener('input', function() {
@@ -812,6 +841,47 @@ function parseMarksExcelAndFill(){
     .space-x-1 > * + * {
         margin-left: 0.5rem;
     }
+    
+    /* Enhanced mobile form styling */
+    input[type="number"], input[type="text"], select {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 12px 16px;
+    }
+    
+    /* Better button spacing on mobile */
+    .grid.grid-cols-3 button {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Improved file input styling */
+    input[type="file"] {
+        padding: 8px;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        background-color: #f9fafb;
+    }
+    
+    /* Better modal responsiveness */
+    .fixed.inset-0 .bg-white {
+        margin: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+    }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .marks-student-row {
+        padding: 1rem;
+    }
+    
+    .grid.grid-cols-3 {
+        display: flex;
+        gap: 0.5rem;
+    }
 }
 
 /* Ensure proper touch targets */
@@ -820,11 +890,42 @@ function parseMarksExcelAndFill(){
         min-height: 44px;
         min-width: 44px;
     }
+    
+    /* Larger touch targets for preset buttons */
+    .grid.grid-cols-3 button {
+        min-height: 48px;
+        min-width: 48px;
+    }
 }
 
 /* Smooth transitions for better UX */
 .transition-colors {
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* Enhanced focus states for accessibility */
+.touch-manipulation:focus {
+    outline: 2px solid #000;
+    outline-offset: 2px;
+}
+
+/* Better scrollbar styling for mobile */
+.max-h-96::-webkit-scrollbar {
+    width: 6px;
+}
+
+.max-h-96::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.max-h-96::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.max-h-96::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 </style>
 {% endblock %}

@@ -363,29 +363,26 @@ class LecturerService:
             enrolled_students = [e.student for e in enrollments_sorted]
             report_data = []
             
-            # Compute subject total classes cumulatively
+            # Compute subject total classes cumulatively (overall across all lecturers)
             total_classes_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyAttendanceSummary.total_classes), 0))
                 .filter(
-                    MonthlyAttendanceSummary.subject_id == subject_id,
-                    MonthlyAttendanceSummary.lecturer_id == lecturer_id
+                    MonthlyAttendanceSummary.subject_id == subject_id
                 ).scalar() or 0)
             total_classes_cumulative = int(total_classes_cumulative)
             
             for student in enrolled_students:
-                # Sum student's presents cumulatively across months
+                # Sum student's presents cumulatively across months (overall across all lecturers)
                 present_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.present_count), 0))
                     .filter(
                         MonthlyStudentAttendance.student_id == student.id,
-                        MonthlyStudentAttendance.subject_id == subject_id,
-                        MonthlyStudentAttendance.lecturer_id == lecturer_id
+                        MonthlyStudentAttendance.subject_id == subject_id
                     ).scalar() or 0)
                 present_cumulative = int(present_cumulative)
-                # Sum student's deputation cumulatively across months (year-agnostic for overall)
+                # Sum student's deputation cumulatively across months (overall across all lecturers)
                 deputation_cumulative = (db.session.query(func.coalesce(func.sum(MonthlyStudentAttendance.deputation_count), 0))
                     .filter(
                         MonthlyStudentAttendance.student_id == student.id,
-                        MonthlyStudentAttendance.subject_id == subject_id,
-                        MonthlyStudentAttendance.lecturer_id == lecturer_id
+                        MonthlyStudentAttendance.subject_id == subject_id
                     ).scalar() or 0)
                 deputation_cumulative = int(deputation_cumulative)
                 
