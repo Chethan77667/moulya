@@ -81,11 +81,18 @@
                         </div>
                         <button onclick="applyMarksFilter()" 
                                 class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2l-7 7v6l-4-2v-4L3 6V4z"/></svg>
                             Apply Filter
                         </button>
                         <button onclick="exportMarksDeficiency()" 
                                 class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
-                            📥 Export Excel
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/></svg>
+                            Export Excel
+                        </button>
+                        <button onclick="exportMarksDeficiencyPDF()" 
+                                class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3 0 2.761 3 5 3 5s3-2.239 3-5c0-1.657-1.343-3-3-3z"/></svg>
+                            Export PDF
                         </button>
                     </div>
                     <div class="mt-2 text-xs text-gray-500">
@@ -288,6 +295,15 @@ function exportMarksDeficiency() {
     const threshold = document.getElementById('threshold-slider').value;
     const subjectId = document.getElementById('subject-select').value;
     const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export');
+    url.searchParams.set('threshold', threshold);
+    if (subjectId) url.searchParams.set('subject_id', subjectId);
+    window.location.href = url.toString();
+}
+
+function exportMarksDeficiencyPDF() {
+    const threshold = document.getElementById('threshold-slider').value;
+    const subjectId = document.getElementById('subject-select').value;
+    const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export-pdf');
     url.searchParams.set('threshold', threshold);
     if (subjectId) url.searchParams.set('subject_id', subjectId);
     window.location.href = url.toString();

@@ -14,6 +14,8 @@
             selectedMonth: new Date().getMonth() + 1,
             selectedYear: new Date().getFullYear(),
             selectedAssessmentType: '',
+            selectedComprehensiveCourse: '',
+            selectedReportType: 'attendance',
             studentSearch: '',
             showStudentDropdown: false,
             filteredStudents: [],
@@ -116,6 +118,22 @@
                     return;
                 }
                 window.open(`/management/reports/course/${this.selectedCourse}`, '_blank');
+            },
+            
+            generateComprehensiveClassReport() {
+                if (!this.selectedComprehensiveCourse) {
+                    Swal.fire('Error!', 'Please select a course', 'error');
+                    return;
+                }
+                if (!this.selectedReportType) {
+                    Swal.fire('Error!', 'Please select a report type', 'error');
+                    return;
+                }
+                let url = `/management/reports/comprehensive-class/${this.selectedComprehensiveCourse}?type=${this.selectedReportType}`;
+                if (this.selectedReportType === 'marks' && this.selectedAssessmentType) {
+                    url += `&assessment_type=${this.selectedAssessmentType}`;
+                }
+                window.open(url, '_blank');
             }
         }
     }
@@ -398,6 +416,69 @@
                                 📥 Export Excel
                             </button>
                             <button @click="selectedCourse && (window.open(`/management/reports/export/course/${selectedCourse}/pdf`, '_blank'))" 
+                                    class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                🧾 Export PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comprehensive Class Report Card -->
+            <div class="bg-white shadow rounded-lg border border-gray-200">
+                <div class="px-6 py-6">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-gray-900 rounded-lg flex items-center justify-center">
+                                <span class="text-white font-bold">📊</span>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-lg font-semibold text-gray-900">Comprehensive Class Report</h3>
+                            <p class="text-sm text-gray-600">Complete attendance and marks analysis for all subjects</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Select Course</label>
+                            <select x-model="selectedComprehensiveCourse" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="">Choose a course...</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.name }} ({{ course.code }}) - {{ course.total_students }} students</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Report Type</label>
+                            <select x-model="selectedReportType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="attendance">Attendance Report</option>
+                                <option value="marks">Marks Report</option>
+                            </select>
+                        </div>
+                        
+                        <div x-show="selectedReportType === 'marks'">
+                            <label class="block text-sm font-medium text-gray-700">Assessment Type (Optional)</label>
+                            <select x-model="selectedAssessmentType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                                <option value="all">All Assessments</option>
+                                <option value="internal1">Internal 1</option>
+                                <option value="internal2">Internal 2</option>
+                                <option value="assignment">Assignment</option>
+                                <option value="project">Project</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex space-x-2">
+                            <button @click="generateComprehensiveClassReport()" 
+                                    class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
+                                View Report
+                            </button>
+                            <button @click="selectedComprehensiveCourse && (window.open(`/management/reports/export/comprehensive-class/${selectedComprehensiveCourse}/excel?type=${selectedReportType}&assessment_type=${selectedAssessmentType}`, '_blank'))" 
+                                    class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                                📥 Export Excel
+                            </button>
+                            <button @click="selectedComprehensiveCourse && (window.open(`/management/reports/export/comprehensive-class/${selectedComprehensiveCourse}/pdf?type=${selectedReportType}&assessment_type=${selectedAssessmentType}`, '_blank'))" 
                                     class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                                 🧾 Export PDF
                             </button>

@@ -1313,3 +1313,79 @@ def export_course_overview_report(course_id):
     except Exception as e:
         flash(f'Error exporting course overview report: {str(e)}', 'error')
         return redirect(url_for('management.course_overview_report', course_id=course_id))
+
+@management_bp.route('/reports/comprehensive-class/<int:course_id>')
+@login_required('management')
+def comprehensive_class_report(course_id):
+    """Comprehensive class report for all subjects in a course"""
+    try:
+        report_type = request.args.get('type', 'attendance')  # 'attendance' or 'marks'
+        assessment_type = request.args.get('assessment_type', 'all')  # for marks report
+        
+        report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
+        
+        if not report:
+            flash('Course not found or no data available', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        
+        return render_template('management/comprehensive_class_report.html', report=report)
+        
+    except Exception as e:
+        flash(f'Error generating comprehensive class report: {str(e)}', 'error')
+        return redirect(url_for('management.reports_dashboard'))
+
+@management_bp.route('/reports/export/comprehensive-class/<int:course_id>/excel')
+@login_required('management')
+def export_comprehensive_class_report_excel(course_id):
+    """Export comprehensive class report to Excel"""
+    try:
+        from flask import make_response
+        
+        report_type = request.args.get('type', 'attendance')
+        assessment_type = request.args.get('assessment_type', 'all')
+        
+        report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
+        
+        if not report:
+            flash('Course not found or no data available', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        
+        excel_bytes = ExcelExportService.export_comprehensive_class_report(report)
+        
+        response = make_response(excel_bytes)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=comprehensive_class_report_{course_id}_{report_type}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Error exporting comprehensive class report: {str(e)}', 'error')
+        return redirect(url_for('management.reports_dashboard'))
+
+@management_bp.route('/reports/export/comprehensive-class/<int:course_id>/pdf')
+@login_required('management')
+def export_comprehensive_class_report_pdf(course_id):
+    """Export comprehensive class report to PDF"""
+    try:
+        from flask import make_response
+        
+        report_type = request.args.get('type', 'attendance')
+        assessment_type = request.args.get('assessment_type', 'all')
+        
+        report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
+        
+        if not report:
+            flash('Course not found or no data available', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        
+        pdf_bytes = ReportingService.generate_comprehensive_class_report_pdf(report)
+        
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=comprehensive_class_report_{course_id}_{report_type}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Error exporting comprehensive class report: {str(e)}', 'error')
+        return redirect(url_for('management.reports_dashboard'))

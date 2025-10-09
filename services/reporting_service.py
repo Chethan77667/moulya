@@ -120,13 +120,14 @@ class ReportingService:
             return Paragraph(xml_escape(str(value)), ReportingService._get_paragraph_style())
 
     @staticmethod
-    def _wrap_table_data(rows, skip_header=True, header_text_white=False):
+    def _wrap_table_data(rows, skip_header=True, header_text_white=False, no_wrap_cols=None):
         """Map table cells to Paragraphs for word-wrap.
         If skip_header=True, the first row is left as-is so TableStyle header
         text color/background rules still apply.
         """
         if not rows:
             return rows
+        no_wrap_set = set(no_wrap_cols or [])
         start_idx = 1 if skip_header and len(rows) > 0 else 0
         wrapped_rows = []
         # Keep header as-is if requested
@@ -136,7 +137,13 @@ class ReportingService:
             else:
                 wrapped_rows.append(rows[0])
         for row in rows[start_idx:]:
-            wrapped_rows.append([ReportingService._to_paragraph(cell) for cell in row])
+            wrapped = []
+            for idx, cell in enumerate(row):
+                if idx in no_wrap_set:
+                    wrapped.append(xml_escape(str(cell)) if cell is not None else '')
+                else:
+                    wrapped.append(ReportingService._to_paragraph(cell))
+            wrapped_rows.append(wrapped)
         return wrapped_rows
     
     @staticmethod
@@ -1603,9 +1610,12 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
         # Wrap text in table data
-        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
+        # Only Student column (0) may wrap; all others should not wrap
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5})
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        # Use full page width with better proportions - Student gets most space, others are sized appropriately
+        col_widths = [120*mm, 40*mm, 40*mm, 40*mm, 35*mm, 40*mm]
+        tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1703,9 +1713,17 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
         # Wrap text in table data
-        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True)
+        # Prevent wrapping for Code (1) and Roll (4)
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,4})
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
+        # Columns: 0 Subj | 1 Code | 2 Course | 3 Student | 4 Roll | 5 Overall% | 6 Int1 | 7 Int2 | 8 Assign | 9 Project
+        # Code and Roll fit max content, other columns smaller to fit page
+        col_widths = [25*mm, 40*mm, 18*mm, 30*mm, 25*mm, 8*mm, 12*mm, 12*mm, 15*mm, 15*mm]
+        # Adjust last column to fill if any rounding difference
+        used = sum(col_widths)
+        if used < page_width:
+            col_widths[-1] += (page_width - used)
+        tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
@@ -1797,3 +1815,564 @@ class ReportingService:
         pdf_bytes = buffer.getvalue()
         buffer.close()
         return pdf_bytes
+
+    # ======================== LECTURER SHORTAGE/DEFICIENCY PDFS ========================
+    @staticmethod
+    def generate_attendance_shortage_pdf(threshold, shortage_data, lecturer_name=None):
+        """Generate a PDF for Attendance Shortage (lecturer view)."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+
+        # Header (logo + college text)
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+
+        # Title and meta
+        elements.extend([Spacer(1, 8), Paragraph('Attendance Shortage Report', styles['Title'])])
+        meta_rows = [
+            ['Lecturer', lecturer_name or 'N/A'],
+            ['Threshold', f"{ReportingService._format_number(threshold)}%"],
+        ]
+        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
+        meta_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+
+        # Create separate tables for each subject
+        sorted_shortage_data = sorted(shortage_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
+        
+        for block_idx, block in enumerate(sorted_shortage_data):
+            subj = block.get('subject')
+            if not subj:
+                continue
+                
+            course_name = subj.course.name if getattr(subj, 'course', None) else ''
+            
+            # Subject details above each table
+            if block_idx > 0:
+                elements.append(Spacer(1, 12))  # Add spacing between tables
+            
+            subject_rows = [
+                ['Subject', subj.name],
+                ['Code', subj.code],
+                ['Course', course_name]
+            ]
+            subject_table = Table(subject_rows, colWidths=[20*mm, 60*mm])
+            subject_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ]))
+            elements.extend([subject_table, Spacer(1, 8)])
+
+            # Table for this subject - removed Subject, Code, Course columns
+            headers = ['Student', 'Roll', 'Present', 'Total', '%', 'Shortage']
+            rows = [headers]
+            
+            # Sort students by roll number (last 3 digits)
+            shortage_students = block.get('shortage_students') or []
+            def get_roll_sort_key(rec):
+                roll_number = rec['student'].roll_number
+                if len(roll_number) >= 3:
+                    last_three = roll_number[-3:]
+                    try:
+                        return int(last_three)
+                    except ValueError:
+                        return 999
+                return 999
+            
+            sorted_students = sorted(shortage_students, key=get_roll_sort_key)
+            
+            for rec in sorted_students:
+                pct = rec.get('attendance_percentage') or 0
+                shortage_pct = max(0.0, float(threshold) - float(pct))
+                rows.append([
+                    rec['student'].name,
+                    rec['student'].roll_number,
+                    ReportingService._format_number(rec.get('present_classes')),
+                    ReportingService._format_number(rec.get('total_classes')),
+                    ReportingService._format_number(pct),
+                    ReportingService._format_number(shortage_pct),
+                ])
+            
+            if len(rows) == 1:
+                rows.append(['No data', '', '', '', '', ''])
+
+            # Only Student column (0) may wrap; all others should not wrap
+            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5})
+            page_width = A4[0] - (18*mm + 18*mm)
+            # Set widths for new column order: 0 Student | 1 Roll | 2 Present | 3 Total | 4 % | 5 Shortage
+            # Calculate proper widths that fit within page boundaries
+            # A4 width is 210mm, minus margins (36mm) = 174mm available
+            col_widths = [60*mm, 25*mm, 20*mm, 20*mm, 15*mm, 20*mm]
+            tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
+            tbl.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('BACKGROUND', (0,0), (-1,0), colors.black),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+            ]))
+            elements.append(tbl)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @staticmethod
+    def generate_marks_deficiency_pdf(threshold, deficiency_data, lecturer_name=None):
+        """Generate a PDF for Marks Deficiency (lecturer view)."""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+        header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+
+        # Header
+        try:
+            from flask import current_app
+            logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+            logo_img = Image(logo_path)
+            logo_img._restrictSize(26*mm, 26*mm)
+        except Exception:
+            logo_img = ''
+        header_text = [
+            Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+            Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+        ]
+        header_table = Table([[logo_img, header_text]], colWidths=[26*mm, (A4[0] - (18*mm + 18*mm) - 26*mm)])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+            ('LEFTPADDING', (0,0), (-1,-1), 0),
+            ('RIGHTPADDING', (0,0), (-1,-1), 0),
+            ('TOPPADDING', (0,0), (-1,-1), 0),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        elements.append(header_table)
+
+        elements.extend([Spacer(1, 8), Paragraph('Marks Deficiency Report', styles['Title'])])
+        meta_rows = [
+            ['Lecturer', lecturer_name or 'N/A'],
+            ['Threshold', f"{ReportingService._format_number(threshold)}%"],
+        ]
+        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
+        meta_table.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+        ]))
+        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+
+        # Create separate tables for each subject
+        sorted_deficiency_data = sorted(deficiency_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
+        
+        for block_idx, block in enumerate(sorted_deficiency_data):
+            subj = block.get('subject')
+            if not subj:
+                continue
+                
+            course_name = subj.course.name if getattr(subj, 'course', None) else ''
+            
+            # Subject details above each table
+            if block_idx > 0:
+                elements.append(Spacer(1, 12))  # Add spacing between tables
+            
+            subject_rows = [
+                ['Subject', subj.name],
+                ['Code', subj.code],
+                ['Course', course_name]
+            ]
+            subject_table = Table(subject_rows, colWidths=[20*mm, 60*mm])
+            subject_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ]))
+            elements.extend([subject_table, Spacer(1, 8)])
+
+            # Table for this subject - removed Subject, Code, Course columns
+            headers = ['Student', 'Roll', 'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project']
+            rows = [headers]
+            
+            # Sort students by roll number (last 3 digits)
+            deficient_students = block.get('deficient_students') or []
+            def get_roll_sort_key(rec):
+                roll_number = rec['student'].roll_number
+                if len(roll_number) >= 3:
+                    last_three = roll_number[-3:]
+                    try:
+                        return int(last_three)
+                    except ValueError:
+                        return 999
+                return 999
+            
+            sorted_students = sorted(deficient_students, key=get_roll_sort_key)
+            
+            for rec in sorted_students:
+                ms = rec.get('marks_summary') or {}
+                def _pair(d):
+                    try:
+                        obt = getattr(d, 'obtained', None) if hasattr(d, 'obtained') else (d.get('obtained') if isinstance(d, dict) else None)
+                        mx = getattr(d, 'max', None) if hasattr(d, 'max') else (d.get('max') if isinstance(d, dict) else None)
+                        if obt in (None, 0, '0', '0.0') and mx in (None, 0, '0', '0.0'):
+                            return ''
+                        return f"{ReportingService._format_number(obt)}/{ReportingService._format_number(mx)}"
+                    except Exception:
+                        return ''
+                rows.append([
+                    rec['student'].name,
+                    rec['student'].roll_number,
+                    ReportingService._format_number(rec.get('overall_percentage') or 0),
+                    _pair(ms.get('internal1')),
+                    _pair(ms.get('internal2')),
+                    _pair(ms.get('assignment')),
+                    _pair(ms.get('project')),
+                ])
+            
+            if len(rows) == 1:
+                rows.append(['No data', '', '', '', '', '', ''])
+
+            # Only Student column (0) may wrap; all others should not wrap
+            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5,6})
+            page_width = A4[0] - (18*mm + 18*mm)
+            # Set widths for new column order: 0 Student | 1 Roll | 2 Overall% | 3 Int1 | 4 Int2 | 5 Assign | 6 Project
+            # Calculate proper widths that fit within page boundaries
+            # A4 width is 210mm, minus margins (36mm) = 174mm available
+            col_widths = [50*mm, 25*mm, 18*mm, 18*mm, 18*mm, 20*mm, 20*mm]
+            tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
+            tbl.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('BACKGROUND', (0,0), (-1,0), colors.black),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+            ]))
+            elements.append(tbl)
+
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        return pdf_bytes
+
+    @staticmethod
+    def get_comprehensive_class_report(course_id, report_type='attendance', assessment_type='all'):
+        """Get comprehensive class report for all subjects in a course"""
+        try:
+            from models.academic import Course, Subject
+            from models.student import Student
+            from models.attendance import MonthlyAttendanceSummary, MonthlyStudentAttendance
+            from models.marks import StudentMarks
+            from sqlalchemy import func, and_, or_
+            from database import db
+            
+            # Get course information
+            course = Course.query.get(course_id)
+            if not course:
+                return None
+            
+            # Get all subjects for this course
+            subjects = Subject.query.filter_by(course_id=course_id, is_active=True).order_by(Subject.name).all()
+            
+            # Get all students for this course
+            students = Student.query.filter_by(course_id=course_id, is_active=True).order_by(Student.roll_number).all()
+            
+            report = {
+                'course': {
+                    'id': course.id,
+                    'name': course.name,
+                    'code': course.code
+                },
+                'report_type': report_type,
+                'assessment_type': assessment_type,
+                'subjects': [],
+                'students': [],
+                'data': {}
+            }
+            
+            # Add student information
+            for student in students:
+                report['students'].append({
+                    'id': student.id,
+                    'name': student.name,
+                    'roll_number': student.roll_number
+                })
+            
+            # Add subject information
+            for subject in subjects:
+                report['subjects'].append({
+                    'id': subject.id,
+                    'name': subject.name,
+                    'code': subject.code
+                })
+            
+            if report_type == 'attendance':
+                # Get attendance data for all subjects
+                for subject in subjects:
+                    subject_data = {
+                        'subject_id': subject.id,
+                        'subject_name': subject.name,
+                        'subject_code': subject.code,
+                        'student_attendance': {}
+                    }
+                    
+                    # Get overall attendance for each student in this subject
+                    for student in students:
+                        # Get total classes and attendance across all months
+                        total_classes_query = db.session.query(
+                            func.sum(MonthlyAttendanceSummary.total_classes)
+                        ).filter(
+                            MonthlyAttendanceSummary.subject_id == subject.id
+                        ).scalar() or 0
+                        
+                        # Get total present classes (including deputation)
+                        total_present_query = db.session.query(
+                            func.sum(MonthlyStudentAttendance.present_count + MonthlyStudentAttendance.deputation_count)
+                        ).filter(
+                            and_(
+                                MonthlyStudentAttendance.subject_id == subject.id,
+                                MonthlyStudentAttendance.student_id == student.id
+                            )
+                        ).scalar() or 0
+                        
+                        # Calculate percentage
+                        percentage = 0
+                        if total_classes_query > 0:
+                            percentage = round((total_present_query / total_classes_query) * 100, 2)
+                        
+                        subject_data['student_attendance'][student.id] = {
+                            'total_classes': total_classes_query,
+                            'present_classes': total_present_query,
+                            'percentage': percentage
+                        }
+                    
+                    report['data'][subject.id] = subject_data
+            
+            elif report_type == 'marks':
+                # Get marks data for all subjects
+                for subject in subjects:
+                    subject_data = {
+                        'subject_id': subject.id,
+                        'subject_name': subject.name,
+                        'subject_code': subject.code,
+                        'student_marks': {}
+                    }
+                    
+                    for student in students:
+                        student_marks = {
+                            'internal1': {'obtained': 0, 'max': 0},
+                            'internal2': {'obtained': 0, 'max': 0},
+                            'assignment': {'obtained': 0, 'max': 0},
+                            'project': {'obtained': 0, 'max': 0},
+                            'overall_percentage': 0
+                        }
+                        
+                        # Get marks for each assessment type for this student and subject
+                        marks_records = StudentMarks.query.filter_by(
+                            student_id=student.id,
+                            subject_id=subject.id
+                        ).all()
+                        
+                        for marks in marks_records:
+                            assessment_type = marks.assessment_type.lower()
+                            if assessment_type in student_marks:
+                                student_marks[assessment_type]['obtained'] = marks.marks_obtained or 0
+                                student_marks[assessment_type]['max'] = marks.max_marks or 0
+                        
+                        # Calculate overall percentage
+                        total_obtained = sum([m['obtained'] for m in student_marks.values() if isinstance(m, dict)])
+                        total_max = sum([m['max'] for m in student_marks.values() if isinstance(m, dict)])
+                        
+                        if total_max > 0:
+                            student_marks['overall_percentage'] = round((total_obtained / total_max) * 100, 2)
+                        
+                        subject_data['student_marks'][student.id] = student_marks
+                    
+                    report['data'][subject.id] = subject_data
+            
+            return report
+            
+        except Exception as e:
+            print(f"Error in get_comprehensive_class_report: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+    @staticmethod
+    def generate_comprehensive_class_report_pdf(report):
+        """Generate PDF for comprehensive class report with proper subject grouping"""
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import mm
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib import colors
+            from io import BytesIO
+            
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            # Header
+            try:
+                from flask import current_app
+                logo_path = current_app.root_path + '/static/img/logo-removebg-preview.png'
+                logo_img = Image(logo_path)
+                logo_img._restrictSize(26*mm, 26*mm)
+            except Exception:
+                logo_img = ''
+            
+            from reportlab.lib.styles import ParagraphStyle
+            header_title = ParagraphStyle('HeaderTitle', parent=styles['Title'], alignment=0, fontSize=16, leading=19)
+            header_sub = ParagraphStyle('HeaderSub', parent=styles['Normal'], alignment=0, fontSize=10, leading=12)
+            
+            header_text = [
+                Paragraph('Dr. B. B. Hegde First Grade College, Kundapura', header_title),
+                Paragraph('A Unit of Coondapur Education Society (R)', header_sub)
+            ]
+            header_table = Table([[logo_img, header_text]], colWidths=[26*mm, 148*mm])
+            header_table.setStyle(TableStyle([
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('LINEBELOW', (0,0), (-1,0), 0.75, colors.lightgrey),
+                ('LEFTPADDING', (0,0), (-1,-1), 0),
+                ('RIGHTPADDING', (0,0), (-1,-1), 0),
+                ('TOPPADDING', (0,0), (-1,-1), 0),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ]))
+            elements.append(header_table)
+            elements.append(Spacer(1, 6))
+            
+            # Title
+            report_type = report['report_type'].title()
+            course_name = report['course']['name']
+            elements.append(Paragraph(f'Comprehensive {report_type} Report', styles['Title']))
+            
+            # Course info
+            course_info = [
+                ['Course', f"{course_name} ({report['course']['code']})"],
+                ['Total Students', str(len(report['students']))],
+                ['Total Subjects', str(len(report['subjects']))]
+            ]
+            course_table = Table(course_info, colWidths=[40*mm, 120*mm])
+            course_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ]))
+            elements.extend([Spacer(1, 6), course_table, Spacer(1, 12)])
+            
+            # Group subjects into pages (4 subjects per page)
+            subjects_per_page = 4
+            subjects = report['subjects']
+            students = report['students']
+            
+            for page_start in range(0, len(subjects), subjects_per_page):
+                page_subjects = subjects[page_start:page_start + subjects_per_page]
+                
+                if page_start > 0:
+                    elements.append(Spacer(1, 20))
+                    elements.append(Paragraph(f'Page {page_start // subjects_per_page + 1}', styles['Heading2']))
+                    elements.append(Spacer(1, 12))
+                
+                # Create table for this page
+                if report['report_type'] == 'attendance':
+                    # Attendance report
+                    headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in page_subjects]
+                    rows = [headers]
+                    
+                    for student in students:
+                        row_data = [student['roll_number'], student['name']]
+                        
+                        for subject in page_subjects:
+                            subject_data = report['data'].get(subject['id'], {})
+                            student_attendance = subject_data.get('student_attendance', {}).get(student['id'], {})
+                            
+                            if student_attendance:
+                                percentage = student_attendance.get('percentage', 0)
+                                present = student_attendance.get('present_classes', 0)
+                                total = student_attendance.get('total_classes', 0)
+                                row_data.append(f"{present}/{total}\n({percentage}%)")
+                            else:
+                                row_data.append("N/A")
+                        
+                        rows.append(row_data)
+                
+                elif report['report_type'] == 'marks':
+                    # Marks report
+                    headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in page_subjects]
+                    rows = [headers]
+                    
+                    for student in students:
+                        row_data = [student['roll_number'], student['name']]
+                        
+                        for subject in page_subjects:
+                            subject_data = report['data'].get(subject['id'], {})
+                            student_marks = subject_data.get('student_marks', {}).get(student['id'], {})
+                            
+                            if student_marks:
+                                percentage = student_marks.get('overall_percentage', 0)
+                                row_data.append(f"{percentage}%")
+                            else:
+                                row_data.append("N/A")
+                        
+                        rows.append(row_data)
+                
+                # Calculate column widths
+                page_width = A4[0] - (18*mm + 18*mm)
+                num_cols = len(headers)
+                col_width = page_width / num_cols
+                col_widths = [col_width] * num_cols
+                
+                # Create table
+                table = Table(rows, repeatRows=1, colWidths=col_widths)
+                table.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                    ('BACKGROUND', (0,0), (-1,0), colors.black),
+                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                    ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0,0), (-1,-1), 8),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.lightgrey])
+                ]))
+                
+                elements.append(table)
+                
+                # Add page break if not the last page
+                if page_start + subjects_per_page < len(subjects):
+                    elements.append(Spacer(1, 20))
+            
+            doc.build(elements)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            return pdf_bytes
+            
+        except Exception as e:
+            print(f"Error in generate_comprehensive_class_report_pdf: {e}")
+            return None
