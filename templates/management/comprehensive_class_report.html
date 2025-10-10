@@ -8,7 +8,10 @@
         <!-- Header -->
         <div class="mb-8">
             <div class="flex items-center justify-between">
-                <div>
+                <div class="flex items-center gap-3">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-md bg-white hover:bg-gray-50">
+                        ← Back to Reports
+                    </a>
                     <h1 class="text-3xl font-bold text-gray-900">Comprehensive Class Report</h1>
                     <p class="mt-2 text-gray-600">{{ report.course.name }} ({{ report.course.code }})</p>
                 </div>
@@ -57,14 +60,20 @@
                 </h3>
             </div>
             
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto cursor-ew-resize" onmousedown="this.style.scrollBehavior='auto'">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
                             {% for subject in report.subjects %}
-                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ subject.name }}</th>
+                            {% set subject_data = report.data.get(subject.id, {}) %}
+                            {% if report.report_type == 'marks' and report.assessment_type != 'all' %}
+                                {% set max_m = subject_data.get('assessment_max', 0) %}
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ subject.name }} ({{ max_m }})</th>
+                            {% else %}
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ subject.name }}</th>
+                            {% endif %}
                             {% endfor %}
                         </tr>
                     </thead>
@@ -95,10 +104,15 @@
                                     {% set subject_data = report.data.get(subject.id, {}) %}
                                     {% set student_marks = subject_data.get('student_marks', {}).get(student.id, {}) %}
                                     {% if student_marks %}
-                                        {% set percentage = student_marks.get('overall_percentage', 0) %}
-                                        <span class="font-medium {% if percentage >= 60 %}text-green-600{% elif percentage >= 40 %}text-yellow-600{% else %}text-red-600{% endif %}">
-                                            {{ percentage }}%
-                                        </span>
+                                        {% if report.assessment_type != 'all' %}
+                                            {% set a = report.assessment_type.lower() %}
+                                            {% set obt = student_marks.get(a, {}).get('obtained', 0) %}
+                                            {% set mx = subject_data.get('assessment_max', student_marks.get(a, {}).get('max', 0)) %}
+                                            <span class="font-medium">{{ obt }}/{{ mx }}</span>
+                                        {% else %}
+                                            {% set percentage = student_marks.get('overall_percentage', 0) %}
+                                            <span class="font-medium {% if percentage >= 60 %}text-green-600{% elif percentage >= 40 %}text-yellow-600{% else %}text-red-600{% endif %}">{{ percentage }}%</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="text-gray-400">N/A</span>
                                     {% endif %}

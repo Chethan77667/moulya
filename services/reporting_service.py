@@ -2065,7 +2065,9 @@ class ReportingService:
             # Set widths for new column order: 0 Student | 1 Roll | 2 Overall% | 3 Int1 | 4 Int2 | 5 Assign | 6 Project
             # Calculate proper widths that fit within page boundaries
             # A4 width is 210mm, minus margins (36mm) = 174mm available
-            col_widths = [50*mm, 25*mm, 18*mm, 18*mm, 18*mm, 20*mm, 20*mm]
+            # Widen the Assignment column to avoid header wrapping while keeping total <= page width
+            # Sum: 48 + 25 + 18 + 18 + 18 + 27 + 20 = 174 mm (fits within 174mm usable width)
+            col_widths = [48*mm, 25*mm, 18*mm, 18*mm, 18*mm, 27*mm, 20*mm]
             tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
             tbl.setStyle(TableStyle([
                 ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -2181,7 +2183,9 @@ class ReportingService:
                         'subject_id': subject.id,
                         'subject_name': subject.name,
                         'subject_code': subject.code,
-                        'student_marks': {}
+                        'student_marks': {},
+                        # When a specific assessment is requested, capture the max marks for header display
+                        'assessment_max': 0
                     }
                     
                     for student in students:
@@ -2204,6 +2208,18 @@ class ReportingService:
                             if assessment_type in student_marks:
                                 student_marks[assessment_type]['obtained'] = marks.marks_obtained or 0
                                 student_marks[assessment_type]['max'] = marks.max_marks or 0
+                                # Record assessment max for the selected assessment type
+                                if assessment_type == (assessment_type_param := (assessment_type if assessment_type else '').lower()):
+                                    pass  # placeholder to avoid linter
+                        
+                        # If a specific assessment type is requested, set assessment_max from any student's record
+                        if assessment_type and assessment_type != 'all':
+                            try:
+                                max_for_type = student_marks.get(assessment_type, {}).get('max') or 0
+                                if max_for_type and (subject_data['assessment_max'] or 0) == 0:
+                                    subject_data['assessment_max'] = max_for_type
+                            except Exception:
+                                pass
                         
                         # Calculate overall percentage
                         total_obtained = sum([m['obtained'] for m in student_marks.values() if isinstance(m, dict)])

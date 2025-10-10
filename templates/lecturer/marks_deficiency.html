@@ -49,7 +49,22 @@
         <!-- Filters Section -->
         <div class="bg-white shadow rounded-lg mb-6">
             <div class="px-4 py-4 sm:py-5 sm:px-6">
-                <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Marks Deficiency Filters</h3>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <h3 class="text-base sm:text-lg leading-6 font-medium text-gray-900">Marks Deficiency Filters</h3>
+                    <!-- Export actions moved to top-right -->
+                    <div class="flex flex-col xs:flex-row sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <button onclick="exportMarksDeficiency()" 
+                                class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/></svg>
+                            Export Excel
+                        </button>
+                        <button onclick="exportMarksDeficiencyPDF()" 
+                                class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/></svg>
+                            Export PDF
+                        </button>
+                    </div>
+                </div>
                 <p class="mt-1 text-sm text-gray-500">Choose a subject and set the minimum marks percentage</p>
                 
                 <div class="mt-4">
@@ -84,16 +99,7 @@
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2l-7 7v6l-4-2v-4L3 6V4z"/></svg>
                             Apply Filter
                         </button>
-                        <button onclick="exportMarksDeficiency()" 
-                                class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"/></svg>
-                            Export Excel
-                        </button>
-                        <button onclick="exportMarksDeficiencyPDF()" 
-                                class="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-black bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3 0 2.761 3 5 3 5s3-2.239 3-5c0-1.657-1.343-3-3-3z"/></svg>
-                            Export PDF
-                        </button>
+                        
                     </div>
                     <div class="mt-2 text-xs text-gray-500">
                         Students with marks at or below <span id="threshold-text">{{ "%.2f"|format(threshold) }}%</span> will be shown
@@ -131,8 +137,8 @@
                                 <div class="bg-white p-2 rounded">
                                     <div class="font-medium text-gray-700">Internal 1</div>
                                     <div class="text-gray-900">
-                                        {% if marks_summary.internal1.obtained > 0 %}
-                                        {{ marks_summary.internal1.obtained }}/{{ marks_summary.internal1.max }}
+                                    {% if marks_summary.internal1.obtained > 0 %}
+                                        {{ marks_summary.internal1.obtained|format_mark }}/{{ marks_summary.internal1.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -141,8 +147,8 @@
                                 <div class="bg-white p-2 rounded">
                                     <div class="font-medium text-gray-700">Internal 2</div>
                                     <div class="text-gray-900">
-                                        {% if marks_summary.internal2.obtained > 0 %}
-                                        {{ marks_summary.internal2.obtained }}/{{ marks_summary.internal2.max }}
+                                    {% if marks_summary.internal2.obtained > 0 %}
+                                        {{ marks_summary.internal2.obtained|format_mark }}/{{ marks_summary.internal2.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -151,8 +157,8 @@
                                 <div class="bg-white p-2 rounded">
                                     <div class="font-medium text-gray-700">Assignment</div>
                                     <div class="text-gray-900">
-                                        {% if marks_summary.assignment.obtained > 0 %}
-                                        {{ marks_summary.assignment.obtained }}/{{ marks_summary.assignment.max }}
+                                    {% if marks_summary.assignment.obtained > 0 %}
+                                        {{ marks_summary.assignment.obtained|format_mark }}/{{ marks_summary.assignment.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -161,8 +167,8 @@
                                 <div class="bg-white p-2 rounded">
                                     <div class="font-medium text-gray-700">Project</div>
                                     <div class="text-gray-900">
-                                        {% if marks_summary.project.obtained > 0 %}
-                                        {{ marks_summary.project.obtained }}/{{ marks_summary.project.max }}
+                                    {% if marks_summary.project.obtained > 0 %}
+                                        {{ marks_summary.project.obtained|format_mark }}/{{ marks_summary.project.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -197,28 +203,28 @@
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{{ "%.2f"|format(student_data.overall_percentage) }}%</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.internal1.obtained > 0 %}
-                                    {{ marks_summary.internal1.obtained }}/{{ marks_summary.internal1.max }}
+                                    {{ marks_summary.internal1.obtained|format_mark }}/{{ marks_summary.internal1.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.internal2.obtained > 0 %}
-                                    {{ marks_summary.internal2.obtained }}/{{ marks_summary.internal2.max }}
+                                    {{ marks_summary.internal2.obtained|format_mark }}/{{ marks_summary.internal2.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.assignment.obtained > 0 %}
-                                    {{ marks_summary.assignment.obtained }}/{{ marks_summary.assignment.max }}
+                                    {{ marks_summary.assignment.obtained|format_mark }}/{{ marks_summary.assignment.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.project.obtained > 0 %}
-                                    {{ marks_summary.project.obtained }}/{{ marks_summary.project.max }}
+                                    {{ marks_summary.project.obtained|format_mark }}/{{ marks_summary.project.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}

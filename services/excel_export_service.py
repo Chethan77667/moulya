@@ -415,39 +415,36 @@ class ExcelExportService:
             # Title and meta rows
             ws['A1'] = 'Attendance Shortage Report'
             ws['A1'].font = Font(size=16, bold=True)
-            ws.merge_cells('A1:F1')
+            # We now have 9 columns in the table, merge across A1:I1 so title is visible/centered
+            ws.merge_cells('A1:I1')
+            # Ensure the merged title cell is centered and tall enough to be visible
+           
+            try:
+                ws.row_dimensions[1].height = 30
+            except Exception:
+                pass
             
             # Lecturer and threshold info
-            meta_row = 2
+            # Leave one blank row after the title for visibility (row 2)
+            meta_row = 3
             if lecturer_name:
-                ws['A2'] = 'Lecturer'
-                ws['B2'] = lecturer_name
-                meta_row = 3
+                ws['A3'] = 'Lecturer'
+                ws['B3'] = lecturer_name
+                meta_row = 4
             ws[f'A{meta_row}'] = 'Threshold'
             ws[f'B{meta_row}'] = f"{threshold}%"
 
-            # Start row for first subject section
+            # Start row for unified table header
             row = (meta_row + 1)
-            # Build a section (header + table) for EACH subject block
+            # Unified table with Subject, Code, Course as columns as requested
+            headers = ['Subject', 'Code', 'Course', 'Student', 'Roll Number', 'Present', 'Total', 'Percent', 'Shortage vs Threshold']
+            ExcelExportService.style_header_row(ws, row, headers)
+            row += 1
+
+            # Build rows for each subject block
             for idx, block in enumerate(shortage_data or []):
                 subj = block.get('subject')
                 course_name = subj.course.name if getattr(subj, 'course', None) else ''
-
-                # Subject header: Subject, Code, Course (stacked)
-                ws[f'A{row}'] = 'Subject'
-                ws[f'B{row}'] = subj.name if subj else ''
-                row += 1
-                ws[f'A{row}'] = 'Code'
-                ws[f'B{row}'] = getattr(subj, 'code', '')
-                row += 1
-                ws[f'A{row}'] = 'Course'
-                ws[f'B{row}'] = course_name
-                row += 1
-
-                # Section table header (no Subject/Code/Course columns in table)
-                headers = ['Student', 'Roll Number', 'Present', 'Total', 'Percent', 'Shortage vs Threshold']
-                ExcelExportService.style_header_row(ws, row, headers)
-                row += 1
 
                 # Sort students by roll number (last 3 digits)
                 shortage_students = block.get('shortage_students') or []
@@ -463,18 +460,18 @@ class ExcelExportService:
                 
                 sorted_students = sorted(shortage_students, key=get_roll_sort_key)
                 
-                # Section rows
+                # Rows with subject columns populated
                 for rec in sorted_students:
-                    ws.cell(row=row, column=1, value=rec['student'].name)
-                    ws.cell(row=row, column=2, value=rec['student'].roll_number)
-                    ExcelExportService.set_number(ws.cell(row=row, column=3), rec.get('present_classes') or 0, align_right=True)
-                    ExcelExportService.set_number(ws.cell(row=row, column=4), rec.get('total_classes') or 0, align_right=True)
-                    ExcelExportService.set_percentage(ws.cell(row=row, column=5), rec.get('attendance_percentage') or 0, align_left=True)
+                    ws.cell(row=row, column=1, value=(subj.name if subj else ''))
+                    ws.cell(row=row, column=2, value=(getattr(subj, 'code', '') if subj else ''))
+                    ws.cell(row=row, column=3, value=course_name)
+                    ws.cell(row=row, column=4, value=rec['student'].name)
+                    ws.cell(row=row, column=5, value=rec['student'].roll_number)
+                    ExcelExportService.set_number(ws.cell(row=row, column=6), rec.get('present_classes') or 0, align_right=True)
+                    ExcelExportService.set_number(ws.cell(row=row, column=7), rec.get('total_classes') or 0, align_right=True)
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=8), rec.get('attendance_percentage') or 0, align_left=True)
                     shortage_pct = max(0.0, float(threshold) - float(rec.get('attendance_percentage') or 0))
-                    ExcelExportService.set_percentage(ws.cell(row=row, column=6), shortage_pct, align_left=True)
-                    row += 1
-
-                # Blank row between sections
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=9), shortage_pct, align_left=True)
                 row += 1
 
             ExcelExportService.center_all_cells(ws)
@@ -507,19 +504,30 @@ class ExcelExportService:
             # Title and meta rows
             ws['A1'] = 'Marks Deficiency Report'
             ws['A1'].font = Font(size=16, bold=True)
-            ws.merge_cells('A1:G1')
+            # We will output 10 columns; merge A1:J1 for a visible centered title
+            ws.merge_cells('A1:J1')
+            # Ensure the merged title cell is centered and tall enough to be visible
+           
+            try:
+                ws.row_dimensions[1].height = 30
+            except Exception:
+                pass
             
             # Lecturer and threshold info
-            meta_row = 2
+            # Leave one blank row after the title for visibility (row 2)
+            meta_row = 3
             if lecturer_name:
-                ws['A2'] = 'Lecturer'
-                ws['B2'] = lecturer_name
-                meta_row = 3
+                ws['A3'] = 'Lecturer'
+                ws['B3'] = lecturer_name
+                meta_row = 4
             ws[f'A{meta_row}'] = 'Threshold'
             ws[f'B{meta_row}'] = f"{threshold}%"
 
-            # Create separate tables for each subject
+            # Unified table with Subject, Code, Course as columns
             current_row = meta_row + 1
+            headers = ['Subject', 'Code', 'Course', 'Student', 'Roll Number', 'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project']
+            ExcelExportService.style_header_row(ws, current_row, headers)
+            current_row += 1
             
             # Sort deficiency_data by subject name for consistent ordering
             sorted_deficiency_data = sorted(deficiency_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
@@ -528,29 +536,7 @@ class ExcelExportService:
                 subj = block.get('subject')
                 if not subj:
                     continue
-                    
                 course_name = subj.course.name if getattr(subj, 'course', None) else ''
-                
-                # Subject details above each table
-                if block_idx > 0:
-                    current_row += 2  # Add spacing between tables
-                
-                ws[f'A{current_row}'] = 'Subject'
-                ws[f'B{current_row}'] = subj.name
-                current_row += 1
-                ws[f'A{current_row}'] = 'Code'
-                ws[f'B{current_row}'] = subj.code
-                current_row += 1
-                ws[f'A{current_row}'] = 'Course'
-                ws[f'B{current_row}'] = course_name
-                current_row += 1
-                
-                # Header row for this subject's table
-                headers = [
-                    'Student', 'Roll Number', 'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project'
-                ]
-                ExcelExportService.style_header_row(ws, current_row, headers)
-                current_row += 1
                 
                 # Sort students by roll number (last 3 digits)
                 deficient_students = block.get('deficient_students') or []
@@ -573,30 +559,35 @@ class ExcelExportService:
                         try:
                             obt = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else (a.get('obtained') if isinstance(a, dict) else None)
                             mx = getattr(a, 'max', None) if hasattr(a, 'max') else (a.get('max') if isinstance(a, dict) else None)
-                            if not obt and not mx:
+                            if obt is None and mx is None:
                                 return ''
-                            return f"{obt}/{mx}"
+                            obt_f = ExcelExportService.format_number(obt)
+                            mx_f = ExcelExportService.format_number(mx)
+                            return f"{obt_f}/{mx_f}"
                         except Exception:
                             return ''
                     
-                    ws.cell(row=current_row, column=1, value=rec['student'].name)
-                    ws.cell(row=current_row, column=2, value=rec['student'].roll_number)
-                    ExcelExportService.set_percentage(ws.cell(row=current_row, column=3), rec.get('overall_percentage') or 0, align_left=True)
-                    ws.cell(row=current_row, column=4, value=_fmt(ms.get('internal1')))
-                    ws.cell(row=current_row, column=5, value=_fmt(ms.get('internal2')))
-                    ws.cell(row=current_row, column=6, value=_fmt(ms.get('assignment')))
-                    ws.cell(row=current_row, column=7, value=_fmt(ms.get('project')))
+                    ws.cell(row=current_row, column=1, value=subj.name)
+                    ws.cell(row=current_row, column=2, value=subj.code)
+                    ws.cell(row=current_row, column=3, value=course_name)
+                    ws.cell(row=current_row, column=4, value=rec['student'].name)
+                    ws.cell(row=current_row, column=5, value=rec['student'].roll_number)
+                    ExcelExportService.set_percentage(ws.cell(row=current_row, column=6), rec.get('overall_percentage') or 0, align_left=True)
+                    ws.cell(row=current_row, column=7, value=_fmt(ms.get('internal1')))
+                    ws.cell(row=current_row, column=8, value=_fmt(ms.get('internal2')))
+                    ws.cell(row=current_row, column=9, value=_fmt(ms.get('assignment')))
+                    ws.cell(row=current_row, column=10, value=_fmt(ms.get('project')))
                     current_row += 1
 
             ExcelExportService.center_all_cells(ws)
             ExcelExportService.auto_adjust_columns(ws)
 
-            # Wrap and left-align Student column (D)
+            # Wrap and left-align Student name column (now column 4) and Subject column for readability
             from openpyxl.styles import Alignment
-            last_row = ws.max_row or row - 1
-            for r in range(header_row + 1, last_row + 1):
-                cell = ws.cell(row=r, column=4)
-                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            last_row2 = ws.max_row or 1
+            for r in range(1, last_row2 + 1):
+                ws.cell(row=r, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                ws.cell(row=r, column=4).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
             return ExcelExportService.workbook_to_bytes(wb)
         except Exception as e:
