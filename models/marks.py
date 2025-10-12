@@ -34,7 +34,7 @@ class StudentMarks(db.Model):
     def calculate_percentage_and_grade(self):
         """Calculate percentage and grade based on marks"""
         if self.max_marks > 0:
-            self.percentage = round((self.marks_obtained / self.max_marks) * 100, 2)
+            self.percentage = (self.marks_obtained / self.max_marks) * 100
             self.grade = self.calculate_grade(self.percentage)
         else:
             self.percentage = 0.0
@@ -105,7 +105,7 @@ class StudentMarks(db.Model):
         if total_max == 0:
             return 0.0
         
-        return round((total_obtained / total_max) * 100, 2)
+        return (total_obtained / total_max) * 100
     
     @staticmethod
     def get_class_average(subject_id, assessment_type):

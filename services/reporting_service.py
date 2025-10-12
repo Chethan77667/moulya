@@ -21,6 +21,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from xml.sax.saxutils import escape as xml_escape
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from services.excel_export_service import ExcelExportService
 
 class ReportingService:
     """Service for generating reports"""
@@ -114,7 +115,8 @@ class ReportingService:
             if value is None:
                 return Paragraph('', ReportingService._get_paragraph_style())
             # Keep numbers as plain strings too; Paragraph will handle fine
-            text = xml_escape(str(value))
+            # Escape text but preserve explicit line breaks by converting \n -> <br/>
+            text = xml_escape(str(value)).replace('\n', '<br/>')
             return Paragraph(text, ReportingService._get_paragraph_style())
         except Exception:
             return Paragraph(xml_escape(str(value)), ReportingService._get_paragraph_style())
@@ -353,39 +355,47 @@ class ReportingService:
                 }
             
             from models.marks import StudentMarks
-            query = StudentMarks.query.filter_by(subject_id=subject_id)
-            if assessment_type:
-                query = query.filter_by(assessment_type=assessment_type)
             
-            marks = query.all()
+            # Get all enrolled students for this subject
+            enrolled_students = subject.get_enrolled_students()
             
-            # Group marks by student
+            # Initialize student_marks with all enrolled students
             student_marks = {}
-            for mark in marks:
-                student_id = mark.student_id
-                if student_id not in student_marks:
-                    student_marks[student_id] = {
-                        'student': mark.student,
-                        'student_name': mark.student.name,
-                        'roll_number': mark.student.roll_number,
+            for student in enrolled_students:
+                student_marks[student.id] = {
+                    'student': student,
+                    'student_name': student.name,
+                    'roll_number': student.roll_number,
                         'marks': []
                     }
                 
-                mark_dict = mark.to_dict()
-                # Format assessment type for display
-                assessment_type_display = mark.assessment_type
-                if assessment_type_display == 'internal1':
-                    mark_dict['assessment_type'] = 'Internal 1'
-                elif assessment_type_display == 'internal2':
-                    mark_dict['assessment_type'] = 'Internal 2'
-                elif assessment_type_display == 'assignment':
-                    mark_dict['assessment_type'] = 'Assignment'
-                elif assessment_type_display == 'project':
-                    mark_dict['assessment_type'] = 'Project'
-                else:
-                    mark_dict['assessment_type'] = assessment_type_display.title()
-                
-                student_marks[student_id]['marks'].append(mark_dict)
+            # Get marks - if assessment_type is specified, filter by it
+            if assessment_type:
+                # Get marks for the specific assessment type
+                marks = StudentMarks.query.filter_by(subject_id=subject_id, assessment_type=assessment_type).all()
+            else:
+                # Get all marks for this subject
+                marks = StudentMarks.query.filter_by(subject_id=subject_id).all()
+            
+            # Add marks to student_marks
+            for mark in marks:
+                student_id = mark.student_id
+                if student_id in student_marks:
+                    mark_dict = mark.to_dict()
+                    # Format assessment type for display
+                    assessment_type_display = mark.assessment_type
+                    if assessment_type_display == 'internal1':
+                        mark_dict['assessment_type'] = 'Internal 1'
+                    elif assessment_type_display == 'internal2':
+                        mark_dict['assessment_type'] = 'Internal 2'
+                    elif assessment_type_display == 'assignment':
+                        mark_dict['assessment_type'] = 'Assignment'
+                    elif assessment_type_display == 'project':
+                        mark_dict['assessment_type'] = 'Project'
+                    else:
+                        mark_dict['assessment_type'] = assessment_type_display.title()
+                    
+                    student_marks[student_id]['marks'].append(mark_dict)
             
             # Calculate statistics
             all_percentages = []
@@ -523,7 +533,13 @@ class ReportingService:
                 return empty_report
             
             # If month is 'overall', compute cumulative across all months/years
-            is_overall = (str(month).lower() == 'overall') if isinstance(month, str) or month is not None else False
+            is_overall = (str(month).lower() == 'overall') if month is not None else False
+            # For specific month requests coming as strings (e.g., '10'), coerce to int
+            if not is_overall and month is not None and not isinstance(month, int):
+                try:
+                    month = int(month)
+                except Exception:
+                    month = None
             # Default to current month/year if not specified and not overall
             if not is_overall:
                 if not month:
@@ -586,10 +602,10 @@ class ReportingService:
                     
                     student_attendance.append(student_data)
             else:
-                # Fallback to daily attendance records if monthly data not available
+                # If overall, compute from monthly aggregates; otherwise, fallback to daily records for the specific month
                 if is_overall:
                     # Compute using MonthlyStudentAttendance + MonthlyAttendanceSummary across all months/years
-                    # Aggregate total classes from summaries and present+deputation from student records
+                    from models.attendance import MonthlyAttendanceSummary, MonthlyStudentAttendance
                     summaries = MonthlyAttendanceSummary.query.filter_by(subject_id=subject_id).all()
                     total_classes_conducted = sum(s.total_classes for s in summaries)
                     # Map student -> present (including deputation)
@@ -597,7 +613,6 @@ class ReportingService:
                     monthly_attendance_records = MonthlyStudentAttendance.query.filter_by(subject_id=subject_id).all()
                     for rec in monthly_attendance_records:
                         student_present_map[rec.student_id] = student_present_map.get(rec.student_id, 0) + int(rec.present_count or 0) + int(rec.deputation_count or 0)
-                    # Build rows
                     for student in students:
                         present_classes = student_present_map.get(student.id, 0)
                         absent_classes = max(total_classes_conducted - present_classes, 0)
@@ -613,65 +628,60 @@ class ReportingService:
                             'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
                         })
                 else:
+                    # Daily records for a specific month/year
                     all_attendance_records = AttendanceRecord.query.filter(
                         AttendanceRecord.subject_id == subject_id,
                         db.extract('month', AttendanceRecord.date) == month,
                         db.extract('year', AttendanceRecord.date) == year
                     ).all()
-                
-                # For overall case, get all attendance records across all months/years
-                if is_overall:
-                    all_attendance_records = AttendanceRecord.query.filter(
-                        AttendanceRecord.subject_id == subject_id
-                    ).all()
-                
-                # Get unique dates to count total classes
-                unique_dates = set(record.date for record in all_attendance_records)
-                total_classes_conducted = len(unique_dates)
-                
-                # If no classes were conducted, still show students with 0 attendance
-                if total_classes_conducted == 0:
-                    for student in students:
-                        student_data = {
-                            'student_id': student.id,
-                            'student_name': student.name,
-                            'roll_number': student.roll_number,
-                            'total_classes': 0,
-                            'present_classes': 0,
-                            'absent_classes': 0,
-                            'attendance_percentage': 0,
-                            'status': 'Poor'
-                        }
-                        student_attendance.append(student_data)
-                else:
-                    # Calculate attendance for each student for the specific month
-                    for student in students:
-                        # Get attendance records for this student in this subject for this month
-                        student_records = AttendanceRecord.query.filter(
-                            AttendanceRecord.student_id == student.id,
-                            AttendanceRecord.subject_id == subject_id,
-                            db.extract('month', AttendanceRecord.date) == month,
-                            db.extract('year', AttendanceRecord.date) == year
-                        ).all()
-                        
-                        present_classes = len([r for r in student_records if r.status == 'present'])
-                        absent_classes = len([r for r in student_records if r.status == 'absent'])
-                        
-                        # Calculate percentage
-                        attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
-                        
-                        student_data = {
-                            'student_id': student.id,
-                            'student_name': student.name,
-                            'roll_number': student.roll_number,
-                            'total_classes': total_classes_conducted,
-                            'present_classes': present_classes,
-                            'absent_classes': absent_classes,
-                            'attendance_percentage': attendance_percentage,
-                            'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
-                        }
-                        
-                        student_attendance.append(student_data)
+
+                    # Get unique dates to count total classes
+                    unique_dates = set(record.date for record in all_attendance_records)
+                    total_classes_conducted = len(unique_dates)
+
+                    # If no classes were conducted, still show students with 0 attendance
+                    if total_classes_conducted == 0:
+                        for student in students:
+                            student_data = {
+                                'student_id': student.id,
+                                'student_name': student.name,
+                                'roll_number': student.roll_number,
+                                'total_classes': 0,
+                                'present_classes': 0,
+                                'absent_classes': 0,
+                                'attendance_percentage': 0,
+                                'status': 'Poor'
+                            }
+                            student_attendance.append(student_data)
+                    else:
+                        # Calculate attendance for each student for the specific month
+                        for student in students:
+                            # Get attendance records for this student in this subject for this month
+                            student_records = AttendanceRecord.query.filter(
+                                AttendanceRecord.student_id == student.id,
+                                AttendanceRecord.subject_id == subject_id,
+                                db.extract('month', AttendanceRecord.date) == month,
+                                db.extract('year', AttendanceRecord.date) == year
+                            ).all()
+
+                            present_classes = len([r for r in student_records if r.status == 'present'])
+                            absent_classes = len([r for r in student_records if r.status == 'absent'])
+
+                            # Calculate percentage
+                            attendance_percentage = round((present_classes / total_classes_conducted) * 100, 2) if total_classes_conducted > 0 else 0
+
+                            student_data = {
+                                'student_id': student.id,
+                                'student_name': student.name,
+                                'roll_number': student.roll_number,
+                                'total_classes': total_classes_conducted,
+                                'present_classes': present_classes,
+                                'absent_classes': absent_classes,
+                                'attendance_percentage': attendance_percentage,
+                                'status': 'Good' if attendance_percentage >= 75 else 'Poor' if attendance_percentage < 50 else 'Average'
+                            }
+
+                            student_attendance.append(student_data)
             
             # Sort students by last 3 digits of roll number
             def get_roll_sort_key(student):
@@ -705,7 +715,10 @@ class ReportingService:
             else:
                 month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                               'July', 'August', 'September', 'October', 'November', 'December']
-                month_name = month_names[month] if 1 <= month <= 12 else str(month)
+                try:
+                    month_name = month_names[int(month)] if 1 <= int(month) <= 12 else str(month)
+                except Exception:
+                    month_name = str(month)
             
             course_display, section = ReportingService._parse_course_and_section(subject.course.name if subject.course else None)
 
@@ -728,6 +741,7 @@ class ReportingService:
                     'lecturers': lecturers_list
                 },
                 'month': month_name,
+                'month_num': month if not is_overall else None,
                 'year': year,
                 'statistics': statistics,
                 'student_attendance': student_attendance
@@ -978,58 +992,61 @@ class ReportingService:
 
         # Marks table
         elements.append(Paragraph('Marks Report', styles['Heading2']))
-        marks_headers = ['Subject', 'Code', 'Assessment', 'Marks', 'Max', 'Percent', 'Grade', 'Status']
+        # Removed Percent and Grade columns for a cleaner layout
+        marks_headers = ['Subject', 'Code', 'Assessment', 'Marks', 'Max', 'Status']
         marks_rows = [marks_headers]
         for subj in report.get('subjects', []):
             for m in subj.get('marks', []):
                 marks_rows.append([
-                    subj.get('subject_name',''), subj.get('subject_code',''), m.get('assessment_type',''),
-                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(m.get('percentage')), m.get('grade',''), m.get('performance_status','')
+                    subj.get('subject_name',''), (subj.get('subject_code','') or '').replace(' ', '\u00A0'), m.get('assessment_type',''),
+                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')),
+                    m.get('performance_status','')
                 ])
         if len(marks_rows) == 1:
-            marks_rows.append(['No data'] + ['']*7)
-        # Wrap text in table data and make table full width
-        marks_rows_wrapped = ReportingService._wrap_table_data(marks_rows, skip_header=True, header_text_white=True)
+            marks_rows.append(['No data'] + ['']*5)
+        # Build standardized marks table with consistent font size
         page_width = A4[0] - (18*mm + 18*mm)
-        marks_table = Table(marks_rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(marks_headers)))
-        marks_table.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.black),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (0,0), (-1,0), 'CENTER'),
-            ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
-            ('LEFTPADDING', (0,0), (-1,0), 4),
-            ('RIGHTPADDING', (0,0), (-1,0), 4),
-            ('TOPPADDING', (0,0), (-1,0), 3),
-            ('BOTTOMPADDING', (0,0), (-1,0), 3)
-        ]))
+        # Make Subject narrower and widen Status so it fits on one line
+        marks_col_fracs = [0.34, 0.18, 0.16, 0.10, 0.10, 0.12]
+        marks_table = ReportingService._build_table(
+            marks_rows,
+            page_width,
+            marks_col_fracs,
+            no_wrap_cols={1},          # Code must not wrap
+            center_cols={3,4},         # Marks and Max
+            header_bg=colors.black,
+        )
         elements.extend([marks_table, Spacer(1, 12)])
 
         # Attendance table
         elements.append(Paragraph('Attendance Report', styles['Heading2']))
-        att_headers = ['Subject', 'Code', 'Total', 'Present', 'Absent', 'Percent', 'Status']
+        # Removed Absent column for a cleaner layout
+        att_headers = ['Subject', 'Code', 'Total', 'Present', 'Percent', 'Status']
         att_rows = [att_headers]
         for subj in report.get('subjects', []):
             a = subj.get('attendance', {})
             att_rows.append([
-                subj.get('subject_name',''), subj.get('subject_code',''), ReportingService._format_number(a.get('total_classes')),
-                ReportingService._format_number(a.get('present_classes')), ReportingService._format_number(a.get('absent_classes')), ReportingService._format_number(a.get('attendance_percentage')),
+                subj.get('subject_name',''), (subj.get('subject_code','') or '').replace(' ', '\u00A0'), ReportingService._format_number(a.get('total_classes')),
+                ReportingService._format_number(a.get('present_classes')), ReportingService._format_number(a.get('attendance_percentage')),
                 'Good' if a.get('attendance_percentage',0) >= 75 else 'Average' if a.get('attendance_percentage',0) >= 50 else 'Poor'
             ])
         if len(att_rows) == 1:
-            att_rows.append(['No data'] + ['']*6)
+            att_rows.append(['No data'] + ['']*5)
         # Wrap text in table data
-        att_rows_wrapped = ReportingService._wrap_table_data(att_rows, skip_header=True, header_text_white=True)
-        att_table = Table(att_rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(att_headers)))
-        att_table.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.black),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
-        ]))
+        # Prevent wrapping in Code column (index 1)
+        att_rows_wrapped = ReportingService._wrap_table_data(att_rows, skip_header=True, header_text_white=True, no_wrap_cols={1})
+        # Build standardized attendance table
+        # Columns: Subject, Code, Total, Present, Percent, Status
+        # Make Subject narrower and give Status more width to keep it on one line
+        att_col_fracs = [0.34, 0.18, 0.12, 0.12, 0.12, 0.12]
+        att_table = ReportingService._build_table(
+            att_rows,
+            page_width,
+            att_col_fracs,
+            no_wrap_cols={1},              # Code
+            center_cols={2,3,4},
+            header_bg=colors.black,
+        )
         elements.append(att_table)
 
         doc.build(elements)
@@ -1095,10 +1112,12 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
-        # Extract year from course name and add Year row
-        year = ReportingService._extract_year_from_class(course_name)
-        year_display = f"Year {year}" if year else "Year N/A"
-        subj_rows.append(['Year', year_display])
+        # Year/Semester from subject
+        try:
+            ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+        except Exception:
+            ys_display = "N/A/N/A"
+        subj_rows.append(['Year/Semester', ys_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -1108,7 +1127,7 @@ class ReportingService:
         ]))
         elements.extend([Spacer(1, 10), Paragraph('Marks Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
 
-        # Marks table (Student | Internal 1 | Internal 2 | Assignment | Project | Overall % | Status)
+        # Marks table
         def _fmt_mark_pair(obt, mx):
             try:
                 if obt is None or mx is None:
@@ -1122,7 +1141,29 @@ class ReportingService:
                 except Exception:
                     return ''
 
-        header = ['Student', 'Internal 1', 'Internal 2', 'Assignment', 'Project', 'Overall %', 'Status']
+        # Decide which assessment components to include based on actual recorded values
+        comp_keys = ['internal1', 'internal2', 'assignment', 'project']
+        include = {k: False for k in comp_keys}
+        for record in (marks_report or []):
+            ms = record.get('marks_summary', {})
+            for k in comp_keys:
+                a = getattr(ms, k, None) if hasattr(ms, k) else (ms.get(k) if isinstance(ms, dict) else None)
+                if not a:
+                    continue
+                obt = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else (a.get('obtained') if isinstance(a, dict) else None)
+                mx = getattr(a, 'max', None) if hasattr(a, 'max') else (a.get('max') if isinstance(a, dict) else None)
+                try:
+                    obt_num = float(obt or 0)
+                    mx_num = float(mx or 0)
+                    if obt_num > 0 or mx_num > 0:
+                        include[k] = True
+                except Exception:
+                    pass
+
+        ordered_components = [k for k in comp_keys if include[k]]
+        comp_to_header = {'internal1':'Internal 1','internal2':'Internal 2','assignment':'Assignment','project':'Project'}
+
+        header = ['Student'] + [comp_to_header[k] for k in ordered_components] + ['Overall %', 'Status']
         rows = [header]
         for record in marks_report or []:
             student = record['student']
@@ -1136,16 +1177,16 @@ class ReportingService:
                 if obtained in (None, 0, '0', '0.0') and max_marks in (None, 0, '0', '0.0'):
                     return ''
                 return _fmt_mark_pair(obtained, max_marks)
-
-            i1 = _cell('internal1')
-            i2 = _cell('internal2')
-            asg = _cell('assignment')
-            prj = _cell('project')
+            # Build row with only included components
             overall = record.get('overall_percentage') or 0
             status = 'Good' if overall >= 50 else 'Deficient'
             # Combine name and roll in one cell (two lines)
             combined_student = f"{student.name}\n{getattr(student, 'roll_number', '') or ''}".strip()
-            rows.append([combined_student, i1, i2, asg, prj, f"{overall}%", status])
+            row = [combined_student]
+            for k in ordered_components:
+                row.append(_cell(k))
+            row.extend([f"{ReportingService._format_number(overall)}%", status])
+            rows.append(row)
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
         # Wrap text in table data
@@ -1223,10 +1264,9 @@ class ReportingService:
         if has_section:
             subj_rows.append(['Section', section])
         subj_rows.append(['Faculty', faculty_name])
-        # Extract year from course name and add Year row
-        year = ReportingService._extract_year_from_class(course_name)
-        year_display = f"Year {year}" if year else "Year N/A"
-        subj_rows.append(['Year', year_display])
+        # Year/Semester directly from subject
+        ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+        subj_rows.append(['Year/Semester', ys_display])
         
         subj_table = Table(subj_rows, colWidths=[35*mm, (A4[0] - (18*mm + 18*mm) - 35*mm)])
         subj_table.setStyle(TableStyle([
@@ -1247,7 +1287,7 @@ class ReportingService:
                 student.roll_number,
                 record.get('present_classes') or 0,
                 record.get('total_classes') or 0,
-                f"{percent}%",
+                f"{ReportingService._format_number(percent)}%",
                 status
             ])
         if len(rows) == 1:
@@ -1284,6 +1324,23 @@ class ReportingService:
         assignment = SubjectAssignment.query.filter_by(subject_id=subject.id, is_active=True).first()
         faculty_name = assignment.lecturer.name if assignment and assignment.lecturer else 'N/A'
         
+        # Get students and marks data using the same logic as HTML view
+        from models.student import Student
+        from models.marks import StudentMarks
+        
+        # Get enrolled students
+        students = subject.get_enrolled_students()
+        
+        # Get existing marks for students (same as HTML view)
+        existing_marks = {}
+        for student in students:
+            marks = StudentMarks.query.filter_by(
+                student_id=student.id,
+                subject_id=subject.id
+            ).all()
+            # map assessment_type -> mark row (same as HTML view)
+            existing_marks[student.id] = {mark.assessment_type: mark for mark in marks}
+        
         # Parse course name to extract course code and section
         course_name = subject.course.name if subject.course else 'N/A'
         course_parts = course_name.split() if course_name != 'N/A' else []
@@ -1310,19 +1367,16 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
-            # Extract year from course name and add Year row
-            year = ReportingService._extract_year_from_class(course_name)
-            year_display = f"Year {year}" if year else "Year N/A"
-            ws['A8'] = 'Year'
-            ws['B8'] = year_display
+            # Year/Semester directly from subject
+            ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+            ws['A8'] = 'Year/Semester'
+            ws['B8'] = ys_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
-            # Extract year from course name and add Year row
-            year = ReportingService._extract_year_from_class(course_name)
-            year_display = f"Year {year}" if year else "Year N/A"
-            ws['A7'] = 'Year'
-            ws['B7'] = year_display
+            ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+            ws['A7'] = 'Year/Semester'
+            ws['B7'] = ys_display
         # Determine where to place spacer row and headers
         last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
@@ -1334,8 +1388,21 @@ class ReportingService:
         spacer_cell = ws.cell(row=spacer_row, column=1, value='')
         spacer_cell.fill = PatternFill(start_color='F5F5F5', end_color='F5F5F5', fill_type='solid')
 
+        # Decide which assessment components to include based on actual recorded values
+        comp_keys = ['internal1', 'internal2', 'assignment', 'project']
+        include = {k: False for k in comp_keys}
+        
+        # Check which components have marks recorded (same logic as HTML view)
+        for student in students:
+            student_marks = existing_marks.get(student.id, {})
+            for k in comp_keys:
+                if k in student_marks and student_marks[k].max_marks > 0:
+                    include[k] = True
+        ordered_components = [k for k in comp_keys if include[k]]
+        comp_to_header = {'internal1': 'Internal 1', 'internal2': 'Internal 2', 'assignment': 'Assignment', 'project': 'Project'}
+
         # Table headers
-        headers = ['Student', 'Roll Number', 'Internal 1', 'Internal 2', 'Assignment', 'Project', 'Overall %', 'Status']
+        headers = ['Student', 'Roll Number'] + [comp_to_header[k] for k in ordered_components] + ['Overall %', 'Status']
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=header_row, column=col, value=header)
             cell.font = Font(bold=True, color='FFFFFF')
@@ -1344,46 +1411,41 @@ class ReportingService:
         
         # Data rows
         row = data_start_row
-        for record in marks_report or []:
-            student = record['student']
-            ms = record.get('marks_summary', {})
+        for student in students:
+            student_marks = existing_marks.get(student.id, {})
+            
             def _pair(assess):
-                a = getattr(ms, assess, None) if hasattr(ms, assess) else (ms.get(assess) if isinstance(ms, dict) else None)
-                if not a:
-                    return ''
-                obtained = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else a.get('obtained') if isinstance(a, dict) else None
-                max_marks = getattr(a, 'max', None) if hasattr(a, 'max') else a.get('max') if isinstance(a, dict) else None
-                try:
-                    if obtained is None or max_marks is None:
-                        return ''
-                    fo = float(obtained); fm = float(max_marks)
-                    obt_s = str(int(fo)) if fo.is_integer() else str(fo)
-                    max_s = str(int(fm)) if fm.is_integer() else str(fm)
-                    return f"{obt_s}/{max_s}"
-                except Exception:
-                    try:
-                        return f"{obtained}/{max_marks}"
-                    except Exception:
-                        return ''
-
-            i1 = _pair('internal1')
-            i2 = _pair('internal2')
-            asg = _pair('assignment')
-            prj = _pair('project')
-            overall = record.get('overall_percentage') or 0
+                if assess in student_marks:
+                    mark = student_marks[assess]
+                    obtained = mark.marks_obtained
+                    max_marks = mark.max_marks
+                    
+                    if max_marks > 0:
+                        fo_formatted = ExcelExportService.format_number(obtained)
+                        fm_formatted = ExcelExportService.format_number(max_marks)
+                        return f"{fo_formatted}/{fm_formatted}"
+                return ''
+            
+            # Calculate overall percentage (same logic as HTML view)
+            if student_marks:
+                total_obtained = sum(mark.marks_obtained for mark in student_marks.values())
+                total_max = sum(mark.max_marks for mark in student_marks.values())
+                overall = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0.0
+            else:
+                overall = 0.0
+            
             status = 'Good' if overall >= 50 else 'Deficient'
 
-            ws.cell(row=row, column=1, value=student.name)
-            ws.cell(row=row, column=2, value=student.roll_number)
-            ws.cell(row=row, column=3, value=i1)
-            ws.cell(row=row, column=4, value=i2)
-            ws.cell(row=row, column=5, value=asg)
-            ws.cell(row=row, column=6, value=prj)
-            ws.cell(row=row, column=7, value=f"{overall}%")
-            ws.cell(row=row, column=8, value=status)
+            col = 1
+            ws.cell(row=row, column=col, value=student.name); col += 1
+            ws.cell(row=row, column=col, value=student.roll_number); col += 1
+            for k in ordered_components:
+                ws.cell(row=row, column=col, value=_pair(k)); col += 1
+            ws.cell(row=row, column=col, value=f"{ReportingService._format_number(overall)}%"); col += 1
+            ws.cell(row=row, column=col, value=status)
             row += 1
         
-        if not marks_report:
+        if not students:
             ws.cell(row=data_start_row, column=1, value='No data')
         
         # Auto-adjust column widths
@@ -1446,19 +1508,16 @@ class ReportingService:
             ws['B6'] = section
             ws['A7'] = 'Faculty'
             ws['B7'] = faculty_name
-            # Extract year from course name and add Year row
-            year = ReportingService._extract_year_from_class(course_name)
-            year_display = f"Year {year}" if year else "Year N/A"
-            ws['A8'] = 'Year'
-            ws['B8'] = year_display
+            # Year/Semester directly from subject
+            ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+            ws['A8'] = 'Year/Semester'
+            ws['B8'] = ys_display
         else:
             ws['A6'] = 'Faculty'
             ws['B6'] = faculty_name
-            # Extract year from course name and add Year row
-            year = ReportingService._extract_year_from_class(course_name)
-            year_display = f"Year {year}" if year else "Year N/A"
-            ws['A7'] = 'Year'
-            ws['B7'] = year_display
+            ys_display = f"{getattr(subject, 'year', 'N/A')}/{getattr(subject, 'semester', 'N/A')}"
+            ws['A7'] = 'Year/Semester'
+            ws['B7'] = ys_display
         # Determine where to place spacer row and headers
         last_info_row = 8 if has_section else 7
         spacer_row = last_info_row + 1
@@ -1596,33 +1655,66 @@ class ReportingService:
         elements.extend([Paragraph('Statistics', styles['Heading2']), stats_table, Spacer(1, 8)])
 
         # Student marks table
-        header = ['Student', 'Roll', 'Assessment', 'Marks', 'Max', 'Percent']
-        rows = [header]
-        for sm in report.get('student_marks', []):
-            for m in sm.get('marks', []):
-                percent = m.get('percentage') if 'percentage' in m else (
-                    round((m.get('marks_obtained', 0) / m.get('max_marks', 1)) * 100, 2) if m.get('max_marks') else 0
-                )
-                rows.append([
-                    sm.get('student_name',''), sm.get('roll_number',''), m.get('assessment_type',''),
-                    ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(percent)
-                ])
+        # Check if specific assessment type is selected
+        assessment_type = report.get('assessment_type')
+        if assessment_type and assessment_type != 'All Assessments':
+            # Remove Assessment column when specific assessment type is selected
+            header = ['Student', 'Roll', 'Marks', 'Max', 'Percent']
+            rows = [header]
+            # Sort students by roll number ascending for readability
+            student_marks_sorted = sorted(report.get('student_marks', []), key=lambda sm: (sm.get('roll_number') or ''))
+            for sm in student_marks_sorted:
+                for m in sm.get('marks', []):
+                    percent = m.get('percentage') if 'percentage' in m else (
+                        round((m.get('marks_obtained', 0) / m.get('max_marks', 1)) * 100, 2) if m.get('max_marks') else 0
+                    )
+                    rows.append([
+                        sm.get('student_name',''), sm.get('roll_number',''),
+                        ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(percent)
+                    ])
+            if len(rows) == 1:
+                rows.append(['No data', '', '', '', ''])
+            # Build standardized table that fits the page width
+            page_width = A4[0] - (18*mm + 18*mm)
+            col_fracs = [0.45, 0.15, 0.15, 0.10, 0.15]  # Adjusted for 5 columns
+            tbl = ReportingService._build_table(
+                rows,
+                page_width,
+                col_fracs,
+                no_wrap_cols={1,2,3,4},   # only Student may wrap
+                center_cols={2,3,4},
+                header_bg=colors.black,
+            )
+        else:
+            # Include Assessment column when "All Assessments" is selected
+            header = ['Student', 'Roll', 'Assessment', 'Marks', 'Max', 'Percent']
+            rows = [header]
+            # Sort students by roll number ascending for readability
+            student_marks_sorted = sorted(report.get('student_marks', []), key=lambda sm: (sm.get('roll_number') or ''))
+            for sm in student_marks_sorted:
+                for m in sm.get('marks', []):
+                    percent = m.get('percentage') if 'percentage' in m else (
+                        round((m.get('marks_obtained', 0) / m.get('max_marks', 1)) * 100, 2) if m.get('max_marks') else 0
+                    )
+                    rows.append([
+                        sm.get('student_name',''), sm.get('roll_number',''), m.get('assessment_type',''),
+                        ReportingService._format_number(m.get('marks_obtained')), ReportingService._format_number(m.get('max_marks')), ReportingService._format_number(percent)
+                    ])
+        
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', ''])
-        # Wrap text in table data
-        # Only Student column (0) may wrap; all others should not wrap
-        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5})
+        
+        # Build standardized table that fits the page width
         page_width = A4[0] - (18*mm + 18*mm)
-        # Use full page width with better proportions - Student gets most space, others are sized appropriately
-        col_widths = [120*mm, 40*mm, 40*mm, 40*mm, 35*mm, 40*mm]
-        tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
-        tbl.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.black),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
-        ]))
+        col_fracs = [0.40, 0.14, 0.16, 0.10, 0.10, 0.10]
+        tbl = ReportingService._build_table(
+            rows,
+            page_width,
+            col_fracs,
+            no_wrap_cols={1,2,3,4,5},   # only Student may wrap
+            center_cols={3,4,5},
+            header_bg=colors.black,
+            )
         elements.append(tbl)
 
         doc.build(elements)
@@ -1679,8 +1771,9 @@ class ReportingService:
                 meta_rows.append(['Faculty', ', '.join(lecturers)])
         except Exception:
             pass
-        # Period after faculty
-        meta_rows.append(['Period', f"{report.get('month','')} {report.get('year','')}"])
+        # Period shown only when a specific month is selected (not Overall)
+        if str(report.get('month','')).lower() != 'overall':
+            meta_rows.append(['Period', f"{report.get('month','')} {report.get('year','')}"])
         meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
         meta_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -1713,16 +1806,14 @@ class ReportingService:
         if len(rows) == 1:
             rows.append(['No data', '', '', '', '', '', ''])
         # Wrap text in table data
-        # Prevent wrapping for Code (1) and Roll (4)
-        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,4})
+        # Prevent wrapping for Roll (1)
+        rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1})
         page_width = A4[0] - (18*mm + 18*mm)
-        # Columns: 0 Subj | 1 Code | 2 Course | 3 Student | 4 Roll | 5 Overall% | 6 Int1 | 7 Int2 | 8 Assign | 9 Project
-        # Code and Roll fit max content, other columns smaller to fit page
-        col_widths = [25*mm, 40*mm, 18*mm, 30*mm, 25*mm, 8*mm, 12*mm, 12*mm, 15*mm, 15*mm]
-        # Adjust last column to fill if any rounding difference
-        used = sum(col_widths)
-        if used < page_width:
-            col_widths[-1] += (page_width - used)
+        # 7 columns: Student | Roll | Total | Present | Absent | Percent | Status
+        # Use proportional widths for a clean, consistent layout
+        # Student gets 38%, Roll 16%, each numeric column 9%, Status 10%
+        proportions = [0.38, 0.16, 0.09, 0.09, 0.09, 0.09, 0.10]
+        col_widths = [page_width * p for p in proportions]
         tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
         tbl.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -1774,7 +1865,7 @@ class ReportingService:
         elements.append(Paragraph('Course Overview Report', styles['Title']))
         c = report.get('course', {})
         meta_rows = [
-            ['Course', f"{c.get('name','')} ({c.get('code','')})"],
+            ['Class', c.get('name','')],
             ['Duration (years)', ReportingService._format_number(c.get('duration_years'))],
             ['Total Semesters', ReportingService._format_number(c.get('total_semesters'))],
             ['Total Students', ReportingService._format_number(report.get('total_students'))],
@@ -1788,27 +1879,27 @@ class ReportingService:
         elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
 
         # Subjects table
-        header = ['Subject', 'Code', 'Y/S', 'Enrolled', 'Avg Marks %', 'Pass Rate %', 'Avg Attendance %']
+        header = ['Subject', 'Code', 'Enrolled', 'Avg Marks %', 'Pass Rate %', 'Avg Attendance %']
         rows = [header]
         for s in report.get('subjects', []):
             rows.append([
-                s.get('subject_name',''), s.get('subject_code',''), f"{s.get('year','')}/{s.get('semester','')}",
+                s.get('subject_name',''), s.get('subject_code',''),
                 ReportingService._format_number(s.get('enrolled_students')), ReportingService._format_number(s.get('marks_statistics',{}).get('average_marks',0)),
                 ReportingService._format_number(s.get('marks_statistics',{}).get('passing_rate',0)), ReportingService._format_number(s.get('attendance_statistics',{}).get('average_attendance',0))
             ])
         if len(rows) == 1:
-            rows.append(['No data', '', '', '', '', '', ''])
-        # Wrap text in table data
-        rows_wrapped = ReportingService._wrap_table_data(rows)
+            rows.append(['No data', '', '', '', '', ''])
+        
+        # Build standardized table with proper column widths
         page_width = A4[0] - (18*mm + 18*mm)
-        tbl = Table(rows_wrapped, repeatRows=1, colWidths=ReportingService._full_width_colwidths(page_width, len(rows[0])))
-        tbl.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.black),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
-        ]))
+        col_fracs = [0.25, 0.15, 0.10, 0.12, 0.12, 0.18]  # Increased Avg Attendance column width to fit full header
+        tbl = ReportingService._build_table(
+            rows,
+            page_width,
+            col_fracs,
+            no_wrap_cols={2,3,4,5},  # Allow Subject and Code columns to wrap, prevent others
+            center_cols={0,1,2,3,4,5}     # Center all columns including wrapped text
+        )
         elements.append(tbl)
 
         doc.build(elements)
@@ -1851,18 +1942,13 @@ class ReportingService:
         ]))
         elements.append(header_table)
 
-        # Title and meta
-        elements.extend([Spacer(1, 8), Paragraph('Attendance Shortage Report', styles['Title'])])
-        meta_rows = [
-            ['Lecturer', lecturer_name or 'N/A'],
-            ['Threshold', f"{ReportingService._format_number(threshold)}%"],
-        ]
-        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
-        meta_table.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-        ]))
-        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+        # Title and subheading (threshold)
+        from reportlab.lib.styles import ParagraphStyle
+        title_center = ParagraphStyle('TitleCenter', parent=styles['Title'], alignment=1)
+        sub_center = ParagraphStyle('SubCenter', parent=styles['Normal'], alignment=1, fontSize=10)
+        elements.extend([Spacer(1, 8), Paragraph('Attendance Shortage Report', title_center)])
+        elements.append(Paragraph(f"Below {ReportingService._format_number(threshold)}%", sub_center))
+        elements.append(Spacer(1, 10))
 
         # Create separate tables for each subject
         sorted_shortage_data = sorted(shortage_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
@@ -1874,24 +1960,39 @@ class ReportingService:
                 
             course_name = subj.course.name if getattr(subj, 'course', None) else ''
             
-            # Subject details above each table
-            if block_idx > 0:
-                elements.append(Spacer(1, 12))  # Add spacing between tables
-            
-            subject_rows = [
-                ['Subject', subj.name],
-                ['Code', subj.code],
-                ['Course', course_name]
-            ]
-            subject_table = Table(subject_rows, colWidths=[20*mm, 60*mm])
-            subject_table.setStyle(TableStyle([
-                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ]))
-            elements.extend([subject_table, Spacer(1, 8)])
+            # If only one subject in export, place a single info table at the top
+            if len(sorted_shortage_data) == 1 and block_idx == 0:
+                info_rows = [
+                    ['Subject', subj.name],
+                    ['Class', course_name],
+                    ['Code', subj.code],
+                    ['Faculty', lecturer_name or 'N/A']
+                ]
+                info_table = Table(info_rows, colWidths=[25*mm, 135*mm])
+                info_table.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ]))
+                elements.extend([info_table, Spacer(1, 8)])
+            else:
+                # For multiple subjects, keep a compact subject header above each table
+                if block_idx > 0:
+                    elements.append(Spacer(1, 12))
+                subject_rows = [
+                    ['Subject', subj.name],
+                    ['Class', course_name],
+                    ['Code', subj.code],
+                    ['Faculty', lecturer_name or 'N/A']
+                ]
+                subject_table = Table(subject_rows, colWidths=[25*mm, 135*mm])
+                subject_table.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ]))
+                elements.extend([subject_table, Spacer(1, 8)])
 
-            # Table for this subject - removed Subject, Code, Course columns
-            headers = ['Student', 'Roll', 'Present', 'Total', '%', 'Shortage']
+            # Table for this subject - remove Shortage column
+            headers = ['Student', 'Roll', 'Present', 'Total', '%']
             rows = [headers]
             
             # Sort students by roll number (last 3 digits)
@@ -1910,26 +2011,24 @@ class ReportingService:
             
             for rec in sorted_students:
                 pct = rec.get('attendance_percentage') or 0
-                shortage_pct = max(0.0, float(threshold) - float(pct))
                 rows.append([
                     rec['student'].name,
                     rec['student'].roll_number,
                     ReportingService._format_number(rec.get('present_classes')),
                     ReportingService._format_number(rec.get('total_classes')),
                     ReportingService._format_number(pct),
-                    ReportingService._format_number(shortage_pct),
                 ])
             
             if len(rows) == 1:
-                rows.append(['No data', '', '', '', '', ''])
+                rows.append(['No data', '', '', '', ''])
 
             # Only Student column (0) may wrap; all others should not wrap
-            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5})
+            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4})
             page_width = A4[0] - (18*mm + 18*mm)
             # Set widths for new column order: 0 Student | 1 Roll | 2 Present | 3 Total | 4 % | 5 Shortage
             # Calculate proper widths that fit within page boundaries
             # A4 width is 210mm, minus margins (36mm) = 174mm available
-            col_widths = [60*mm, 25*mm, 20*mm, 20*mm, 15*mm, 20*mm]
+            col_widths = [70*mm, 30*mm, 22*mm, 22*mm, 18*mm]
             tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
             tbl.setStyle(TableStyle([
                 ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -1979,21 +2078,41 @@ class ReportingService:
         ]))
         elements.append(header_table)
 
-        elements.extend([Spacer(1, 8), Paragraph('Marks Deficiency Report', styles['Title'])])
-        meta_rows = [
-            ['Lecturer', lecturer_name or 'N/A'],
-            ['Threshold', f"{ReportingService._format_number(threshold)}%"],
-        ]
-        meta_table = Table(meta_rows, colWidths=[40*mm, 120*mm])
-        meta_table.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-        ]))
-        elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
+        # Title + subheading centered
+        from reportlab.lib.styles import ParagraphStyle
+        title_center = ParagraphStyle('TitleCenter', parent=styles['Title'], alignment=1)
+        sub_center = ParagraphStyle('SubCenter', parent=styles['Normal'], alignment=1, fontSize=10)
+        elements.extend([Spacer(1, 8), Paragraph('Marks Deficiency Report', title_center)])
+        elements.append(Paragraph(f"Below {ReportingService._format_number(threshold)}%", sub_center))
+        elements.append(Spacer(1, 10))
 
         # Create separate tables for each subject
         sorted_deficiency_data = sorted(deficiency_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
         
+        # If a single subject is present, render one info table at the top only
+        single_subject_mode = len(sorted_deficiency_data) == 1 and sorted_deficiency_data[0].get('subject') is not None
+        if single_subject_mode:
+            subj = sorted_deficiency_data[0]['subject']
+            course_name = subj.course.name if getattr(subj, 'course', None) else ''
+            wrap_style = ParagraphStyle('WrapSmall', parent=styles['Normal'], fontSize=10, leading=12)
+            info_rows = [
+                ['Subject', Paragraph(str(subj.name or ''), wrap_style)],
+                ['Class', Paragraph(str(course_name or ''), wrap_style)],
+                ['Code', Paragraph(str(subj.code or ''), wrap_style)],
+                ['Faculty', Paragraph(str(lecturer_name or 'N/A'), wrap_style)]
+            ]
+            info_table = Table(info_rows, colWidths=[25*mm, (A4[0] - (18*mm + 18*mm) - 25*mm)])
+            info_table.setStyle(TableStyle([
+                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('LEFTPADDING', (0,0), (-1,-1), 4),
+                ('RIGHTPADDING', (0,0), (-1,-1), 4),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            elements.extend([info_table, Spacer(1, 8)])
+
         for block_idx, block in enumerate(sorted_deficiency_data):
             subj = block.get('subject')
             if not subj:
@@ -2001,24 +2120,52 @@ class ReportingService:
                 
             course_name = subj.course.name if getattr(subj, 'course', None) else ''
             
-            # Subject details above each table
-            if block_idx > 0:
-                elements.append(Spacer(1, 12))  # Add spacing between tables
-            
-            subject_rows = [
-                ['Subject', subj.name],
-                ['Code', subj.code],
-                ['Course', course_name]
-            ]
-            subject_table = Table(subject_rows, colWidths=[20*mm, 60*mm])
-            subject_table.setStyle(TableStyle([
-                ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-                ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ]))
-            elements.extend([subject_table, Spacer(1, 8)])
+            # For multiple subjects, show compact info table above each table
+            if not single_subject_mode:
+                if block_idx > 0:
+                    elements.append(Spacer(1, 12))
+                wrap_style = ParagraphStyle('WrapSmall', parent=styles['Normal'], fontSize=10, leading=12)
+                subject_rows = [
+                    ['Subject', Paragraph(str(subj.name or ''), wrap_style)],
+                    ['Class', Paragraph(str(course_name or ''), wrap_style)],
+                    ['Code', Paragraph(str(subj.code or ''), wrap_style)],
+                    ['Faculty', Paragraph(str(lecturer_name or 'N/A'), wrap_style)]
+                ]
+                subject_table = Table(subject_rows, colWidths=[25*mm, (A4[0] - (18*mm + 18*mm) - 25*mm)])
+                subject_table.setStyle(TableStyle([
+                    ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                    ('LEFTPADDING', (0,0), (-1,-1), 4),
+                    ('RIGHTPADDING', (0,0), (-1,-1), 4),
+                    ('TOPPADDING', (0,0), (-1,-1), 2),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ]))
+                elements.extend([subject_table, Spacer(1, 8)])
 
             # Table for this subject - removed Subject, Code, Course columns
-            headers = ['Student', 'Roll', 'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project']
+            # Dynamic headers: include only components that have recorded (non-zero) values
+            headers = ['Student', 'Roll', 'Overall %']
+            comp_keys = ['internal1','internal2','assignment','project']
+            comp_to_header = {'internal1':'Internal 1','internal2':'Internal 2','assignment':'Assignment','project':'Project'}
+            include = {k: False for k in comp_keys}
+            for rec in block.get('deficient_students') or []:
+                ms = rec.get('marks_summary') or {}
+                for k in comp_keys:
+                    v = ms.get(k)
+                    try:
+                        if isinstance(v, dict):
+                            obt = float(v.get('obtained') or 0)
+                            mx = float(v.get('max') or 0)
+                        else:
+                            obt = float(getattr(v, 'obtained', 0) or 0)
+                            mx = float(getattr(v, 'max', 0) or 0)
+                        if obt > 0 or mx > 0:
+                            include[k] = True
+                    except Exception:
+                        pass
+            ordered_components = [k for k in comp_keys if include[k]]
+            headers += [comp_to_header[k] for k in ordered_components]
             rows = [headers]
             
             # Sort students by roll number (last 3 digits)
@@ -2039,33 +2186,38 @@ class ReportingService:
                 ms = rec.get('marks_summary') or {}
                 def _pair(d):
                     try:
-                        obt = getattr(d, 'obtained', None) if hasattr(d, 'obtained') else (d.get('obtained') if isinstance(d, dict) else None)
-                        mx = getattr(d, 'max', None) if hasattr(d, 'max') else (d.get('max') if isinstance(d, dict) else None)
+                        if isinstance(d, dict):
+                            obt = d.get('obtained'); mx = d.get('max')
+                        else:
+                            obt = getattr(d, 'obtained', None); mx = getattr(d, 'max', None)
                         if obt in (None, 0, '0', '0.0') and mx in (None, 0, '0', '0.0'):
                             return ''
                         return f"{ReportingService._format_number(obt)}/{ReportingService._format_number(mx)}"
                     except Exception:
                         return ''
-                rows.append([
+                row = [
                     rec['student'].name,
                     rec['student'].roll_number,
                     ReportingService._format_number(rec.get('overall_percentage') or 0),
-                    _pair(ms.get('internal1')),
-                    _pair(ms.get('internal2')),
-                    _pair(ms.get('assignment')),
-                    _pair(ms.get('project')),
-                ])
+                ]
+                for k in ordered_components:
+                    row.append(_pair(ms.get(k)))
+                rows.append(row)
             
             if len(rows) == 1:
                 rows.append(['No data', '', '', '', '', '', ''])
 
             # Only Student column (0) may wrap; all others should not wrap
-            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols={1,2,3,4,5,6})
+            no_wrap_cols = set(range(1, len(headers)))
+            rows_wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols=no_wrap_cols)
             page_width = A4[0] - (18*mm + 18*mm)
-            # Set widths for new column order: 0 Student | 1 Roll | 2 Overall% | 3 Int1 | 4 Int2 | 5 Assign | 6 Project
-            # Calculate proper widths that fit within page boundaries
-            # A4 width is 210mm, minus margins (36mm) = 174mm available
-            col_widths = [50*mm, 25*mm, 18*mm, 18*mm, 18*mm, 20*mm, 20*mm]
+            base_widths = [70*mm, 30*mm, 20*mm]
+            extra_cols = max(0, len(headers) - 3)
+            if extra_cols:
+                per = max(18*mm, (page_width - sum(base_widths)) / extra_cols)
+                col_widths = base_widths + [per for _ in range(extra_cols)]
+            else:
+                col_widths = base_widths
             tbl = Table(rows_wrapped, repeatRows=1, colWidths=col_widths)
             tbl.setStyle(TableStyle([
                 ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
@@ -2082,7 +2234,7 @@ class ReportingService:
         return pdf_bytes
 
     @staticmethod
-    def get_comprehensive_class_report(course_id, report_type='attendance', assessment_type='all'):
+    def get_comprehensive_class_report(course_id, report_type='attendance', assessment_type=None):
         """Get comprehensive class report for all subjects in a course"""
         try:
             from models.academic import Course, Subject
@@ -2124,12 +2276,35 @@ class ReportingService:
                     'roll_number': student.roll_number
                 })
             
-            # Add subject information
+            # Add subject information with max marks
             for subject in subjects:
+                # Get max marks for each assessment type for this subject
+                max_marks = {
+                    'internal1': 0,
+                    'internal2': 0,
+                    'assignment': 0,
+                    'project': 0
+                }
+                
+                # Get max marks from any student's marks for this subject
+                sample_marks = StudentMarks.query.filter_by(subject_id=subject.id).first()
+                if sample_marks:
+                    # Get all unique max marks for each assessment type
+                    for assessment_type in ['internal1', 'internal2', 'assignment', 'project']:
+                        max_mark_record = StudentMarks.query.filter_by(
+                            subject_id=subject.id,
+                            assessment_type=assessment_type
+                        ).first()
+                        if max_mark_record and max_mark_record.max_marks:
+                            max_marks[assessment_type] = max_mark_record.max_marks
+                
                 report['subjects'].append({
                     'id': subject.id,
                     'name': subject.name,
-                    'code': subject.code
+                    'code': subject.code,
+                    'year': subject.year,
+                    'semester': subject.semester,
+                    'max_marks': max_marks
                 })
             
             if report_type == 'attendance':
@@ -2139,8 +2314,21 @@ class ReportingService:
                         'subject_id': subject.id,
                         'subject_name': subject.name,
                         'subject_code': subject.code,
-                        'student_attendance': {}
+                        'student_attendance': {},
+                        'enrolled_students': {}
                     }
+                    
+                    # Get enrolled students for this subject
+                    from models.student import StudentEnrollment
+                    enrolled_student_ids = db.session.query(StudentEnrollment.student_id).filter_by(
+                        subject_id=subject.id, 
+                        is_active=True
+                    ).all()
+                    enrolled_student_ids = [sid[0] for sid in enrolled_student_ids]
+                    
+                    # Mark which students are enrolled
+                    for student in students:
+                        subject_data['enrolled_students'][student.id] = student.id in enrolled_student_ids
                     
                     # Get overall attendance for each student in this subject
                     for student in students:
@@ -2181,15 +2369,28 @@ class ReportingService:
                         'subject_id': subject.id,
                         'subject_name': subject.name,
                         'subject_code': subject.code,
-                        'student_marks': {}
+                        'student_marks': {},
+                        'enrolled_students': {}
                     }
+                    
+                    # Get enrolled students for this subject
+                    from models.student import StudentEnrollment
+                    enrolled_student_ids = db.session.query(StudentEnrollment.student_id).filter_by(
+                        subject_id=subject.id, 
+                        is_active=True
+                    ).all()
+                    enrolled_student_ids = [sid[0] for sid in enrolled_student_ids]
+                    
+                    # Mark which students are enrolled
+                    for student in students:
+                        subject_data['enrolled_students'][student.id] = student.id in enrolled_student_ids
                     
                     for student in students:
                         student_marks = {
-                            'internal1': {'obtained': 0, 'max': 0},
-                            'internal2': {'obtained': 0, 'max': 0},
-                            'assignment': {'obtained': 0, 'max': 0},
-                            'project': {'obtained': 0, 'max': 0},
+                            'internal1': {'obtained': None, 'max': None, 'recorded': False},
+                            'internal2': {'obtained': None, 'max': None, 'recorded': False},
+                            'assignment': {'obtained': None, 'max': None, 'recorded': False},
+                            'project': {'obtained': None, 'max': None, 'recorded': False},
                             'overall_percentage': 0
                         }
                         
@@ -2204,10 +2405,15 @@ class ReportingService:
                             if assessment_type in student_marks:
                                 student_marks[assessment_type]['obtained'] = marks.marks_obtained or 0
                                 student_marks[assessment_type]['max'] = marks.max_marks or 0
+                                student_marks[assessment_type]['recorded'] = True
                         
-                        # Calculate overall percentage
-                        total_obtained = sum([m['obtained'] for m in student_marks.values() if isinstance(m, dict)])
-                        total_max = sum([m['max'] for m in student_marks.values() if isinstance(m, dict)])
+                        # Calculate overall percentage (only for recorded marks)
+                        total_obtained = sum([m['obtained'] for m in student_marks.values() if isinstance(m, dict) and m.get('recorded', False) and m['obtained'] is not None])
+                        total_max = sum([m['max'] for m in student_marks.values() if isinstance(m, dict) and m.get('recorded', False) and m['max'] is not None])
+                        
+                        # Add total marks for display
+                        student_marks['total_obtained'] = total_obtained
+                        student_marks['total_max'] = total_max
                         
                         if total_max > 0:
                             student_marks['overall_percentage'] = round((total_obtained / total_max) * 100, 2)
@@ -2235,7 +2441,7 @@ class ReportingService:
             from io import BytesIO
             
             buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+            doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm, showBoundary=0)
             elements = []
             styles = getSampleStyleSheet()
             
@@ -2269,20 +2475,44 @@ class ReportingService:
             elements.append(Spacer(1, 6))
             
             # Title
-            report_type = report['report_type'].title()
-            course_name = report['course']['name']
+            report_type = report.get('report_type', 'attendance').title()
+            course_name = report.get('course', {}).get('name', 'Unknown Course')
             elements.append(Paragraph(f'Comprehensive {report_type} Report', styles['Title']))
             
-            # Course info
+            # Course info table with professional styling
             course_info = [
-                ['Course', f"{course_name} ({report['course']['code']})"],
-                ['Total Students', str(len(report['students']))],
-                ['Total Subjects', str(len(report['subjects']))]
+                ['Class', course_name],
+                ['Year/Semester', f"{report.get('subjects', [{}])[0].get('year', 'N/A')}/{report.get('subjects', [{}])[0].get('semester', 'N/A')}" if report.get('subjects') and len(report.get('subjects', [])) > 0 else 'N/A/N/A'],
+                ['No of Subjects', str(len(report.get('subjects', [])))]
             ]
-            course_table = Table(course_info, colWidths=[40*mm, 120*mm])
+            
+            # Add Assessment Type row for marks reports
+            if report['report_type'] == 'marks' and report.get('assessment_type'):
+                assessment_display = report['assessment_type'].title().replace('1', ' 1').replace('2', ' 2')
+                course_info.append(['Assessment', assessment_display])
+            
+            # Create custom table for course info without header styling
+            page_width = A4[0] - (18*mm + 18*mm)
+            col_widths = [page_width * 0.25, page_width * 0.75]
+            course_table = Table(course_info, colWidths=col_widths)
+            
+            # Apply consistent styling without header treatment
             course_table.setStyle(TableStyle([
                 ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
                 ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+                ('FONTSIZE', (0,0), (-1,-1), 10),
+                ('LEFTPADDING', (0,0), (-1,-1), 6),
+                ('RIGHTPADDING', (0,0), (-1,-1), 6),
+                ('TOPPADDING', (0,0), (-1,-1), 4),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                # Alternating row backgrounds
+                ('BACKGROUND', (0,0), (-1,0), colors.white),
+                ('BACKGROUND', (0,1), (-1,1), colors.lightgrey),
+                ('BACKGROUND', (0,2), (-1,2), colors.white),
+                ('BACKGROUND', (0,3), (-1,3), colors.lightgrey),
             ]))
             elements.extend([Spacer(1, 6), course_table, Spacer(1, 12)])
             
@@ -2296,8 +2526,6 @@ class ReportingService:
                 
                 if page_start > 0:
                     elements.append(Spacer(1, 20))
-                    elements.append(Paragraph(f'Page {page_start // subjects_per_page + 1}', styles['Heading2']))
-                    elements.append(Spacer(1, 12))
                 
                 # Create table for this page
                 if report['report_type'] == 'attendance':
@@ -2312,59 +2540,113 @@ class ReportingService:
                             subject_data = report['data'].get(subject['id'], {})
                             student_attendance = subject_data.get('student_attendance', {}).get(student['id'], {})
                             
-                            if student_attendance:
+                            # Check if student is enrolled in this subject
+                            is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+                            
+                            if not is_enrolled:
+                                row_data.append("NA")
+                            elif student_attendance and student_attendance.get('total_classes', 0) > 0:
                                 percentage = student_attendance.get('percentage', 0)
-                                present = student_attendance.get('present_classes', 0)
-                                total = student_attendance.get('total_classes', 0)
-                                row_data.append(f"{present}/{total}\n({percentage}%)")
+                                row_data.append(f"{percentage}%")
                             else:
-                                row_data.append("N/A")
+                                row_data.append("-")
                         
                         rows.append(row_data)
                 
                 elif report['report_type'] == 'marks':
-                    # Marks report
-                    headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in page_subjects]
-                    rows = [headers]
+                    # Marks report - spreadsheet format
+                    assessment_type = report.get('assessment_type')
                     
-                    for student in students:
-                        row_data = [student['roll_number'], student['name']]
+                    if assessment_type:
+                        # Specific assessment type selected
+                        headers = ['Roll No', 'Student Name']
+                        for subj in page_subjects:
+                            headers.append(subj['name'])
+                        rows = [headers]
                         
-                        for subject in page_subjects:
-                            subject_data = report['data'].get(subject['id'], {})
-                            student_marks = subject_data.get('student_marks', {}).get(student['id'], {})
+                        for student in students:
+                            row_data = [student['roll_number'], student['name']]
                             
-                            if student_marks:
-                                percentage = student_marks.get('overall_percentage', 0)
-                                row_data.append(f"{percentage}%")
-                            else:
-                                row_data.append("N/A")
-                        
-                        rows.append(row_data)
+                            for subject in page_subjects:
+                                subject_data = report['data'].get(subject['id'], {})
+                                student_marks = subject_data.get('student_marks', {}).get(student['id'], {})
+                                
+                                # Check if student is enrolled in this subject
+                                is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+                                
+                                if not is_enrolled:
+                                    row_data.append("NA")
+                                elif student_marks and assessment_type in student_marks:
+                                    assessment_data = student_marks[assessment_type]
+                                    if assessment_data.get('recorded', False):
+                                        obtained = assessment_data['obtained']
+                                        max_marks = assessment_data['max']
+                                        if max_marks > 0:
+                                            # Format marks: remove .0 from whole numbers
+                                            obtained_str = str(int(obtained)) if obtained == int(obtained) else str(obtained)
+                                            max_marks_str = str(int(max_marks)) if max_marks == int(max_marks) else str(max_marks)
+                                            row_data.append(f"{obtained_str}/{max_marks_str}")
+                                        else:
+                                            obtained_str = str(int(obtained)) if obtained == int(obtained) else str(obtained)
+                                            row_data.append(obtained_str)
+                                    else:
+                                        row_data.append("-")
+                                else:
+                                    row_data.append("-")
+                            
+                            rows.append(row_data)
                 
-                # Calculate column widths
+                # Calculate column widths with better proportions
                 page_width = A4[0] - (18*mm + 18*mm)
                 num_cols = len(headers)
-                col_width = page_width / num_cols
-                col_widths = [col_width] * num_cols
                 
-                # Create table
-                table = Table(rows, repeatRows=1, colWidths=col_widths)
-                table.setStyle(TableStyle([
-                    ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
-                    ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-                    ('BACKGROUND', (0,0), (-1,0), colors.black),
-                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                    ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0,0), (-1,-1), 8),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                    ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.lightgrey])
-                ]))
+                if report['report_type'] == 'marks' and assessment_type:
+                    # For marks with specific assessment, give more space to subject columns
+                    col_widths = []
+                    for i, header in enumerate(headers):
+                        if i == 0:  # Roll No
+                            col_widths.append(20*mm)
+                        elif i == 1:  # Student Name
+                            col_widths.append(35*mm)
+                        else:  # Subject columns
+                            remaining_width = page_width - 55*mm  # Reserve space for Roll No and Name
+                            subject_cols = num_cols - 2
+                            col_widths.append(remaining_width / subject_cols)
+                else:
+                    # Default equal width distribution
+                    col_width = page_width / num_cols
+                    col_widths = [col_width] * num_cols
+                
+                # Use the same _build_table function as class marks report for consistent styling
+                if report['report_type'] == 'marks' and assessment_type and assessment_type != 'all':
+                    # For marks with specific assessment, use optimized column fractions
+                    col_fracs = [0.12, 0.23] + [0.65 / (num_cols - 2)] * (num_cols - 2)  # Increased Roll No width
+                    no_wrap_cols = {0}  # Only allow Student Name to wrap, keep Roll No single line
+                    center_cols = {0}  # Center Roll No
+                    for i in range(2, num_cols):
+                        center_cols.add(i)  # Center all subject columns
+                    
+                    table = ReportingService._build_table(
+                        rows,
+                        page_width,
+                        col_fracs,
+                        no_wrap_cols=no_wrap_cols,
+                        center_cols=center_cols,
+                        header_bg=colors.black,
+                    )
+                else:
+                    # For other reports, use default styling
+                    col_fracs = [1.0 / num_cols] * num_cols
+                    table = ReportingService._build_table(
+                        rows,
+                        page_width,
+                        col_fracs,
+                        header_bg=colors.black,
+                    )
                 
                 elements.append(table)
                 
-                # Add page break if not the last page
+                # Add page break if not the last page (without page number text)
                 if page_start + subjects_per_page < len(subjects):
                     elements.append(Spacer(1, 20))
             
@@ -2376,3 +2658,62 @@ class ReportingService:
         except Exception as e:
             print(f"Error in generate_comprehensive_class_report_pdf: {e}")
             return None
+
+    # ------------------------- PDF Helper Utilities -------------------------
+    @staticmethod
+    def _calc_colwidths_from_fracs(total_width, fracs):
+        safe_fracs = fracs or []
+        s = float(sum(safe_fracs)) or 1.0
+        normalized = [f / s for f in safe_fracs]
+        return [total_width * f for f in normalized]
+
+    @staticmethod
+    def _build_table(rows, page_width, col_fracs, *, no_wrap_cols=None, center_cols=None, header_bg=colors.black, col_font_sizes=None):
+        """Build a standardized table with consistent styling across PDFs.
+        - rows: 2D list with header at index 0
+        - page_width: available width for table
+        - col_fracs: fractions for each column width
+        - no_wrap_cols: set of indices that must not wrap
+        - center_cols: set of indices to center-align in body
+        - col_font_sizes: dict of {col_index: font_size} for custom font sizes
+        """
+        wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols=no_wrap_cols or set())
+        colwidths = ReportingService._calc_colwidths_from_fracs(page_width, col_fracs)
+        tbl = Table(wrapped, repeatRows=1, colWidths=colwidths)
+        center_cols = center_cols or set()
+        # Base style
+        base_style = [
+            ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('BACKGROUND', (0,0), (-1,0), header_bg),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('VALIGN', (0,0), (-1,0), 'MIDDLE'),
+            # Body paddings and alignment
+            ('VALIGN', (0,1), (-1,-1), 'MIDDLE'),
+            ('LEFTPADDING', (0,1), (-1,-1), 3),
+            ('RIGHTPADDING', (0,1), (-1,-1), 3),
+            ('TOPPADDING', (0,1), (-1,-1), 2),
+            ('BOTTOMPADDING', (0,1), (-1,-1), 2),
+        ]
+        
+        # Add custom font sizes for specific columns
+        if col_font_sizes:
+            for col_idx, font_size in col_font_sizes.items():
+                base_style.append(('FONTSIZE', (col_idx, 0), (col_idx, -1), font_size))
+        
+        # Center specified columns in body
+        if center_cols:
+            min_idx = min(center_cols)
+            max_idx = max(center_cols)
+            base_style.append(('ALIGN', (min_idx,1), (max_idx,-1), 'CENTER'))
+        tbl.setStyle(TableStyle(base_style))
+        return tbl
+
+    @staticmethod
+    def _nbsp(text):
+        try:
+            return (text or '').replace(' ', '\u00A0')
+        except Exception:
+            return text

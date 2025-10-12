@@ -562,7 +562,7 @@ def marks_management(subject_id):
             if marks:
                 total_obtained = sum(mark.marks_obtained for mark in marks)
                 total_max = sum(mark.max_marks for mark in marks)
-                per_subject_overall[student.id] = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0.0
+                per_subject_overall[student.id] = (total_obtained / total_max) * 100 if total_max > 0 else 0.0
             else:
                 per_subject_overall[student.id] = 0.0
         
@@ -608,6 +608,10 @@ def add_marks(subject_id):
                     except Exception:
                         # Skip invalid numeric entries silently; frontend may send stray values
                         continue
+                    # Enforce obtained <= max_marks at the server as well
+                    if obtained > max_marks:
+                        flash(f'Mark for student {student_id} cannot exceed maximum ({obtained} > {max_marks}).', 'error')
+                        return redirect(url_for('lecturer.marks_management', subject_id=subject_id))
                     marks_data.append({
                         'student_id': student_id,
                         'assessment_type': assessment_type,
@@ -992,13 +996,22 @@ def attendance_shortage_report():
         for subject in subjects:
             report, message = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                # Filter students based on custom threshold (include 100% when threshold is 100)
-                shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
-                if shortage_students:
-                    shortage_data.append({
-                        'subject': subject,
-                        'shortage_students': shortage_students
-                    })
+                # Check if any attendance data has been recorded for this subject
+                has_recorded_attendance = False
+                for student_data in report:
+                    if student_data.get('total_classes', 0) > 0:
+                        has_recorded_attendance = True
+                        break
+                
+                # Only include subjects that have recorded attendance
+                if has_recorded_attendance:
+                    # Filter students based on custom threshold (include 100% when threshold is 100)
+                    shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
+                    if shortage_students:
+                        shortage_data.append({
+                            'subject': subject,
+                            'shortage_students': shortage_students
+                        })
         
         return render_template('lecturer/attendance_shortage.html', 
                              shortage_data=shortage_data, 
@@ -1027,9 +1040,18 @@ def export_attendance_shortage_excel():
         for subject in subjects:
             report, _ = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
-                if shortage_students:
-                    shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
+                # Check if any attendance data has been recorded for this subject
+                has_recorded_attendance = False
+                for student_data in report:
+                    if student_data.get('total_classes', 0) > 0:
+                        has_recorded_attendance = True
+                        break
+                
+                # Only include subjects that have recorded attendance
+                if has_recorded_attendance:
+                    shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
+                    if shortage_students:
+                        shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
 
         from flask import make_response
         lecturer_name = None
@@ -1067,9 +1089,18 @@ def export_attendance_shortage_pdf():
         for subject in subjects:
             report, _ = LecturerService.generate_attendance_report(subject.id, lecturer_id)
             if report:
-                shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
-                if shortage_students:
-                    shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
+                # Check if any attendance data has been recorded for this subject
+                has_recorded_attendance = False
+                for student_data in report:
+                    if student_data.get('total_classes', 0) > 0:
+                        has_recorded_attendance = True
+                        break
+                
+                # Only include subjects that have recorded attendance
+                if has_recorded_attendance:
+                    shortage_students = [r for r in report if r['attendance_percentage'] <= threshold]
+                    if shortage_students:
+                        shortage_data.append({'subject': subject, 'shortage_students': shortage_students})
 
         lecturer_name = None
         try:
@@ -1086,7 +1117,11 @@ def export_attendance_shortage_pdf():
         fname = 'attendance_shortage'
         if selected_subject_id:
             fname += f'_{selected_subject_id}'
-        response.headers['Content-Disposition'] = f'attachment; filename={fname}.pdf'
+        # Support inline display for printing when ?inline=1
+        if request.args.get('inline') == '1':
+            response.headers['Content-Disposition'] = f'inline; filename={fname}.pdf'
+        else:
+            response.headers['Content-Disposition'] = f'attachment; filename={fname}.pdf'
         return response
     except Exception as e:
         flash(f'Error exporting attendance shortage PDF: {str(e)}', 'error')
@@ -1112,13 +1147,30 @@ def marks_deficiency_report():
         for subject in subjects:
             report, message = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                # Filter students based on custom threshold (include 100% when threshold is 100)
-                deficient_students = [r for r in report if r['overall_percentage'] <= threshold]
-                if deficient_students:
-                    deficiency_data.append({
-                        'subject': subject,
-                        'deficient_students': deficient_students
-                    })
+                # Check if any marks have been recorded for this subject
+                has_recorded_marks = False
+                for student_data in report:
+                    marks_summary = student_data.get('marks_summary', {})
+                    for component in ['internal1', 'internal2', 'assignment', 'project']:
+                        component_data = marks_summary.get(component, {})
+                        obtained = component_data.get('obtained', 0)
+                        max_marks = component_data.get('max', 0)
+                        if obtained > 0 or max_marks > 0:
+                            has_recorded_marks = True
+                            break
+                    if has_recorded_marks:
+                        break
+                
+                # Only include subjects that have recorded marks
+                if has_recorded_marks:
+                    # Filter students based on custom threshold (include 100% when threshold is 100)
+                    # Students with no recorded marks (overall_percentage is None) are considered deficient
+                    deficient_students = [r for r in report if r['overall_percentage'] is None or r['overall_percentage'] <= threshold]
+                    if deficient_students:
+                        deficiency_data.append({
+                            'subject': subject,
+                            'deficient_students': deficient_students
+                        })
         
         return render_template('lecturer/marks_deficiency.html', 
                              deficiency_data=deficiency_data, 
@@ -1147,9 +1199,26 @@ def export_marks_deficiency_excel():
         for subject in subjects:
             report, _ = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                deficient_students = [r for r in report if r['overall_percentage'] <= threshold]
-                if deficient_students:
-                    deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
+                # Check if any marks have been recorded for this subject
+                has_recorded_marks = False
+                for student_data in report:
+                    marks_summary = student_data.get('marks_summary', {})
+                    for component in ['internal1', 'internal2', 'assignment', 'project']:
+                        component_data = marks_summary.get(component, {})
+                        obtained = component_data.get('obtained', 0)
+                        max_marks = component_data.get('max', 0)
+                        if obtained > 0 or max_marks > 0:
+                            has_recorded_marks = True
+                            break
+                    if has_recorded_marks:
+                        break
+                
+                # Only include subjects that have recorded marks
+                if has_recorded_marks:
+                    # Students with no recorded marks (overall_percentage is None) are considered deficient
+                    deficient_students = [r for r in report if r['overall_percentage'] is None or r['overall_percentage'] <= threshold]
+                    if deficient_students:
+                        deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
 
         from flask import make_response
         lecturer_name = None
@@ -1187,9 +1256,26 @@ def export_marks_deficiency_pdf():
         for subject in subjects:
             report, _ = LecturerService.generate_marks_report(subject.id, lecturer_id)
             if report:
-                deficient_students = [r for r in report if r['overall_percentage'] <= threshold]
-                if deficient_students:
-                    deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
+                # Check if any marks have been recorded for this subject
+                has_recorded_marks = False
+                for student_data in report:
+                    marks_summary = student_data.get('marks_summary', {})
+                    for component in ['internal1', 'internal2', 'assignment', 'project']:
+                        component_data = marks_summary.get(component, {})
+                        obtained = component_data.get('obtained', 0)
+                        max_marks = component_data.get('max', 0)
+                        if obtained > 0 or max_marks > 0:
+                            has_recorded_marks = True
+                            break
+                    if has_recorded_marks:
+                        break
+                
+                # Only include subjects that have recorded marks
+                if has_recorded_marks:
+                    # Students with no recorded marks (overall_percentage is None) are considered deficient
+                    deficient_students = [r for r in report if r['overall_percentage'] is None or r['overall_percentage'] <= threshold]
+                    if deficient_students:
+                        deficiency_data.append({'subject': subject, 'deficient_students': deficient_students})
 
         lecturer_name = None
         try:
@@ -1206,7 +1292,14 @@ def export_marks_deficiency_pdf():
         fname = 'marks_deficiency'
         if selected_subject_id:
             fname += f'_{selected_subject_id}'
-        response.headers['Content-Disposition'] = f'attachment; filename={fname}.pdf'
+        if request.args.get('inline') == '1':
+            response.headers['Content-Disposition'] = f'inline; filename={fname}.pdf'
+        else:
+            response.headers['Content-Disposition'] = f'attachment; filename={fname}.pdf'
+        # Prevent client/proxy caching so latest layout is always served
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
     except Exception as e:
         flash(f'Error exporting marks deficiency PDF: {str(e)}', 'error')

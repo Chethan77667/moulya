@@ -92,7 +92,11 @@ class ExcelExportService:
             else:
                 # Convert 65.88 -> 0.6588 and apply percent format
                 cell.value = float(percent_0_to_100) / 100.0
-                cell.number_format = '0.00%'
+                # Use conditional format: whole numbers without .00, decimals with 2 places
+                if percent_0_to_100 == int(percent_0_to_100):
+                    cell.number_format = '0%'  # 75% instead of 75.00%
+                else:
+                    cell.number_format = '0.00%'  # 75.5% for decimals
         except Exception:
             cell.value = None
         cell.alignment = Alignment(horizontal=("left" if align_left else "right"), vertical="center")
@@ -250,8 +254,14 @@ class ExcelExportService:
             ws.cell(row=base + 5, column=2, value=stats['failing_students'])
             
             # Student marks table
-            headers = ['Roll Number', 'Student Name', 'Assessment Type', 'Marks Obtained', 
-                      'Max Marks', 'Percentage', 'Grade', 'Status']
+            # Include Assessment Type column only when "All Assessments" is selected
+            if report_data.get('assessment_type') == 'all' or not report_data.get('assessment_type'):
+                headers = ['Roll Number', 'Student Name', 'Assessment Type', 'Marks Obtained', 
+                          'Max Marks', 'Percentage', 'Grade', 'Status']
+            else:
+                headers = ['Roll Number', 'Student Name', 'Marks Obtained', 
+                          'Max Marks', 'Percentage', 'Grade', 'Status']
+            
             ExcelExportService.style_header_row(ws, base + 7, headers)
             
             row = base + 8
@@ -260,12 +270,19 @@ class ExcelExportService:
                 for mark in student_data['marks']:
                     ws.cell(row=row, column=1, value=student.roll_number)
                     ws.cell(row=row, column=2, value=student.name)
-                    ws.cell(row=row, column=3, value=mark['assessment_type'])
-                    ws.cell(row=row, column=4, value=ExcelExportService.format_number(mark['marks_obtained']))
-                    ws.cell(row=row, column=5, value=ExcelExportService.format_number(mark['max_marks']))
-                    ExcelExportService.set_percentage(ws.cell(row=row, column=6), mark['percentage'], align_left=True)
-                    ws.cell(row=row, column=7, value=mark['grade'])
-                    ws.cell(row=row, column=8, value=mark['performance_status'])
+                    
+                    # Only include Assessment Type column when "All Assessments" is selected
+                    if report_data.get('assessment_type') == 'all' or not report_data.get('assessment_type'):
+                        ws.cell(row=row, column=3, value=mark['assessment_type'])
+                        col_offset = 1
+                    else:
+                        col_offset = 0
+                    
+                    ws.cell(row=row, column=3 + col_offset, value=ExcelExportService.format_number(mark['marks_obtained']))
+                    ws.cell(row=row, column=4 + col_offset, value=ExcelExportService.format_number(mark['max_marks']))
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=5 + col_offset), mark['percentage'], align_left=True)
+                    ws.cell(row=row, column=6 + col_offset, value=mark['grade'])
+                    ws.cell(row=row, column=7 + col_offset, value=mark['performance_status'])
                     row += 1
             
             ExcelExportService.center_all_cells(ws)
@@ -293,13 +310,18 @@ class ExcelExportService:
             ws.cell(row=2, column=2, value=f"{subject['name']} ({subject['code']})")
             ws.cell(row=3, column=1, value="Course")
             course_line = subject.get('course_display') or subject.get('course') or ''
-            if subject.get('section'):
-                course_line += f" - Section {str(subject['section']).upper()}"
             ws.cell(row=3, column=2, value=course_line)
             ws.cell(row=4, column=1, value="Year/Semester")
             ws.cell(row=4, column=2, value=f"{subject['year']}/{subject['semester']}")
             ws.cell(row=5, column=1, value="Period")
-            ws.cell(row=5, column=2, value=f"{report_data['month']}/{report_data['year']}")
+            # Format period as "Month Name - Year" or "Overall"
+            if report_data.get('month') == 'overall' or report_data.get('month') == 'Overall':
+                period_display = "Overall"
+            else:
+                month_name = report_data.get('month', '')
+                year = report_data.get('year', '')
+                period_display = f"{month_name} - {year}"
+            ws.cell(row=5, column=2, value=period_display)
             # Optional section line
             if subject.get('section'):
                 ws.cell(row=6, column=1, value="Section")
@@ -365,8 +387,8 @@ class ExcelExportService:
             course_headers = ['Field', 'Value']
             ExcelExportService.style_header_row(ws, 1, course_headers)
             
-            ws.cell(row=2, column=1, value="Course")
-            ws.cell(row=2, column=2, value=f"{course['name']} ({course['code']})")
+            ws.cell(row=2, column=1, value="Class")
+            ws.cell(row=2, column=2, value=course['name'])
             ws.cell(row=3, column=1, value="Duration")
             ws.cell(row=3, column=2, value=f"{course['duration_years']} years ({course['total_semesters']} semesters)")
             ws.cell(row=4, column=1, value="Total Students")
@@ -375,21 +397,17 @@ class ExcelExportService:
             ws.cell(row=5, column=2, value=report_data['total_subjects'])
             
             # Subject-wise report
-            headers = ['Subject Code', 'Subject Name', 'Year', 'Semester', 'Enrolled Students',
-                      'Total Assessments', 'Average Marks %', 'Passing Rate %', 'Average Attendance %']
+            headers = ['Subject Name', 'Subject Code', 'Enrolled Students', 'Average Marks %', 'Passing Rate %', 'Average Attendance %']
             ExcelExportService.style_header_row(ws, 7, headers)
             
             row = 8
             for subject in report_data['subjects']:
-                ws.cell(row=row, column=1, value=subject['subject_code'])
-                ws.cell(row=row, column=2, value=subject['subject_name'])
-                ws.cell(row=row, column=3, value=subject['year'])
-                ws.cell(row=row, column=4, value=subject['semester'])
-                ws.cell(row=row, column=5, value=subject['enrolled_students'])
-                ws.cell(row=row, column=6, value=subject['marks_statistics']['total_assessments'])
-                ExcelExportService.set_percentage(ws.cell(row=row, column=7), subject['marks_statistics']['average_marks'], align_left=True)
-                ExcelExportService.set_percentage(ws.cell(row=row, column=8), subject['marks_statistics']['passing_rate'], align_left=True)
-                ExcelExportService.set_percentage(ws.cell(row=row, column=9), subject['attendance_statistics']['average_attendance'], align_left=True)
+                ws.cell(row=row, column=1, value=subject['subject_name'])
+                ws.cell(row=row, column=2, value=subject['subject_code'])
+                ws.cell(row=row, column=3, value=subject['enrolled_students'])
+                ExcelExportService.set_percentage(ws.cell(row=row, column=4), subject['marks_statistics']['average_marks'], align_left=True)
+                ExcelExportService.set_percentage(ws.cell(row=row, column=5), subject['marks_statistics']['passing_rate'], align_left=True)
+                ExcelExportService.set_percentage(ws.cell(row=row, column=6), subject['attendance_statistics']['average_attendance'], align_left=True)
                 row += 1
             
             ExcelExportService.center_all_cells(ws)
@@ -445,7 +463,7 @@ class ExcelExportService:
                 row += 1
 
                 # Section table header (no Subject/Code/Course columns in table)
-                headers = ['Student', 'Roll Number', 'Present', 'Total', 'Percent', 'Shortage vs Threshold']
+                headers = ['Student', 'Roll Number', 'Present', 'Total', 'Percent']
                 ExcelExportService.style_header_row(ws, row, headers)
                 row += 1
 
@@ -470,8 +488,6 @@ class ExcelExportService:
                     ExcelExportService.set_number(ws.cell(row=row, column=3), rec.get('present_classes') or 0, align_right=True)
                     ExcelExportService.set_number(ws.cell(row=row, column=4), rec.get('total_classes') or 0, align_right=True)
                     ExcelExportService.set_percentage(ws.cell(row=row, column=5), rec.get('attendance_percentage') or 0, align_left=True)
-                    shortage_pct = max(0.0, float(threshold) - float(rec.get('attendance_percentage') or 0))
-                    ExcelExportService.set_percentage(ws.cell(row=row, column=6), shortage_pct, align_left=True)
                     row += 1
 
                 # Blank row between sections
@@ -545,15 +561,42 @@ class ExcelExportService:
                 ws[f'B{current_row}'] = course_name
                 current_row += 1
                 
-                # Header row for this subject's table
-                headers = [
-                    'Student', 'Roll Number', 'Overall %', 'Internal 1', 'Internal 2', 'Assignment', 'Project'
-                ]
+                # Decide which mark components to include based on actual data present
+                deficient_students = block.get('deficient_students') or []
+                include = { 'internal1': False, 'internal2': False, 'assignment': False, 'project': False }
+                def _is_updated(val):
+                    try:
+                        if isinstance(val, dict):
+                            obt = val.get('obtained')
+                            mx = val.get('max')
+                        else:
+                            obt = getattr(val, 'obtained', None)
+                            mx = getattr(val, 'max', None)
+                        # Consider updated only if any value is numeric and > 0
+                        obt_num = float(obt) if obt is not None else 0.0
+                        mx_num = float(mx) if mx is not None else 0.0
+                        return (obt_num > 0.0) or (mx_num > 0.0)
+                    except Exception:
+                        return False
+                for rec in deficient_students:
+                    ms = rec.get('marks_summary') or {}
+                    for k in include.keys():
+                        if _is_updated(ms.get(k)):
+                            include[k] = True
+
+                headers = ['Student', 'Roll Number', 'Overall %']
+                component_to_header = {
+                    'internal1': 'Internal 1',
+                    'internal2': 'Internal 2',
+                    'assignment': 'Assignment',
+                    'project': 'Project',
+                }
+                ordered_components = [k for k in ['internal1','internal2','assignment','project'] if include.get(k)]
+                headers.extend([component_to_header[k] for k in ordered_components])
                 ExcelExportService.style_header_row(ws, current_row, headers)
                 current_row += 1
                 
                 # Sort students by roll number (last 3 digits)
-                deficient_students = block.get('deficient_students') or []
                 def get_roll_sort_key(rec):
                     roll_number = rec['student'].roll_number
                     if len(roll_number) >= 3:
@@ -571,32 +614,41 @@ class ExcelExportService:
                     ms = rec.get('marks_summary') or {}
                     def _fmt(a):
                         try:
-                            obt = getattr(a, 'obtained', None) if hasattr(a, 'obtained') else (a.get('obtained') if isinstance(a, dict) else None)
-                            mx = getattr(a, 'max', None) if hasattr(a, 'max') else (a.get('max') if isinstance(a, dict) else None)
-                            if not obt and not mx:
+                            if isinstance(a, dict):
+                                obt = a.get('obtained')
+                                mx = a.get('max')
+                            else:
+                                obt = getattr(a, 'obtained', None)
+                                mx = getattr(a, 'max', None)
+                            if obt is None and mx is None:
                                 return ''
-                            return f"{obt}/{mx}"
+                            f_obt = ExcelExportService.format_number(obt)
+                            f_max = ExcelExportService.format_number(mx)
+                            if f_obt is None and f_max is None:
+                                return ''
+                            if f_obt is None:
+                                f_obt = ''
+                            if f_max is None:
+                                f_max = ''
+                            return f"{f_obt}/{f_max}"
                         except Exception:
                             return ''
-                    
-                    ws.cell(row=current_row, column=1, value=rec['student'].name)
-                    ws.cell(row=current_row, column=2, value=rec['student'].roll_number)
-                    ExcelExportService.set_percentage(ws.cell(row=current_row, column=3), rec.get('overall_percentage') or 0, align_left=True)
-                    ws.cell(row=current_row, column=4, value=_fmt(ms.get('internal1')))
-                    ws.cell(row=current_row, column=5, value=_fmt(ms.get('internal2')))
-                    ws.cell(row=current_row, column=6, value=_fmt(ms.get('assignment')))
-                    ws.cell(row=current_row, column=7, value=_fmt(ms.get('project')))
+
+                    col = 1
+                    ws.cell(row=current_row, column=col, value=rec['student'].name); col += 1
+                    ws.cell(row=current_row, column=col, value=rec['student'].roll_number); col += 1
+                    overall_percentage = rec.get('overall_percentage')
+                    if overall_percentage is not None:
+                        ExcelExportService.set_percentage(ws.cell(row=current_row, column=col), overall_percentage, align_left=True)
+                    else:
+                        ws.cell(row=current_row, column=col, value="-")
+                    col += 1
+                    for comp in ordered_components:
+                        ws.cell(row=current_row, column=col, value=_fmt(ms.get(comp))); col += 1
                     current_row += 1
 
             ExcelExportService.center_all_cells(ws)
             ExcelExportService.auto_adjust_columns(ws)
-
-            # Wrap and left-align Student column (D)
-            from openpyxl.styles import Alignment
-            last_row = ws.max_row or row - 1
-            for r in range(header_row + 1, last_row + 1):
-                cell = ws.cell(row=r, column=4)
-                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
             return ExcelExportService.workbook_to_bytes(wb)
         except Exception as e:
@@ -643,19 +695,30 @@ class ExcelExportService:
             ws['A3'] = f"Total Students: {len(report['students'])}"
             ws['A4'] = f"Total Subjects: {len(report['subjects'])}"
             
+            # Add Assessment Type for marks reports
+            if report['report_type'] == 'marks' and report.get('assessment_type'):
+                assessment_display = report['assessment_type'].title().replace('1', ' 1').replace('2', ' 2')
+                ws['A5'] = f"Assessment Type: {assessment_display}"
+                header_rows = 5
+            else:
+                header_rows = 4
+            
             # Set header styles
-            for row in range(1, 5):
+            for row in range(1, header_rows + 1):
                 ws[f'A{row}'].font = Font(name='Arial', size=12, bold=True)
             
-            # Start data from row 6
-            current_row = 6
+            # Start data from row after headers
+            current_row = header_rows + 2
             
             if report['report_type'] == 'attendance':
                 # Create attendance report
                 headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in report['subjects']]
-                ws.append(headers)
                 
-                # Style headers
+                # Add headers to the worksheet
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=current_row, column=col, value=header)
+                
+                # Style headers with blue background and center alignment
                 for col in range(1, len(headers) + 1):
                     cell = ws.cell(row=current_row, column=col)
                     cell.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
@@ -678,13 +741,16 @@ class ExcelExportService:
                         subject_data = report['data'].get(subject['id'], {})
                         student_attendance = subject_data.get('student_attendance', {}).get(student['id'], {})
                         
-                        if student_attendance:
+                        # Check if student is enrolled in this subject
+                        is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+                        
+                        if not is_enrolled:
+                            row_data.append("NA")
+                        elif student_attendance and student_attendance.get('total_classes', 0) > 0:
                             percentage = student_attendance.get('percentage', 0)
-                            present = student_attendance.get('present_classes', 0)
-                            total = student_attendance.get('total_classes', 0)
-                            row_data.append(f"{present}/{total} ({percentage}%)")
+                            row_data.append(f"{percentage}%")
                         else:
-                            row_data.append("N/A")
+                            row_data.append("-")
                     
                     ws.append(row_data)
                     
@@ -718,9 +784,12 @@ class ExcelExportService:
             elif report['report_type'] == 'marks':
                 # Create marks report
                 headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in report['subjects']]
-                ws.append(headers)
                 
-                # Style headers
+                # Add headers to the worksheet
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=current_row, column=col, value=header)
+                
+                # Style headers with blue background and center alignment
                 for col in range(1, len(headers) + 1):
                     cell = ws.cell(row=current_row, column=col)
                     cell.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
@@ -743,11 +812,25 @@ class ExcelExportService:
                         subject_data = report['data'].get(subject['id'], {})
                         student_marks = subject_data.get('student_marks', {}).get(student['id'], {})
                         
-                        if student_marks:
-                            percentage = student_marks.get('overall_percentage', 0)
-                            row_data.append(f"{percentage}%")
+                        # Check if student is enrolled in this subject
+                        is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+                        
+                        if not is_enrolled:
+                            row_data.append("NA")
+                        elif student_marks and report.get('assessment_type'):
+                            # Specific assessment type selected
+                            assessment_data = student_marks.get(report['assessment_type'], {})
+                            if assessment_data and assessment_data.get('recorded', False) and assessment_data.get('max', 0) > 0:
+                                obtained = assessment_data.get('obtained', 0)
+                                max_marks = assessment_data.get('max', 0)
+                                # Format marks: remove .0 from whole numbers
+                                obtained_str = str(int(obtained)) if obtained == int(obtained) else str(obtained)
+                                max_str = str(int(max_marks)) if max_marks == int(max_marks) else str(max_marks)
+                                row_data.append(f"{obtained_str}/{max_str}")
+                            else:
+                                row_data.append("-")
                         else:
-                            row_data.append("N/A")
+                            row_data.append("-")
                     
                     ws.append(row_data)
                     
@@ -763,16 +846,22 @@ class ExcelExportService:
                             bottom=Side(style='thin')
                         )
                         
-                        # Color code marks percentages
-                        if col > 2 and row_data[col-1] != "N/A":
+                        # Color code marks based on obtained/max format
+                        if col > 2 and row_data[col-1] not in ["N/A", "NA", "-"]:
                             try:
-                                percentage = float(row_data[col-1].replace('%', ''))
-                                if percentage >= 60:
-                                    cell.fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
-                                elif percentage >= 40:
-                                    cell.fill = PatternFill(start_color='FFEB9C', end_color='FFEB9C', fill_type='solid')
-                                else:
-                                    cell.fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+                                # Parse "obtained/max" format
+                                if '/' in row_data[col-1]:
+                                    obtained, max_marks = row_data[col-1].split('/')
+                                    obtained = float(obtained)
+                                    max_marks = float(max_marks)
+                                    if max_marks > 0:
+                                        percentage = (obtained / max_marks) * 100
+                                        if percentage >= 60:
+                                            cell.fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+                                        elif percentage >= 40:
+                                            cell.fill = PatternFill(start_color='FFEB9C', end_color='FFEB9C', fill_type='solid')
+                                        else:
+                                            cell.fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
                             except:
                                 pass
                     

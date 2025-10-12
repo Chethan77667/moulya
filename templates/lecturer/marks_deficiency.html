@@ -123,7 +123,13 @@
                                     <p class="text-xs text-gray-500">{{ student_data.student.roll_number }}</p>
                                 </div>
                                 <div class="ml-2 text-right">
-                                    <div class="text-sm font-medium text-red-600">{{ "%.2f"|format(student_data.overall_percentage) }}%</div>
+                                    <div class="text-sm font-medium text-red-600">
+                                        {% if student_data.overall_percentage is not none %}
+                                        {{ student_data.overall_percentage|format_mark }}%
+                                        {% else %}
+                                        <span class="text-gray-400">-</span>
+                                        {% endif %}
+                                    </div>
                                     <div class="text-xs text-red-500">Overall</div>
                                 </div>
                             </div>
@@ -132,7 +138,7 @@
                                     <div class="font-medium text-gray-700">Internal 1</div>
                                     <div class="text-gray-900">
                                         {% if marks_summary.internal1.obtained > 0 %}
-                                        {{ marks_summary.internal1.obtained }}/{{ marks_summary.internal1.max }}
+                                        {{ marks_summary.internal1.obtained|format_mark }}/{{ marks_summary.internal1.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -142,7 +148,7 @@
                                     <div class="font-medium text-gray-700">Internal 2</div>
                                     <div class="text-gray-900">
                                         {% if marks_summary.internal2.obtained > 0 %}
-                                        {{ marks_summary.internal2.obtained }}/{{ marks_summary.internal2.max }}
+                                        {{ marks_summary.internal2.obtained|format_mark }}/{{ marks_summary.internal2.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -152,7 +158,7 @@
                                     <div class="font-medium text-gray-700">Assignment</div>
                                     <div class="text-gray-900">
                                         {% if marks_summary.assignment.obtained > 0 %}
-                                        {{ marks_summary.assignment.obtained }}/{{ marks_summary.assignment.max }}
+                                        {{ marks_summary.assignment.obtained|format_mark }}/{{ marks_summary.assignment.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -162,7 +168,7 @@
                                     <div class="font-medium text-gray-700">Project</div>
                                     <div class="text-gray-900">
                                         {% if marks_summary.project.obtained > 0 %}
-                                        {{ marks_summary.project.obtained }}/{{ marks_summary.project.max }}
+                                        {{ marks_summary.project.obtained|format_mark }}/{{ marks_summary.project.max|format_mark }}
                                         {% else %}
                                         <span class="text-gray-400">Not recorded</span>
                                         {% endif %}
@@ -194,31 +200,37 @@
                             <tr class="bg-red-50 hover:bg-red-100">
                                 <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ student_data.student.name }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ student_data.student.roll_number }}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">{{ "%.2f"|format(student_data.overall_percentage) }}%</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                    {% if student_data.overall_percentage is not none %}
+                                    {{ student_data.overall_percentage|format_mark }}%
+                                    {% else %}
+                                    <span class="text-gray-400">-</span>
+                                    {% endif %}
+                                </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.internal1.obtained > 0 %}
-                                    {{ marks_summary.internal1.obtained }}/{{ marks_summary.internal1.max }}
+                                    {{ marks_summary.internal1.obtained|format_mark }}/{{ marks_summary.internal1.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.internal2.obtained > 0 %}
-                                    {{ marks_summary.internal2.obtained }}/{{ marks_summary.internal2.max }}
+                                    {{ marks_summary.internal2.obtained|format_mark }}/{{ marks_summary.internal2.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.assignment.obtained > 0 %}
-                                    {{ marks_summary.assignment.obtained }}/{{ marks_summary.assignment.max }}
+                                    {{ marks_summary.assignment.obtained|format_mark }}/{{ marks_summary.assignment.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                     {% if marks_summary.project.obtained > 0 %}
-                                    {{ marks_summary.project.obtained }}/{{ marks_summary.project.max }}
+                                    {{ marks_summary.project.obtained|format_mark }}/{{ marks_summary.project.max|format_mark }}
                                     {% else %}
                                     <span class="text-gray-400">-</span>
                                     {% endif %}
@@ -232,11 +244,6 @@
             {% endfor %}
         </div>
         
-        <div class="mt-6 text-center no-print">
-            <button onclick="window.print()" class="inline-flex items-center justify-center bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 text-sm">
-                Print Report
-            </button>
-        </div>
         {% else %}
         <div class="bg-white shadow rounded-lg">
             <div class="px-4 py-8 sm:p-6 text-center">
@@ -306,8 +313,30 @@ function exportMarksDeficiencyPDF() {
     const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export-pdf');
     url.searchParams.set('threshold', threshold);
     if (subjectId) url.searchParams.set('subject_id', subjectId);
+    url.searchParams.set('cb', Date.now());
     window.location.href = url.toString();
 }
+</script>
+
+<script>
+function exportMarksDeficiency() {
+    const threshold = document.getElementById('threshold-slider').value;
+    const subjectId = document.getElementById('subject-select').value;
+    const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export');
+    url.searchParams.set('threshold', threshold);
+    if (subjectId) url.searchParams.set('subject_id', subjectId);
+    window.location.href = url.toString();
+}
+
+function exportMarksDeficiencyPDF() {
+    const threshold = document.getElementById('threshold-slider').value;
+    const subjectId = document.getElementById('subject-select').value;
+    const url = new URL(window.location.origin + '/lecturer/reports/marks-deficiency/export-pdf');
+    url.searchParams.set('threshold', threshold);
+    if (subjectId) url.searchParams.set('subject_id', subjectId);
+    window.location.href = url.toString();
+}
+
 </script>
 
 <style>

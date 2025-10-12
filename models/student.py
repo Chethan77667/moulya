@@ -74,7 +74,12 @@ class Student(db.Model):
     
     def get_subject_marks_summary(self, subject_id):
         """Get marks summary for a specific subject"""
-        marks = self.marks.filter_by(subject_id=subject_id).all()
+        # Use direct query instead of relationship to avoid any issues
+        from models.marks import StudentMarks
+        marks = StudentMarks.query.filter_by(
+            student_id=self.id,
+            subject_id=subject_id
+        ).all()
         
         summary = {
             'internal1': {'obtained': 0, 'max': 0},

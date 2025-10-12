@@ -225,7 +225,7 @@
                     </div>
                     
                     <div class="mobile-sticky-actions">
-                        <button type="submit" class="w-full bg-black text-white py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black text-sm sm:text-sm transition-colors touch-manipulation">
+                        <button type="submit" id="save-marks-btn" class="w-full bg-black text-white py-3 px-6 sm:py-2 sm:px-4 rounded-md hover:bg-gray-800 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black text-sm sm:text-sm transition-colors touch-manipulation">
                             Save Marks
                         </button>
                     </div>
@@ -266,7 +266,7 @@
                                 <p class="text-xs text-gray-500">{{ student.roll_number }}</p>
                             </div>
                             <div class="ml-2 text-right">
-                                <div class="text-sm font-medium text-gray-900">{{ _per.get(student.id, 0) }}%</div>
+                                <div class="text-sm font-medium text-gray-900">{{ _per.get(student.id, 0)|format_mark }}%</div>
                                 <div class="text-xs text-gray-500">Overall</div>
                             </div>
                         </div>
@@ -276,7 +276,7 @@
                                 <div class="text-gray-900">
                                 {% if student_marks.get('internal1') %}
                                     {{ student_marks['internal1'].marks_obtained|format_mark }}/{{ student_marks['internal1'].max_marks|format_mark }}
-                                    <span class="text-gray-500">({{ "%.2f"|format(student_marks['internal1'].percentage) }}%)</span>
+                                    <span class="text-gray-500">({{ student_marks['internal1'].percentage|format_mark }}%)</span>
                                     {% else %}
                                     <span class="text-gray-400">Not recorded</span>
                                     {% endif %}
@@ -287,7 +287,7 @@
                                 <div class="text-gray-900">
                                 {% if student_marks.get('internal2') %}
                                     {{ student_marks['internal2'].marks_obtained|format_mark }}/{{ student_marks['internal2'].max_marks|format_mark }}
-                                    <span class="text-gray-500">({{ "%.2f"|format(student_marks['internal2'].percentage) }}%)</span>
+                                    <span class="text-gray-500">({{ student_marks['internal2'].percentage|format_mark }}%)</span>
                                     {% else %}
                                     <span class="text-gray-400">Not recorded</span>
                                     {% endif %}
@@ -298,7 +298,7 @@
                                 <div class="text-gray-900">
                                 {% if student_marks.get('assignment') %}
                                     {{ student_marks['assignment'].marks_obtained|format_mark }}/{{ student_marks['assignment'].max_marks|format_mark }}
-                                    <span class="text-gray-500">({{ "%.2f"|format(student_marks['assignment'].percentage) }}%)</span>
+                                    <span class="text-gray-500">({{ student_marks['assignment'].percentage|format_mark }}%)</span>
                                     {% else %}
                                     <span class="text-gray-400">Not recorded</span>
                                     {% endif %}
@@ -309,7 +309,7 @@
                                 <div class="text-gray-900">
                                 {% if student_marks.get('project') %}
                                     {{ student_marks['project'].marks_obtained|format_mark }}/{{ student_marks['project'].max_marks|format_mark }}
-                                    <span class="text-gray-500">({{ "%.2f"|format(student_marks['project'].percentage) }}%)</span>
+                                    <span class="text-gray-500">({{ student_marks['project'].percentage|format_mark }}%)</span>
                                     {% else %}
                                     <span class="text-gray-400">Not recorded</span>
                                     {% endif %}
@@ -346,7 +346,7 @@
                                 {% set obtained = student_marks['internal1'].marks_obtained %}
                                 {% set max_val = student_marks['internal1'].max_marks %}
                                 {{ obtained|format_mark }}/{{ max_val|format_mark }}
-                                <span class="text-xs text-gray-500">({{ "%.2f"|format(student_marks['internal1'].percentage) }}%)</span>
+                                <span class="text-xs text-gray-500">({{ student_marks['internal1'].percentage|format_mark }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
                                 {% endif %}
@@ -356,7 +356,7 @@
                                 {% set obtained = student_marks['internal2'].marks_obtained %}
                                 {% set max_val = student_marks['internal2'].max_marks %}
                                 {{ obtained|format_mark }}/{{ max_val|format_mark }}
-                                <span class="text-xs text-gray-500">({{ "%.2f"|format(student_marks['internal2'].percentage) }}%)</span>
+                                <span class="text-xs text-gray-500">({{ student_marks['internal2'].percentage|format_mark }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
                                 {% endif %}
@@ -366,7 +366,7 @@
                                 {% set obtained = student_marks['assignment'].marks_obtained %}
                                 {% set max_val = student_marks['assignment'].max_marks %}
                                 {{ obtained|format_mark }}/{{ max_val|format_mark }}
-                                <span class="text-xs text-gray-500">({{ "%.2f"|format(student_marks['assignment'].percentage) }}%)</span>
+                                <span class="text-xs text-gray-500">({{ student_marks['assignment'].percentage|format_mark }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
                                 {% endif %}
@@ -376,13 +376,13 @@
                                 {% set obtained = student_marks['project'].marks_obtained %}
                                 {% set max_val = student_marks['project'].max_marks %}
                                 {{ obtained|format_mark }}/{{ max_val|format_mark }}
-                                <span class="text-xs text-gray-500">({{ "%.2f"|format(student_marks['project'].percentage) }}%)</span>
+                                <span class="text-xs text-gray-500">({{ student_marks['project'].percentage|format_mark }}%)</span>
                                 {% else %}
                                 <span class="text-gray-400">-</span>
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                <span class="font-medium">{{ "%.2f"|format(_per.get(student.id, 0)) }}%</span>
+                                <span class="font-medium">{{ _per.get(student.id, 0)|format_mark }}%</span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -424,14 +424,24 @@ function toggleMobileMenu() {
         marksInputs.forEach(input => { input.max = maxVal; });
     }
 
-    function clampInputsToMax(maxVal){
+    function markExceedingInputs(maxVal, useNativeMsg){
         const marksInputs = document.querySelectorAll('.marks-input');
+        let firstOffender = null;
         marksInputs.forEach(input => {
             const v = parseFloat(input.value);
-            if (!isNaN(v) && v > maxVal) {
-                input.value = String(maxVal);
+            const exceeds = (!isNaN(v) && v > maxVal);
+            if (exceeds) {
+                input.classList.add('border-red-500');
+                input.setCustomValidity('Value cannot exceed maximum marks');
+                if (!firstOffender) firstOffender = input;
+            } else {
+                input.classList.remove('border-red-500');
+                input.setCustomValidity('');
             }
         });
+        if (firstOffender && useNativeMsg) {
+            try { firstOffender.reportValidity(); firstOffender.focus(); } catch(e) {}
+        }
         updateProgress();
     }
 
@@ -443,13 +453,13 @@ function toggleMobileMenu() {
         }
     });
 
-    // On commit (blur/change): clamp values exceeding the final max
+    // On commit (blur/change): do NOT clamp; just flag and alert
     ['change','blur'].forEach(evt => {
         maxEl.addEventListener(evt, function(){
             const maxVal = parseFloat(this.value);
             if (!isNaN(maxVal)) {
                 setInputsMax(maxVal);
-                clampInputsToMax(maxVal);
+                markExceedingInputs(maxVal, true);
             }
         });
     });
@@ -703,6 +713,80 @@ document.addEventListener('click', function(event) {
     if (!button && !menu.contains(event.target)) {
         menu.classList.add('hidden');
     }
+});
+// Prevent saving when any entered mark exceeds max_marks
+document.addEventListener('DOMContentLoaded', function(){
+  try {
+    const form = document.querySelector('form[action$="/marks/add"]');
+    const saveBtn = document.getElementById('save-marks-btn');
+    if (!form || !saveBtn) return;
+
+    // When max marks changes, propagate to inputs as HTML max and add live validation UI
+    const maxInput = document.getElementById('max_marks');
+    const marksInputs = () => Array.from(form.querySelectorAll('input[name^="marks_"]'));
+    function applyMaxToInputs(){
+      const maxVal = parseFloat(maxInput?.value || '');
+      marksInputs().forEach(inp => {
+        if (!isNaN(maxVal) && maxVal > 0) {
+          inp.setAttribute('max', String(maxVal));
+        } else {
+          inp.removeAttribute('max');
+        }
+      });
+    }
+    if (maxInput) {
+      maxInput.addEventListener('input', function(){
+        applyMaxToInputs();
+        // Also re-validate all mark inputs and clear any stale messages when now within range
+        const maxVal = parseFloat(maxInput.value || '');
+        if (!isNaN(maxVal) && maxVal > 0) {
+          marksInputs().forEach(inp => {
+            const v = parseFloat(inp.value || '');
+            if (!isNaN(v) && v > maxVal) {
+              inp.classList.add('border-red-500');
+              inp.setCustomValidity('Value cannot exceed maximum marks');
+            } else {
+              inp.classList.remove('border-red-500');
+              inp.setCustomValidity('');
+            }
+          });
+        }
+      });
+      applyMaxToInputs();
+    }
+    form.addEventListener('input', function(e){
+      const t = e.target;
+      if (!(t && t.name && t.name.startsWith('marks_'))) return;
+      const maxVal = parseFloat(maxInput?.value || '');
+      if (!isNaN(maxVal) && maxVal > 0) {
+        const v = parseFloat(t.value || '');
+        if (!isNaN(v) && v > maxVal) {
+          t.classList.add('border-red-500');
+          t.setCustomValidity('Value cannot exceed maximum marks');
+          // Do not automatically open bubble here; it will appear on submit or blur if needed
+        } else {
+          t.classList.remove('border-red-500');
+          t.setCustomValidity('');
+        }
+      }
+    });
+    form.addEventListener('submit', function(ev){
+      const maxInput = document.getElementById('max_marks');
+      const maxVal = parseFloat(maxInput ? maxInput.value : '');
+      if (!maxVal || isNaN(maxVal)) return; // backend will reject; no compare
+      const inputs = form.querySelectorAll('input[name^="marks_"]');
+      for (const inp of inputs) {
+        const raw = inp.value;
+        if (raw === '' || raw == null) continue;
+        const mark = parseFloat(raw);
+        if (!isNaN(mark) && mark > maxVal) {
+          ev.preventDefault();
+          try { inp.setCustomValidity('Value cannot exceed maximum marks'); inp.reportValidity(); inp.focus(); } catch(e) {}
+          return false;
+        }
+      }
+    });
+  } catch(e) {}
 });
 </script>
 <script>

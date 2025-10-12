@@ -8,7 +8,8 @@
 <script defer>
     function initReportsForm() {
         return {
-            selectedSubject: '',
+            selectedSubjectMarks: '',
+            selectedSubjectAttendance: '',
             selectedCourse: '',
             selectedStudent: '',
             selectedMonth: new Date().getMonth() + 1,
@@ -92,11 +93,11 @@
             },
             
             generateClassMarksReport() {
-                if (!this.selectedSubject) {
+                if (!this.selectedSubjectMarks) {
                     Swal.fire('Error!', 'Please select a subject', 'error');
                     return;
                 }
-                let url = `/management/reports/class/marks/${this.selectedSubject}`;
+                let url = `/management/reports/class/marks/${this.selectedSubjectMarks}`;
                 if (this.selectedAssessmentType) {
                     url += `?assessment_type=${this.selectedAssessmentType}`;
                 }
@@ -104,11 +105,11 @@
             },
             
             generateClassAttendanceReport() {
-                if (!this.selectedSubject) {
+                if (!this.selectedSubjectAttendance) {
                     Swal.fire('Error!', 'Please select a subject', 'error');
                     return;
                 }
-                let url = `/management/reports/class/attendance/${this.selectedSubject}?month=${this.selectedMonth}&year=${this.selectedYear}`;
+                let url = `/management/reports/class/attendance/${this.selectedSubjectAttendance}?month=${this.selectedMonth}&year=${this.selectedYear}`;
                 window.open(url, '_blank');
             },
             
@@ -127,6 +128,10 @@
                 }
                 if (!this.selectedReportType) {
                     Swal.fire('Error!', 'Please select a report type', 'error');
+                    return;
+                }
+                if (this.selectedReportType === 'marks' && !this.selectedAssessmentType) {
+                    Swal.fire('Error!', 'Please select an assessment type for marks report', 'error');
                     return;
                 }
                 let url = `/management/reports/comprehensive-class/${this.selectedComprehensiveCourse}?type=${this.selectedReportType}`;
@@ -188,7 +193,7 @@
                                     @change="filterStudentsByCourse()"
                                     class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                 <option value="">All Courses</option>
-                                {% for course in courses %}
+                                {% for course in courses|sort(attribute='name') %}
                                 <option value="{{ course.id }}">{{ course.name }} ({{ course.code }})</option>
                                 {% endfor %}
                             </select>
@@ -270,9 +275,9 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Select Subject</label>
-                            <select x-model="selectedSubject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            <select x-model="selectedSubjectMarks" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                 <option value="">Choose a subject...</option>
-                                {% for subject in subjects %}
+                                {% for subject in subjects|sort(attribute='name') %}
                                 <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course_name }}</option>
                                 {% endfor %}
                             </select>
@@ -294,11 +299,11 @@
                                     class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
-                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
+                            <button @click="selectedSubjectMarks && (window.location.href = `/management/reports/export/class/marks/${selectedSubjectMarks}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
-                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/marks/${selectedSubject}${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}/pdf`)" 
+                            <button @click="selectedSubjectMarks && (window.location.href = `/management/reports/export/class/marks/${selectedSubjectMarks}/pdf${selectedAssessmentType ? '?assessment_type=' + selectedAssessmentType : ''}`)" 
                                     class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                                 🧾 Export PDF
                             </button>
@@ -325,9 +330,9 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Select Subject</label>
-                            <select x-model="selectedSubject" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            <select x-model="selectedSubjectAttendance" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                 <option value="">Choose a subject...</option>
-                                {% for subject in subjects %}
+                                {% for subject in subjects|sort(attribute='name') %}
                                 <option value="{{ subject.id }}">{{ subject.name }} ({{ subject.code }}) - {{ subject.course_name }}</option>
                                 {% endfor %}
                             </select>
@@ -367,11 +372,11 @@
                                     class="flex-1 bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
                                 View Report
                             </button>
-                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/attendance/${selectedSubject}?month=${selectedMonth}&year=${selectedYear}`)" 
+                            <button @click="selectedSubjectAttendance && (window.location.href = `/management/reports/export/class/attendance/${selectedSubjectAttendance}?month=${selectedMonth}&year=${selectedYear}`)" 
                                     class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                                 📥 Export Excel
                             </button>
-                            <button @click="selectedSubject && (window.location.href = `/management/reports/export/class/attendance/${selectedSubject}/pdf?month=${selectedMonth}&year=${selectedYear}`)" 
+                            <button @click="selectedSubjectAttendance && (window.location.href = `/management/reports/export/class/attendance/${selectedSubjectAttendance}/pdf?month=${selectedMonth}&year=${selectedYear}`)" 
                                     class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                                 🧾 Export PDF
                             </button>
@@ -400,7 +405,7 @@
                             <label class="block text-sm font-medium text-gray-700">Select Course</label>
                             <select x-model="selectedCourse" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                 <option value="">Choose a course...</option>
-                                {% for course in courses %}
+                                {% for course in courses|sort(attribute='name') %}
                                 <option value="{{ course.id }}">{{ course.name }} ({{ course.code }}) - {{ course.total_students }} students</option>
                                 {% endfor %}
                             </select>
@@ -444,7 +449,7 @@
                             <label class="block text-sm font-medium text-gray-700">Select Course</label>
                             <select x-model="selectedComprehensiveCourse" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                 <option value="">Choose a course...</option>
-                                {% for course in courses %}
+                                {% for course in courses|sort(attribute='name') %}
                                 <option value="{{ course.id }}">{{ course.name }} ({{ course.code }}) - {{ course.total_students }} students</option>
                                 {% endfor %}
                             </select>
@@ -459,9 +464,9 @@
                         </div>
                         
                         <div x-show="selectedReportType === 'marks'">
-                            <label class="block text-sm font-medium text-gray-700">Assessment Type (Optional)</label>
+                            <label class="block text-sm font-medium text-gray-700">Assessment Type</label>
                             <select x-model="selectedAssessmentType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
-                                <option value="all">All Assessments</option>
+                                <option value="">Select Assessment Type</option>
                                 <option value="internal1">Internal 1</option>
                                 <option value="internal2">Internal 2</option>
                                 <option value="assignment">Assignment</option>

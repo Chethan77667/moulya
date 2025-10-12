@@ -31,7 +31,7 @@
         <!-- Course Info -->
         <div class="bg-white shadow rounded-lg mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900">{{ report.course.name }} ({{ report.course.code }})</h2>
+                <h2 class="text-lg font-semibold text-gray-900">{{ report.course.name }}</h2>
                 <p class="text-sm text-gray-600">Duration: {{ report.course.duration_years }} years, {{ report.course.total_semesters }} semesters</p>
             </div>
             <div class="px-6 py-4">
@@ -104,37 +104,33 @@
                 <h3 class="text-lg font-semibold text-gray-900">Subjects Performance Overview</h3>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="report-table compact">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year/Sem</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Marks</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass Rate</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Attendance</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider">Subject</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider no-wrap">Code</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider">Enrolled</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider">Avg Marks</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider">Pass Rate</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider">Avg Attendance</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody>
                         {% for subject in report.subjects %}
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <td class="no-wrap truncate-ellipsis text-sm font-medium text-gray-900 col-subject">
                                 {{ subject.subject_name }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="no-wrap text-sm text-gray-700">
                                 {{ subject.subject_code }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {{ subject.year }}/{{ subject.semester }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="no-wrap text-sm text-gray-700">
                                 {{ subject.enrolled_students }}
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td class="no-wrap text-sm text-gray-700">
                                 {{ subject.marks_statistics.average_marks }}%
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="no-wrap">
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
                                     {% if subject.marks_statistics.passing_rate >= 80 %}bg-gray-100 text-gray-800
                                     {% elif subject.marks_statistics.passing_rate >= 60 %}bg-gray-200 text-gray-800
@@ -142,7 +138,7 @@
                                     {{ subject.marks_statistics.passing_rate }}%
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="no-wrap">
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
                                     {% if subject.attendance_statistics.average_attendance >= 75 %}bg-gray-100 text-gray-800
                                     {% elif subject.attendance_statistics.average_attendance >= 50 %}bg-gray-200 text-gray-800

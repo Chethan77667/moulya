@@ -14,6 +14,7 @@ from models.academic import Course, Subject
 from models.student import Student
 from database import db
 from utils.validators import validate_username, validate_password
+from openpyxl.styles import Font
 
 def is_ajax_request():
     """Check if the current request is an AJAX request"""
@@ -87,7 +88,15 @@ def tracking_marks():
 def tracking_attendance():
     """Return updated vs pending lecturers for attendance by month/year/filters."""
     try:
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
         course_id = request.args.get('course_id', type=int)
         subject_id = request.args.get('subject_id', type=int)
@@ -118,16 +127,37 @@ def tracking_export_marks():
         ws = wb.active
         ws.title = 'Marks Tracking'
 
-        # Remove the "Pending Items" column and always include a Status column
+        # Compute top labels for Assessment and Status
         if status in ['updated', 'pending']:
-            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+            status_display = 'Updated' if status == 'updated' else 'Pending'
+            title_suffix = status_display
         else:
+            status_display = 'All Status'
             title_suffix = None
-        # Updated headers: remove Course and Class/Year -> single Class; pretty Assessment names
-        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Assessment', 'Status']
-        ExcelExportService.style_header_row(ws, 1, headers)
 
-        row = 2
+        at = (assessment_type or '').lower()
+        pretty_map = {
+            'internal1': 'Internal 1',
+            'internal2': 'Internal 2',
+            'assignment': 'Assignment',
+            'project': 'Project',
+            'any': 'Any'
+        }
+        assessment_display = pretty_map.get(at, (assessment_type or ''))
+
+        # Write top info row
+        ws.cell(row=1, column=1, value=f"Assessment: {assessment_display}")
+        ws.cell(row=1, column=2, value=f"Status: {status_display}")
+        header_font = Font(bold=True, size=12)
+        for col in [1, 2]:
+            cell = ws.cell(row=1, column=col)
+            cell.font = header_font
+
+        # Updated headers: remove Assessment and Status columns; keep single Class
+        headers = ['Lecturer', 'Subject', 'Code', 'Class']
+        ExcelExportService.style_header_row(ws, 3, headers)
+
+        row = 4
         keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
         for status_key in keys_to_iterate:
             for item in data.get(status_key, []):
@@ -143,18 +173,6 @@ def tracking_export_marks():
                 except Exception:
                     class_text = item.get('class_display') or ''
                 ws.cell(row=row, column=col, value=class_text); col += 1
-                # Pretty assessment label
-                at = (item.get('assessment_type') or '').lower()
-                pretty_map = {
-                    'internal1': 'Internal 1',
-                    'internal2': 'Internal 2',
-                    'assignment': 'Assignment',
-                    'project': 'Project',
-                    'any': 'Any'
-                }
-                ws.cell(row=row, column=col, value=pretty_map.get(at, (item.get('assessment_type') or ''))); col += 1
-                # Status as the last column
-                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
 
         ExcelExportService.auto_adjust_columns(ws)
@@ -177,7 +195,16 @@ def tracking_export_attendance():
     """Export tracking list (attendance) to Excel."""
     try:
         from flask import make_response
-        month = request.args.get('month', type=int)
+        import calendar
+        # Support 'overall' and numeric months
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
         course_id = request.args.get('course_id', type=int)
         subject_id = request.args.get('subject_id', type=int)
@@ -189,15 +216,32 @@ def tracking_export_attendance():
         ws = wb.active
         ws.title = 'Attendance Tracking'
 
+        # Get month name
+        month_name = calendar.month_name[month] if month else 'All Months'
+        
+        # Determine status display
         if status in ['updated', 'pending']:
-            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+            status_display = 'Updated' if status == 'updated' else 'Pending'
+            title_suffix = status_display
         else:
+            status_display = 'All Status'
             title_suffix = None
-        # Updated headers for attendance export: single Class column (no underscores), remove Month column
-        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Status']
-        ExcelExportService.style_header_row(ws, 1, headers)
 
-        row = 2
+        # Add header information at the top
+        ws.cell(row=1, column=1, value=f"Month: {month_name} {year}")
+        ws.cell(row=1, column=2, value=f"Status: {status_display}")
+        
+        # Style the header row
+        header_font = Font(bold=True, size=12)
+        for col in [1, 2]:
+            cell = ws.cell(row=1, column=col)
+            cell.font = header_font
+
+        # Updated headers for attendance export: single Class column (no underscores), drop Status column
+        headers = ['Lecturer', 'Subject', 'Code', 'Class']
+        ExcelExportService.style_header_row(ws, 3, headers)  # Start table headers at row 3
+
+        row = 4  # Start data at row 4
         keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
         for status_key in keys_to_iterate:
             for item in data.get(status_key, []):
@@ -213,8 +257,7 @@ def tracking_export_attendance():
                 except Exception:
                     class_text = item.get('class_display') or ''
                 ws.cell(row=row, column=col, value=class_text); col += 1
-                # Status last
-                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
+                # No Status column in export anymore
                 row += 1
 
         ExcelExportService.auto_adjust_columns(ws)
@@ -1145,29 +1188,6 @@ def export_student_report_pdf(student_id):
         flash(f'Error exporting PDF: {str(e)}', 'error')
         return redirect(url_for('management.student_report', student_id=student_id))
 
-@management_bp.route('/reports/export/class/marks/<int:subject_id>/pdf')
-@login_required('management')
-def export_class_marks_report_pdf(subject_id):
-    """Export class marks report to PDF"""
-    try:
-        from flask import make_response
-        assessment_type = request.args.get('assessment_type')
-        report = ReportingService.get_class_marks_report(subject_id, assessment_type)
-        if not report:
-            flash('Subject not found', 'error')
-            return redirect(url_for('management.reports_dashboard'))
-        pdf_bytes = ReportingService.generate_class_marks_report_pdf(report)
-        filename = f"class_marks_{report['subject']['code']}"
-        if assessment_type:
-            filename += f"_{assessment_type}"
-        filename += ".pdf"
-        response = make_response(pdf_bytes)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-        return response
-    except Exception as e:
-        flash(f'Error exporting class marks PDF: {str(e)}', 'error')
-        return redirect(url_for('management.class_marks_report', subject_id=subject_id))
 
 @management_bp.route('/reports/export/class/attendance/<int:subject_id>/pdf')
 @login_required('management')
@@ -1175,8 +1195,17 @@ def export_class_attendance_report_pdf(subject_id):
     """Export class attendance report to PDF"""
     try:
         from flask import make_response
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months, like the view route
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
+
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         if not report:
             flash('Subject not found', 'error')
@@ -1247,16 +1276,47 @@ def export_class_marks_report(subject_id):
         flash(f'Error exporting class marks report: {str(e)}', 'error')
         return redirect(url_for('management.class_marks_report', subject_id=subject_id))
 
+@management_bp.route('/reports/export/class/marks/<int:subject_id>/pdf')
+@login_required('management')
+def export_class_marks_report_pdf(subject_id):
+    """Export class marks report to PDF"""
+    try:
+        from flask import make_response
+        assessment_type = request.args.get('assessment_type')
+        report = ReportingService.get_class_marks_report(subject_id, assessment_type)
+        if not report:
+            flash('Subject not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        pdf_bytes = ReportingService.generate_class_marks_report_pdf(report)
+        filename = f"class_marks_{report['subject']['code']}"
+        if assessment_type:
+            filename += f"_{assessment_type}"
+        filename += ".pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting class marks PDF: {str(e)}', 'error')
+        return redirect(url_for('management.class_marks_report', subject_id=subject_id))
+
 @management_bp.route('/reports/export/class/attendance/<int:subject_id>')
 @login_required('management')
 def export_class_attendance_report(subject_id):
     """Export class attendance report to Excel"""
     try:
         from flask import make_response
-        
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months, like the view route
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
-        
+
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         
         if not report:
@@ -1320,7 +1380,12 @@ def comprehensive_class_report(course_id):
     """Comprehensive class report for all subjects in a course"""
     try:
         report_type = request.args.get('type', 'attendance')  # 'attendance' or 'marks'
-        assessment_type = request.args.get('assessment_type', 'all')  # for marks report
+        assessment_type = request.args.get('assessment_type')  # for marks report
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
@@ -1342,7 +1407,12 @@ def export_comprehensive_class_report_excel(course_id):
         from flask import make_response
         
         report_type = request.args.get('type', 'attendance')
-        assessment_type = request.args.get('assessment_type', 'all')
+        assessment_type = request.args.get('assessment_type')
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
@@ -1370,7 +1440,12 @@ def export_comprehensive_class_report_pdf(course_id):
         from flask import make_response
         
         report_type = request.args.get('type', 'attendance')
-        assessment_type = request.args.get('assessment_type', 'all')
+        assessment_type = request.args.get('assessment_type')
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
