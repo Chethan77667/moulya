@@ -226,8 +226,6 @@ def attendance_management(subject_id):
         from datetime import date as _date
         from models.attendance import MonthlyStudentAttendance as MSA
         prev_present_by_month_map = {}
-        # Also build per-month actual present counts for prefill when revisiting saved months
-        month_present_by_month_map = {}
         # Cover all months in selected year and any summary years
         months_to_prepare = months_to_cover
         for (yr, mo) in months_to_prepare:
@@ -242,16 +240,6 @@ def attendance_management(subject_id):
                         ((MSA.year < cutoff.year) | ((MSA.year == cutoff.year) & (MSA.month < cutoff.month)))
                     ).scalar() or 0)
                 per_student[s.id] = int(count_prev)
-                # Actual present for this specific (yr, mo) for prefill
-                month_present = (db.session.query(func.coalesce(func.sum(MSA.present_count), 0))
-                    .filter(
-                        MSA.student_id == s.id,
-                        MSA.subject_id == subject_id,
-                        MSA.lecturer_id == lecturer_id,
-                        MSA.year == yr,
-                        MSA.month == mo
-                    ).scalar() or 0)
-                month_present_by_month_map.setdefault(f"{yr}-{mo:02d}", {})[s.id] = int(month_present)
             prev_present_by_month_map[f"{yr}-{mo:02d}"] = per_student
 
         # Get monthly attendance data if requested
@@ -316,8 +304,6 @@ def attendance_management(subject_id):
                              prev_present_map=prev_present_map,
                              prior_totals_map=prior_totals_map,
                              prev_present_by_month_map=prev_present_by_month_map,
-                             month_present_by_month_map=month_present_by_month_map,
-                             cumulative_totals_by_month=cumulative_map,
                              deputation_counts_map=deputation_counts_map,
                              cumulative_present_map=cumulative_present_map)
     except Exception as e:
@@ -564,8 +550,6 @@ def marks_management(subject_id):
         # Get existing marks for students and compute per-subject overall %
         from models.marks import StudentMarks
         existing_marks = {}
-        # JSON-safe structure for client-side prefill
-        existing_marks_safe = {}
         per_subject_overall = {}
         for student in students:
             marks = StudentMarks.query.filter_by(
@@ -574,19 +558,6 @@ def marks_management(subject_id):
             ).all()
             # map assessment_type -> mark row
             existing_marks[student.id] = {mark.assessment_type: mark for mark in marks}
-            # Build JSON-safe dict
-            safe_map = {}
-            for mark in marks:
-                try:
-                    percentage = (mark.marks_obtained / mark.max_marks * 100) if (mark.max_marks and mark.max_marks > 0) else 0
-                except Exception:
-                    percentage = 0
-                safe_map[mark.assessment_type] = {
-                    'marks_obtained': float(mark.marks_obtained) if mark.marks_obtained is not None else None,
-                    'max_marks': float(mark.max_marks) if mark.max_marks is not None else None,
-                    'percentage': round(percentage, 2)
-                }
-            existing_marks_safe[student.id] = safe_map
             # compute overall for this subject only
             if marks:
                 total_obtained = sum(mark.marks_obtained for mark in marks)
@@ -599,7 +570,6 @@ def marks_management(subject_id):
                              subject=subject, 
                              students=students,
                              existing_marks=existing_marks,
-                             existing_marks_safe=existing_marks_safe,
                              per_subject_overall=per_subject_overall)
     except Exception as e:
         flash(f'Error loading marks: {str(e)}', 'error')
@@ -915,49 +885,6 @@ def upload_marks_excel(subject_id):
     except Exception as e:
         flash(f'Error uploading marks Excel: {str(e)}', 'error')
     return redirect(url_for('lecturer.marks_management', subject_id=subject_id))
-
-# ---------------- Reset Actions (Marks and Attendance) ----------------
-@lecturer_bp.route('/subjects/<int:subject_id>/marks/reset', methods=['POST'])
-@login_required('lecturer')
-def reset_marks_assessment(subject_id):
-    """Reset marks for a specific assessment type for this subject (lecturer scoped)."""
-    try:
-        lecturer_id = session.get('user_id')
-        assessment_type = request.form.get('assessment_type')
-        if assessment_type not in ('internal1', 'internal2', 'assignment', 'project'):
-            flash('Invalid assessment type selected.', 'error')
-            return redirect(url_for('lecturer.marks_management', subject_id=subject_id))
-
-        success, message = LecturerService.reset_marks_for_assessment(subject_id, lecturer_id, assessment_type)
-        if success:
-            flash(message, 'success')
-        else:
-            flash(message, 'error')
-    except Exception as e:
-        flash(f'Error resetting marks: {str(e)}', 'error')
-    return redirect(url_for('lecturer.marks_management', subject_id=subject_id))
-
-
-@lecturer_bp.route('/subjects/<int:subject_id>/attendance/reset', methods=['POST'])
-@login_required('lecturer')
-def reset_month_attendance(subject_id):
-    """Reset attendance for a specific month/year for this subject (lecturer scoped)."""
-    try:
-        lecturer_id = session.get('user_id')
-        month = request.form.get('month', type=int)
-        year = request.form.get('year', type=int)
-        if not month or not year or month < 1 or month > 12:
-            flash('Please select a valid month and year.', 'error')
-            return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
-
-        success, message = LecturerService.reset_month_attendance(subject_id, lecturer_id, month, year)
-        if success:
-            flash(message, 'success')
-        else:
-            flash(message, 'error')
-    except Exception as e:
-        flash(f'Error resetting attendance: {str(e)}', 'error')
-    return redirect(url_for('lecturer.attendance_management', subject_id=subject_id))
 @lecturer_bp.route('/subjects/<int:subject_id>/reports')
 @login_required('lecturer')
 def subject_reports(subject_id):

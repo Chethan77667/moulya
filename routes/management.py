@@ -9,11 +9,16 @@ from services.management_service import ManagementService
 from services.auth_service import AuthService
 from services.reporting_service import ReportingService
 from services.excel_export_service import ExcelExportService
+from services.mongodb_service import mongodb_service
 from models.user import Lecturer
 from models.academic import Course, Subject
 from models.student import Student
 from database import db
 from utils.validators import validate_username, validate_password
+from openpyxl.styles import Font
+import pandas as pd
+from io import BytesIO
+from datetime import datetime
 
 def is_ajax_request():
     """Check if the current request is an AJAX request"""
@@ -87,7 +92,15 @@ def tracking_marks():
 def tracking_attendance():
     """Return updated vs pending lecturers for attendance by month/year/filters."""
     try:
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
         course_id = request.args.get('course_id', type=int)
         subject_id = request.args.get('subject_id', type=int)
@@ -118,16 +131,37 @@ def tracking_export_marks():
         ws = wb.active
         ws.title = 'Marks Tracking'
 
-        # Remove the "Pending Items" column and always include a Status column
+        # Compute top labels for Assessment and Status
         if status in ['updated', 'pending']:
-            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+            status_display = 'Updated' if status == 'updated' else 'Pending'
+            title_suffix = status_display
         else:
+            status_display = 'All Status'
             title_suffix = None
-        # Updated headers: remove Course and Class/Year -> single Class; pretty Assessment names
-        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Assessment', 'Status']
-        ExcelExportService.style_header_row(ws, 1, headers)
 
-        row = 2
+        at = (assessment_type or '').lower()
+        pretty_map = {
+            'internal1': 'Internal 1',
+            'internal2': 'Internal 2',
+            'assignment': 'Assignment',
+            'project': 'Project',
+            'any': 'Any'
+        }
+        assessment_display = pretty_map.get(at, (assessment_type or ''))
+
+        # Write top info row
+        ws.cell(row=1, column=1, value=f"Assessment: {assessment_display}")
+        ws.cell(row=1, column=2, value=f"Status: {status_display}")
+        header_font = Font(bold=True, size=12)
+        for col in [1, 2]:
+            cell = ws.cell(row=1, column=col)
+            cell.font = header_font
+
+        # Updated headers: remove Assessment and Status columns; keep single Class
+        headers = ['Lecturer', 'Subject', 'Code', 'Class']
+        ExcelExportService.style_header_row(ws, 3, headers)
+
+        row = 4
         keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
         for status_key in keys_to_iterate:
             for item in data.get(status_key, []):
@@ -143,18 +177,6 @@ def tracking_export_marks():
                 except Exception:
                     class_text = item.get('class_display') or ''
                 ws.cell(row=row, column=col, value=class_text); col += 1
-                # Pretty assessment label
-                at = (item.get('assessment_type') or '').lower()
-                pretty_map = {
-                    'internal1': 'Internal 1',
-                    'internal2': 'Internal 2',
-                    'assignment': 'Assignment',
-                    'project': 'Project',
-                    'any': 'Any'
-                }
-                ws.cell(row=row, column=col, value=pretty_map.get(at, (item.get('assessment_type') or ''))); col += 1
-                # Status as the last column
-                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
                 row += 1
 
         ExcelExportService.auto_adjust_columns(ws)
@@ -177,7 +199,16 @@ def tracking_export_attendance():
     """Export tracking list (attendance) to Excel."""
     try:
         from flask import make_response
-        month = request.args.get('month', type=int)
+        import calendar
+        # Support 'overall' and numeric months
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
         course_id = request.args.get('course_id', type=int)
         subject_id = request.args.get('subject_id', type=int)
@@ -189,15 +220,32 @@ def tracking_export_attendance():
         ws = wb.active
         ws.title = 'Attendance Tracking'
 
+        # Get month name
+        month_name = calendar.month_name[month] if month else 'All Months'
+        
+        # Determine status display
         if status in ['updated', 'pending']:
-            title_suffix = 'Updated' if status == 'updated' else 'Pending'
+            status_display = 'Updated' if status == 'updated' else 'Pending'
+            title_suffix = status_display
         else:
+            status_display = 'All Status'
             title_suffix = None
-        # Updated headers for attendance export: single Class column (no underscores), remove Month column
-        headers = ['Lecturer', 'Subject', 'Code', 'Class', 'Status']
-        ExcelExportService.style_header_row(ws, 1, headers)
 
-        row = 2
+        # Add header information at the top
+        ws.cell(row=1, column=1, value=f"Month: {month_name} {year}")
+        ws.cell(row=1, column=2, value=f"Status: {status_display}")
+        
+        # Style the header row
+        header_font = Font(bold=True, size=12)
+        for col in [1, 2]:
+            cell = ws.cell(row=1, column=col)
+            cell.font = header_font
+
+        # Updated headers for attendance export: single Class column (no underscores), drop Status column
+        headers = ['Lecturer', 'Subject', 'Code', 'Class']
+        ExcelExportService.style_header_row(ws, 3, headers)  # Start table headers at row 3
+
+        row = 4  # Start data at row 4
         keys_to_iterate = [status] if status in ['updated', 'pending'] else ['updated', 'pending']
         for status_key in keys_to_iterate:
             for item in data.get(status_key, []):
@@ -213,8 +261,7 @@ def tracking_export_attendance():
                 except Exception:
                     class_text = item.get('class_display') or ''
                 ws.cell(row=row, column=col, value=class_text); col += 1
-                # Status last
-                ws.cell(row=row, column=col, value='Updated' if (status or status_key) == 'updated' else 'Pending')
+                # No Status column in export anymore
                 row += 1
 
         ExcelExportService.auto_adjust_columns(ws)
@@ -974,6 +1021,36 @@ def toggle_subject_status(subject_id):
     
     return redirect(url_for('management.subjects'))
 
+@management_bp.route('/subjects/<int:subject_id>/update', methods=['POST'])
+@login_required('management')
+def update_subject(subject_id):
+    """Update a subject's name and code (AJAX-friendly)."""
+    try:
+        payload = {}
+        if request.is_json:
+            payload = request.get_json(silent=True) or {}
+        name = (payload.get('name') or request.form.get('name') or '').strip()
+        code = (payload.get('code') or request.form.get('code') or '').strip()
+
+        success, message = ManagementService.update_subject(subject_id, {
+            'name': name,
+            'code': code
+        })
+
+        if is_ajax_request():
+            return jsonify({'success': success, 'message': message})
+
+        if success:
+            flash(message, 'success')
+        else:
+            flash(message, 'error')
+    except Exception as e:
+        error_msg = f'Error updating subject: {str(e)}'
+        if is_ajax_request():
+            return jsonify({'success': False, 'message': error_msg})
+        flash(error_msg, 'error')
+    return redirect(url_for('management.subjects'))
+
 # ============================================================================
 # REPORTING ROUTES
 # ============================================================================
@@ -1145,29 +1222,6 @@ def export_student_report_pdf(student_id):
         flash(f'Error exporting PDF: {str(e)}', 'error')
         return redirect(url_for('management.student_report', student_id=student_id))
 
-@management_bp.route('/reports/export/class/marks/<int:subject_id>/pdf')
-@login_required('management')
-def export_class_marks_report_pdf(subject_id):
-    """Export class marks report to PDF"""
-    try:
-        from flask import make_response
-        assessment_type = request.args.get('assessment_type')
-        report = ReportingService.get_class_marks_report(subject_id, assessment_type)
-        if not report:
-            flash('Subject not found', 'error')
-            return redirect(url_for('management.reports_dashboard'))
-        pdf_bytes = ReportingService.generate_class_marks_report_pdf(report)
-        filename = f"class_marks_{report['subject']['code']}"
-        if assessment_type:
-            filename += f"_{assessment_type}"
-        filename += ".pdf"
-        response = make_response(pdf_bytes)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-        return response
-    except Exception as e:
-        flash(f'Error exporting class marks PDF: {str(e)}', 'error')
-        return redirect(url_for('management.class_marks_report', subject_id=subject_id))
 
 @management_bp.route('/reports/export/class/attendance/<int:subject_id>/pdf')
 @login_required('management')
@@ -1175,8 +1229,17 @@ def export_class_attendance_report_pdf(subject_id):
     """Export class attendance report to PDF"""
     try:
         from flask import make_response
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months, like the view route
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
+
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         if not report:
             flash('Subject not found', 'error')
@@ -1247,16 +1310,47 @@ def export_class_marks_report(subject_id):
         flash(f'Error exporting class marks report: {str(e)}', 'error')
         return redirect(url_for('management.class_marks_report', subject_id=subject_id))
 
+@management_bp.route('/reports/export/class/marks/<int:subject_id>/pdf')
+@login_required('management')
+def export_class_marks_report_pdf(subject_id):
+    """Export class marks report to PDF"""
+    try:
+        from flask import make_response
+        assessment_type = request.args.get('assessment_type')
+        report = ReportingService.get_class_marks_report(subject_id, assessment_type)
+        if not report:
+            flash('Subject not found', 'error')
+            return redirect(url_for('management.reports_dashboard'))
+        pdf_bytes = ReportingService.generate_class_marks_report_pdf(report)
+        filename = f"class_marks_{report['subject']['code']}"
+        if assessment_type:
+            filename += f"_{assessment_type}"
+        filename += ".pdf"
+        response = make_response(pdf_bytes)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+    except Exception as e:
+        flash(f'Error exporting class marks PDF: {str(e)}', 'error')
+        return redirect(url_for('management.class_marks_report', subject_id=subject_id))
+
 @management_bp.route('/reports/export/class/attendance/<int:subject_id>')
 @login_required('management')
 def export_class_attendance_report(subject_id):
     """Export class attendance report to Excel"""
     try:
         from flask import make_response
-        
-        month = request.args.get('month', type=int)
+        # Support 'overall' and numeric months, like the view route
+        month_param = request.args.get('month')
+        if month_param and str(month_param).lower() == 'overall':
+            month = 'overall'
+        else:
+            try:
+                month = int(month_param) if month_param is not None else None
+            except Exception:
+                month = None
         year = request.args.get('year', type=int)
-        
+
         report = ReportingService.get_class_attendance_report(subject_id, month, year)
         
         if not report:
@@ -1320,7 +1414,12 @@ def comprehensive_class_report(course_id):
     """Comprehensive class report for all subjects in a course"""
     try:
         report_type = request.args.get('type', 'attendance')  # 'attendance' or 'marks'
-        assessment_type = request.args.get('assessment_type', 'all')  # for marks report
+        assessment_type = request.args.get('assessment_type')  # for marks report
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
@@ -1342,7 +1441,12 @@ def export_comprehensive_class_report_excel(course_id):
         from flask import make_response
         
         report_type = request.args.get('type', 'attendance')
-        assessment_type = request.args.get('assessment_type', 'all')
+        assessment_type = request.args.get('assessment_type')
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
@@ -1370,7 +1474,12 @@ def export_comprehensive_class_report_pdf(course_id):
         from flask import make_response
         
         report_type = request.args.get('type', 'attendance')
-        assessment_type = request.args.get('assessment_type', 'all')
+        assessment_type = request.args.get('assessment_type')
+        
+        # For marks reports, assessment_type is required
+        if report_type == 'marks' and not assessment_type:
+            flash('Assessment type is required for marks reports', 'error')
+            return redirect(url_for('management.reports_dashboard'))
         
         report = ReportingService.get_comprehensive_class_report(course_id, report_type, assessment_type)
         
@@ -1389,3 +1498,193 @@ def export_comprehensive_class_report_pdf(course_id):
     except Exception as e:
         flash(f'Error exporting comprehensive class report: {str(e)}', 'error')
         return redirect(url_for('management.reports_dashboard'))
+
+# Student Credentials Management Routes
+@management_bp.route('/students_credentials')
+@login_required('management')
+def students_credentials():
+    """Manage students credentials page"""
+    return render_template('student/manage_students_credencials.html')
+
+@management_bp.route('/add_student_credential', methods=['POST'])
+@login_required('management')
+def add_student_credential():
+    """Add a new student credential"""
+    try:
+        data = request.get_json()
+        
+        roll_number = data.get('roll_number', '').strip()
+        name = data.get('name', '').strip()
+        password = data.get('password', '').strip()
+        
+        # Validate required fields
+        if not roll_number or not name or not password:
+            return jsonify({'success': False, 'message': 'All fields are required'})
+        
+        # Add student to MongoDB
+        result = mongodb_service.add_student_credential(roll_number, name, password)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error adding student: {str(e)}'})
+
+@management_bp.route('/bulk_upload_students', methods=['POST'])
+@login_required('management')
+def bulk_upload_students():
+    """Bulk upload students from Excel file"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'No file uploaded'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'No file selected'})
+        
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': 'Please upload an Excel file (.xlsx or .xls)'})
+        
+        # Read Excel file
+        excel_data = pd.read_excel(file)
+        
+        # Validate required columns
+        required_columns = ['Roll Number', 'Name', 'Password']
+        missing_columns = [col for col in required_columns if col not in excel_data.columns]
+        
+        if missing_columns:
+            return jsonify({
+                'success': False, 
+                'message': f'Missing required columns: {", ".join(missing_columns)}'
+            })
+        
+        # Upload to MongoDB
+        result = mongodb_service.bulk_upload_students(excel_data)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error uploading file: {str(e)}'})
+
+@management_bp.route('/get_students_credentials')
+@login_required('management')
+def get_students_credentials():
+    """Get all students credentials"""
+    try:
+        result = mongodb_service.get_all_students()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error fetching students: {str(e)}'})
+
+@management_bp.route('/search_students_credentials', methods=['POST'])
+@login_required('management')
+def search_students_credentials():
+    """Search students credentials"""
+    try:
+        data = request.get_json()
+        search_term = data.get('searchTerm', '').strip()
+        
+        if not search_term:
+            result = mongodb_service.get_all_students()
+        else:
+            result = mongodb_service.search_students(search_term)
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error searching students: {str(e)}'})
+
+@management_bp.route('/delete_student_credential/<student_id>', methods=['DELETE'])
+@login_required('management')
+def delete_student_credential(student_id):
+    """Delete a student credential"""
+    try:
+        result = mongodb_service.delete_student(student_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error deleting student: {str(e)}'})
+
+@management_bp.route('/update_student_credential/<student_id>', methods=['PUT'])
+@login_required('management')
+def update_student_credential(student_id):
+    """Update a student credential"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        # Validate required fields
+        roll_number = data.get('roll_number', '').strip()
+        name = data.get('name', '').strip()
+        password = data.get('password', '').strip()
+        
+        print(f"DEBUG: Received data - roll_number: '{roll_number}', name: '{name}', password: '{password}'")
+        
+        if not roll_number:
+            return jsonify({'success': False, 'message': 'Roll number is required'}), 400
+        if not name:
+            return jsonify({'success': False, 'message': 'Student name is required'}), 400
+        if not password:
+            return jsonify({'success': False, 'message': 'Password is required'}), 400
+        
+        # Prepare update data
+        update_data = {
+            'roll_number': roll_number,
+            'name': name,
+            'password': password,
+            'username': roll_number.lower(),
+            'updatedAt': datetime.now()
+        }
+        
+        print(f"DEBUG: Update data prepared: {update_data}")
+        
+        result = mongodb_service.update_student(student_id, update_data)
+        print(f"DEBUG: MongoDB result: {result}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"Error in update_student_credential: {e}")
+        return jsonify({'success': False, 'message': f'Error updating student: {str(e)}'}), 500
+
+@management_bp.route('/export_students_credentials')
+@login_required('management')
+def export_students_credentials():
+    """Export students credentials to Excel"""
+    try:
+        result = mongodb_service.get_all_students()
+        
+        if not result['success']:
+            return jsonify({'success': False, 'message': result['message']})
+        
+        students = result['data']
+        
+        # Create DataFrame
+        df = pd.DataFrame(students)
+        
+        # Remove MongoDB specific fields
+        df = df.drop(['_id', 'createdAt', 'updatedAt'], axis=1, errors='ignore')
+        
+        # Rename columns for better readability
+        df = df.rename(columns={
+            'rollNumber': 'Roll Number',
+            'name': 'Name',
+            'username': 'Username',
+            'status': 'Status'
+        })
+        
+        # Create Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Students Credentials', index=False)
+        
+        output.seek(0)
+        
+        from flask import Response
+        response = Response(
+            output.getvalue(),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={'Content-Disposition': 'attachment; filename=students_credentials.xlsx'}
+        )
+        
+        return response
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error exporting students: {str(e)}'})

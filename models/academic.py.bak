@@ -79,11 +79,8 @@ class Subject(db.Model):
     __table_args__ = (db.UniqueConstraint('code', 'course_id', name='unique_subject_code_per_course'),)
     
     def get_assigned_lecturers(self):
-        """Get lecturers assigned to this subject for the current academic year (active only)."""
-        from datetime import datetime
-        current_year = datetime.now().year
-        active_assignments = self.assignments.filter_by(academic_year=current_year, is_active=True).all()
-        return [assignment.lecturer for assignment in active_assignments]
+        """Get all lecturers assigned to this subject"""
+        return [assignment.lecturer for assignment in self.assignments]
     
     def get_enrolled_students(self):
         """Get all students enrolled in this subject"""

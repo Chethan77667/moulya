@@ -61,23 +61,6 @@
         <div class="bg-white shadow rounded-lg mb-4 sm:mb-6">
             <div class="px-4 py-4 sm:p-6">
                 <h3 class="text-base sm:text-lg font-medium text-gray-900 mb-4">Add/Update Marks</h3>
-                <!-- Reset Assessment Section -->
-                <form method="POST" action="{{ url_for('lecturer.reset_marks_assessment', subject_id=subject.id) }}" class="mb-4" onsubmit="return handleResetMarksSubmit(this);">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                    <div class="flex flex-col sm:flex-row sm:items-end gap-3">
-                        <div class="flex-1">
-                            <label for="reset_assessment_type" class="block text-sm font-medium text-gray-700">Reset Assessment</label>
-                            <select name="assessment_type" id="reset_assessment_type" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
-                                <option value="">Select Assessment to Reset</option>
-                                <option value="internal1">Internal 1</option>
-                                <option value="internal2">Internal 2</option>
-                                <option value="assignment">Assignment</option>
-                                <option value="project">Project</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 active:bg-red-800 transition-colors touch-manipulation">Reset Selected</button>
-                    </div>
-                </form>
                 
                 <form method="POST" action="{{ url_for('lecturer.add_marks', subject_id=subject.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -431,61 +414,9 @@ function toggleMobileMenu() {
     menu.classList.toggle('hidden');
 }
 
-// Prefill and validate marks
+// Auto-calculate and validate marks
 (function(){
     const maxEl = document.getElementById('max_marks');
-    const assessmentSel = document.getElementById('assessment_type');
-    // Embed existing marks payload for quick client-side prefill
-    const existingDataEl = document.createElement('div');
-    existingDataEl.id = 'existing-marks-json';
-    existingDataEl.className = 'hidden';
-    existingDataEl.setAttribute('data-json', '{{ existing_marks_safe|tojson|safe }}');
-    document.body.appendChild(existingDataEl);
-
-    function prefillMarksIfAvailable(){
-        try {
-            const assess = assessmentSel ? assessmentSel.value : '';
-            if (!assess) return;
-            const raw = document.getElementById('existing-marks-json').getAttribute('data-json') || '{}';
-            const data = JSON.parse(raw);
-            const container = document.getElementById('marks-students-container');
-            if (!container) return;
-            // Clear any stale values before prefilling
-            container.querySelectorAll('.marks-input').forEach(function(inp){ inp.value = ''; });
-            let maxFound = null;
-            let any = false;
-            container.querySelectorAll('.marks-student-row').forEach(function(row){
-                const input = row.querySelector('.marks-input');
-                const sid = input ? parseInt(input.getAttribute('data-student-id')) : null;
-                if (!sid) return;
-                const studentMap = data[String(sid)] || {};
-                const markRow = studentMap[assess];
-                if (markRow) {
-                    if (markRow.marks_obtained != null && input) input.value = String(markRow.marks_obtained);
-                    if (maxFound == null && markRow.max_marks != null) maxFound = markRow.max_marks;
-                    any = true;
-                }
-            });
-            if (maxEl) {
-                if (maxFound != null) {
-                    // Always override to stored max for this assessment
-                    maxEl.value = String(maxFound);
-                } else {
-                    // No saved data for this assessment -> clear
-                    maxEl.value = '';
-                }
-                const evt = new Event('input');
-                maxEl.dispatchEvent(evt);
-            }
-            // If no rows existed for this assessment, keep inputs cleared (no prefill)
-        } catch(e) {}
-    }
-
-    assessmentSel && assessmentSel.addEventListener('change', function(){
-        prefillMarksIfAvailable();
-        updateProgress();
-    });
-
     if (!maxEl) return;
 
     function setInputsMax(maxVal){
@@ -532,8 +463,6 @@ function toggleMobileMenu() {
             }
         });
     });
-    // Prefill once on load if an assessment is preselected
-    prefillMarksIfAvailable();
 })();
 
 // Search functionality for marks entry
@@ -859,48 +788,6 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   } catch(e) {}
 });
-</script>
-<script>
-// Simple two-button confirm modal tailored for Marks page
-function showConfirmModal(title, message, onConfirm, onCancel) {
-  const existing = document.getElementById('marks-confirm-modal');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'marks-confirm-modal';
-  overlay.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
-  overlay.innerHTML = `
-    <div class="bg-white rounded-md shadow-xl w-11/12 max-w-md p-5">
-      <h3 class="text-lg font-semibold mb-2">${title || 'Confirm'}</h3>
-      <div class="text-sm text-gray-700 mb-4 whitespace-pre-line">${message || ''}</div>
-      <div class="flex justify-end gap-2">
-        <button id="marks-confirm-cancel" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400">Cancel</button>
-        <button id="marks-confirm-ok" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">OK</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  document.getElementById('marks-confirm-cancel').onclick = function(){
-    try { document.getElementById('marks-confirm-modal')?.remove(); } catch(e) {}
-    if (typeof onCancel === 'function') onCancel();
-  };
-  document.getElementById('marks-confirm-ok').onclick = function(){
-    try { document.getElementById('marks-confirm-modal')?.remove(); } catch(e) {}
-    if (typeof onConfirm === 'function') onConfirm();
-  };
-}
-
-function handleResetMarksSubmit(formEl){
-  try {
-    const sel = document.getElementById('reset_assessment_type');
-    const label = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'selected assessment';
-    showConfirmModal('Reset Marks', `This will delete all marks for ${label}. Continue?`, function(){
-      try { formEl.submit(); } catch(e) { /* noop */ }
-    }, function(){});
-    return false; // prevent native submit
-  } catch(e) {
-    // Fallback: no modal available
-    return false;
-  }
-}
 </script>
 <script>
 // Marks Excel: download template action

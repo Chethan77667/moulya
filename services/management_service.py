@@ -873,6 +873,53 @@ class ManagementService:
             return False, f"Error creating subject: {str(e)}"
     
     @staticmethod
+    def update_subject(subject_id, update_data):
+        """Update subject's basic details (name and code).
+
+        Only `name` and `code` are allowed to be updated through this method to
+        avoid accidental changes that would impact enrollments/assignments.
+        """
+        try:
+            subject = Subject.query.get(subject_id)
+            if not subject:
+                return False, "Subject not found"
+
+            # Validate provided fields
+            new_name = (update_data.get('name') or '').strip()
+            new_code = (update_data.get('code') or '').strip()
+
+            is_valid, message = validate_name(new_name, "Subject name")
+            if not is_valid:
+                return False, message
+
+            is_valid, message = validate_subject_code(new_code)
+            if not is_valid:
+                return False, message
+
+            # Uniqueness: subject code must be unique within the same course among active subjects
+            existing = Subject.query.filter(
+                Subject.id != subject.id,
+                Subject.course_id == subject.course_id,
+                Subject.code == new_code,
+                Subject.is_active == True
+            ).first()
+            if existing:
+                return False, "Another active subject in the same course already uses this code"
+
+            # Apply updates
+            subject.name = new_name
+            subject.code = new_code
+
+            try:
+                db.session.commit()
+                return True, "Subject updated successfully"
+            except Exception as e:
+                db.session.rollback()
+                return False, f"Database error while updating subject: {str(e)}"
+        except Exception as e:
+            return False, f"Error updating subject: {str(e)}"
+
+    @staticmethod
     def assign_subjects_to_lecturer(lecturer_id, subject_ids):
         """Assign subjects to an existing lecturer"""
         try:
@@ -1041,15 +1088,18 @@ class ManagementService:
 
             from models.assignments import SubjectAssignment
             from models.student import StudentEnrollment
-            from models.attendance import AttendanceRecord, MonthlyAttendanceSummary
+            from models.attendance import AttendanceRecord, MonthlyAttendanceSummary, MonthlyStudentAttendance
             from models.marks import StudentMarks
 
+            # Delete all related records in the correct order to avoid foreign key constraints
             SubjectAssignment.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
             StudentEnrollment.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
             AttendanceRecord.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
             MonthlyAttendanceSummary.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
+            MonthlyStudentAttendance.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
             StudentMarks.query.filter_by(subject_id=subject.id).delete(synchronize_session=False)
 
+            # Finally delete the subject itself
             db.session.delete(subject)
             db.session.commit()
             return True, "Subject permanently deleted"

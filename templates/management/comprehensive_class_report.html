@@ -3,24 +3,37 @@
 {% block title %}Comprehensive Class Report - Academic Record Management System{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gray-50 py-6">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('management.reports_dashboard') }}" class="text-sm text-gray-600 hover:text-black">← Reports Dashboard</a>
+                    <h1 class="text-xl font-semibold text-gray-900">Comprehensive Class Report</h1>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="exportToExcel()" 
+                            class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                        📥 Export Excel
+                    </button>
+                    <button onclick="exportToPDF()" 
+                            class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
+                        🧾 Export PDF
+                    </button>
+                    <span class="text-sm text-gray-700 ml-2">{{ current_user.username }}</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <!-- Header -->
         <div class="mb-8">
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900">Comprehensive Class Report</h1>
                     <p class="mt-2 text-gray-600">{{ report.course.name }} ({{ report.course.code }})</p>
-                </div>
-                <div class="flex space-x-3">
-                    <button onclick="exportToExcel()" 
-                            class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                        📥 Export Excel
-                    </button>
-                    <button onclick="exportToPDF()" 
-                            class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                        🧾 Export PDF
-                    </button>
                 </div>
             </div>
         </div>
@@ -38,69 +51,95 @@
                         <div class="text-sm text-gray-600">Total Subjects</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900">{{ report.report_type.title() }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.report_type.title() if report.report_type else 'N/A' }}</div>
                         <div class="text-sm text-gray-600">Report Type</div>
                     </div>
+                    {% if report.report_type == 'marks' %}
                     <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900">{{ report.assessment_type.title() if report.assessment_type != 'all' else 'All' }}</div>
+                        <div class="text-2xl font-bold text-gray-900">{{ report.assessment_type.title() if report.assessment_type and report.assessment_type != 'all' else 'N/A' }}</div>
                         <div class="text-sm text-gray-600">Assessment Type</div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Data Table -->
-        <div class="bg-white shadow rounded-lg overflow-hidden">
+        <!-- Data Tables (Split by Subjects) -->
+        {% set subjects_per_table = 4 %}
+        {% set total_subjects = report.subjects|length %}
+        {% set num_tables = (total_subjects / subjects_per_table)|round(0, 'ceil')|int %}
+        
+        {% for table_num in range(num_tables) %}
+        {% set start_idx = table_num * subjects_per_table %}
+        {% set end_idx = (start_idx + subjects_per_table) if (start_idx + subjects_per_table) < total_subjects else total_subjects %}
+        {% set table_subjects = report.subjects[start_idx:end_idx] %}
+        
+        <div class="bg-white shadow rounded-lg overflow-hidden mb-6">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-medium text-gray-900">
-                    {{ report.report_type.title() }} Data for All Subjects
+                    {{ report.report_type.title() if report.report_type else 'N/A' }} Data - Subjects {{ start_idx + 1 }}-{{ end_idx }}
+                    {% if num_tables > 1 %}
+                    <span class="text-sm text-gray-500 font-normal">(Table {{ table_num + 1 }} of {{ num_tables }})</span>
+                    {% endif %}
                 </h3>
             </div>
             
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="report-table compact">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student Name</th>
-                            {% for subject in report.subjects %}
-                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ subject.name }}</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider" style="width: 10%;">Roll No</th>
+                            <th class="text-left text-xs font-medium uppercase tracking-wider" style="width: 20%;">Student Name</th>
+                            {% for subject in table_subjects %}
+                            <th class="text-center text-xs font-medium uppercase tracking-wider" style="width: {{ 70 / table_subjects|length }}%; word-wrap: break-word; white-space: normal; line-height: 1.2; padding: 8px 4px;">
+                                {{ subject.name }}
+                            </th>
                             {% endfor %}
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody>
                         {% for student in report.students %}
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ student.roll_number }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ student.name }}</td>
-                            {% for subject in report.subjects %}
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                                {% if report.report_type == 'attendance' %}
-                                    {% set subject_data = report.data.get(subject.id, {}) %}
+                            <td class="no-wrap text-sm font-medium text-gray-900">{{ student.roll_number }}</td>
+                            <td class="no-wrap truncate-ellipsis text-sm text-gray-900">{{ student.name }}</td>
+                            {% for subject in table_subjects %}
+                            <td class="text-sm text-gray-900 text-center" style="padding: 8px 4px;">
+                                {% set subject_data = report.data.get(subject.id, {}) %}
+                                {% set is_enrolled = subject_data.get('enrolled_students', {}).get(student.id, False) %}
+                                
+                                {% if not is_enrolled %}
+                                    <span class="text-gray-500 font-medium">NA</span>
+                                {% elif report.report_type == 'attendance' %}
                                     {% set student_attendance = subject_data.get('student_attendance', {}).get(student.id, {}) %}
-                                    {% if student_attendance %}
+                                    {% if student_attendance and student_attendance.get('total_classes', 0) > 0 %}
                                         {% set percentage = student_attendance.get('percentage', 0) %}
-                                        {% set present = student_attendance.get('present_classes', 0) %}
-                                        {% set total = student_attendance.get('total_classes', 0) %}
-                                        <div class="flex flex-col">
-                                            <span class="font-medium">{{ present }}/{{ total }}</span>
-                                            <span class="text-xs {% if percentage >= 75 %}text-green-600{% elif percentage >= 60 %}text-yellow-600{% else %}text-red-600{% endif %}">
-                                                ({{ percentage }}%)
-                                            </span>
-                                        </div>
-                                    {% else %}
-                                        <span class="text-gray-400">N/A</span>
-                                    {% endif %}
-                                {% elif report.report_type == 'marks' %}
-                                    {% set subject_data = report.data.get(subject.id, {}) %}
-                                    {% set student_marks = subject_data.get('student_marks', {}).get(student.id, {}) %}
-                                    {% if student_marks %}
-                                        {% set percentage = student_marks.get('overall_percentage', 0) %}
-                                        <span class="font-medium {% if percentage >= 60 %}text-green-600{% elif percentage >= 40 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                        <span class="font-medium {% if percentage >= 75 %}text-green-600{% elif percentage >= 60 %}text-yellow-600{% else %}text-red-600{% endif %}">
                                             {{ percentage }}%
                                         </span>
                                     {% else %}
-                                        <span class="text-gray-400">N/A</span>
+                                        <span class="text-black font-medium">-</span>
+                                    {% endif %}
+                                {% elif report.report_type == 'marks' %}
+                                    {% set student_marks = subject_data.get('student_marks', {}).get(student.id, {}) %}
+                                    {% if student_marks %}
+                                        {% if report.assessment_type %}
+                                            <!-- Specific assessment type selected -->
+                                            {% set assessment_data = student_marks.get(report.assessment_type, {}) %}
+                                            {% if assessment_data and assessment_data.get('recorded', False) and assessment_data.get('max', 0) > 0 %}
+                                                {% set obtained = assessment_data.get('obtained', 0) %}
+                                                {% set max_marks = assessment_data.get('max', 0) %}
+                                                {% set percentage = (obtained / max_marks * 100) if max_marks > 0 else 0 %}
+                                                {% set obtained_str = obtained|int if obtained == obtained|int else obtained %}
+                                                {% set max_str = max_marks|int if max_marks == max_marks|int else max_marks %}
+                                                <span class="font-medium {% if percentage >= 60 %}text-green-600{% elif percentage >= 40 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                                    {{ obtained_str }}/{{ max_str }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-black font-medium">-</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-black font-medium">-</span>
                                     {% endif %}
                                 {% endif %}
                             </td>
@@ -111,11 +150,20 @@
                 </table>
             </div>
         </div>
+        {% endfor %}
 
         <!-- Legend -->
         <div class="mt-6 bg-white shadow rounded-lg p-6">
             <h3 class="text-lg font-medium text-gray-900 mb-4">Legend</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="flex items-center">
+                    <span class="text-gray-500 font-medium mr-3">NA</span>
+                    <span class="text-sm text-gray-600">Not Enrolled</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-black font-medium mr-3">-</span>
+                    <span class="text-sm text-gray-600">No Data Available</span>
+                </div>
                 {% if report.report_type == 'attendance' %}
                 <div class="flex items-center">
                     <div class="w-4 h-4 bg-green-100 border border-green-300 rounded mr-3"></div>
@@ -128,6 +176,10 @@
                 <div class="flex items-center">
                     <div class="w-4 h-4 bg-red-100 border border-red-300 rounded mr-3"></div>
                     <span class="text-sm text-gray-600">&lt; 60% - Poor Attendance</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 font-medium mr-3">Format:</span>
+                    <span class="text-sm text-gray-600">Overall Attendance Percentage</span>
                 </div>
                 {% else %}
                 <div class="flex items-center">
@@ -142,10 +194,15 @@
                     <div class="w-4 h-4 bg-red-100 border border-red-300 rounded mr-3"></div>
                     <span class="text-sm text-gray-600">&lt; 40% - Fail</span>
                 </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 font-medium mr-3">Format:</span>
+                    <span class="text-sm text-gray-600">Marks Scored / Max Marks</span>
+                </div>
                 {% endif %}
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <script>

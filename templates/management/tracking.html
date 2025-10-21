@@ -167,8 +167,8 @@ function renderTable(containerId, items, statusLabel, view){
   const trHead = document.createElement('tr')
   const isDep = (view === 'attendance') && (qs('att-month')?.value === 'deputation')
   const headers = view === 'marks'
-    ? ['Lecturer','Subject','Code','Class','Assessment','Status']
-    : ['Lecturer','Subject','Code','Class','Status']
+    ? ['Lecturer','Subject','Code','Class']
+    : ['Lecturer','Subject','Code','Class']
   headers.forEach(h=>{
     const th = document.createElement('th')
     th.className = 'border-b border-gray-200 px-3 py-2 text-left bg-gray-50'
@@ -192,14 +192,11 @@ function renderTable(containerId, items, statusLabel, view){
       ? `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
-         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>
-         <td class="px-3 py-2 border-b">${prettyAssessment(it.assessment_type)}</td>
-         <td class="px-3 py-2 border-b">${statusLabel}</td>`
+         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>`
       : `<td class="px-3 py-2 border-b">${it.lecturer_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_name || ''}</td>
          <td class="px-3 py-2 border-b">${it.subject_code || ''}</td>
-         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>
-         <td class="px-3 py-2 border-b">${statusLabel}</td>`
+         <td class="px-3 py-2 border-b">${prettyClass(it.course_code)}</td>`
     tbody.appendChild(tr)
   })
   table.appendChild(tbody)

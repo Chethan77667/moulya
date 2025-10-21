@@ -291,9 +291,9 @@ class LecturerService:
                     marks_obtained = float(data['marks_obtained'])
                     max_marks = float(data['max_marks'])
                     
-                    # Validate marks
+                    # Validate marks - do not silently cap or accept
                     if marks_obtained > max_marks:
-                        continue
+                        return False, f"Mark {marks_obtained} cannot exceed maximum {max_marks} for student {student_id}."
                     
                     # Check if marks already exist
                     existing = StudentMarks.query.filter_by(
@@ -397,7 +397,8 @@ class LecturerService:
                     'total_classes': total_classes,
                     'present_classes': present_classes,
                     'absent_classes': absent_classes,
-                    'attendance_percentage': round(attendance_percentage, 1),
+                    # Round to 2 decimals to avoid loss of precision before rendering
+                    'attendance_percentage': round(attendance_percentage, 2),
                     'has_shortage': attendance_percentage < 75
                 })
             
@@ -443,16 +444,17 @@ class LecturerService:
                         if max_marks not in (None, 0, 0.0):
                             total_max += float(max_marks)
                             total_obtained += float(obtained or 0)
-                    overall_percentage = round((total_obtained / total_max) * 100, 2) if total_max > 0 else 0.0
+                    overall_percentage = (total_obtained / total_max) * 100 if total_max > 0 else None
                 except Exception:
                     # Fallback to DB-based computation if summary parsing fails
-                    overall_percentage = StudentMarks.get_student_overall_percentage(student.id, subject_id)
+                    fallback_percentage = StudentMarks.get_student_overall_percentage(student.id, subject_id)
+                    overall_percentage = fallback_percentage if fallback_percentage is not None else None
                 
                 report_data.append({
                     'student': student,
                     'marks_summary': marks_summary,
                     'overall_percentage': overall_percentage,
-                    'has_deficiency': overall_percentage < 50
+                    'has_deficiency': overall_percentage is None or overall_percentage < 50
                 })
             
             return report_data, "Report generated successfully"
@@ -817,3 +819,87 @@ class LecturerService:
         except Exception as e:
             db.session.rollback()
             return False, f"Error recording deputation attendance: {str(e)}"
+
+    @staticmethod
+    def reset_marks_for_assessment(subject_id, lecturer_id, assessment_type):
+        """Reset all marks for a given assessment type for this subject by this lecturer.
+
+        Removes all `StudentMarks` rows matching subject, lecturer and assessment_type.
+        """
+        try:
+            # Verify lecturer is assigned to this subject
+            assignment = SubjectAssignment.query.filter_by(
+                lecturer_id=lecturer_id,
+                subject_id=subject_id,
+                is_active=True
+            ).first()
+            if not assignment:
+                return False, "You are not assigned to this subject"
+
+            # Delete matching marks entries
+            (StudentMarks.query
+                .filter(
+                    StudentMarks.subject_id == subject_id,
+                    StudentMarks.lecturer_id == lecturer_id,
+                    StudentMarks.assessment_type == assessment_type
+                )
+                .delete(synchronize_session=False))
+
+            db.session.commit()
+            return True, f"Reset marks for assessment '{assessment_type}'."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error resetting marks: {str(e)}"
+
+    @staticmethod
+    def reset_month_attendance(subject_id, lecturer_id, month, year):
+        """Reset monthly attendance (summary and per-student) for a month/year for this lecturer.
+
+        Deletes `MonthlyStudentAttendance` rows and the `MonthlyAttendanceSummary` row for the month.
+        Also removes any `AttendanceRecord` daily rows for that month for safety.
+        """
+        try:
+            # Verify lecturer is assigned to this subject
+            assignment = SubjectAssignment.query.filter_by(
+                lecturer_id=lecturer_id,
+                subject_id=subject_id,
+                is_active=True
+            ).first()
+            if not assignment:
+                return False, "You are not assigned to this subject"
+
+            # Delete per-student monthly attendance rows
+            (MonthlyStudentAttendance.query
+                .filter(
+                    MonthlyStudentAttendance.subject_id == subject_id,
+                    MonthlyStudentAttendance.lecturer_id == lecturer_id,
+                    MonthlyStudentAttendance.month == month,
+                    MonthlyStudentAttendance.year == year
+                )
+                .delete(synchronize_session=False))
+
+            # Delete monthly summary for this lecturer/month
+            (MonthlyAttendanceSummary.query
+                .filter(
+                    MonthlyAttendanceSummary.subject_id == subject_id,
+                    MonthlyAttendanceSummary.lecturer_id == lecturer_id,
+                    MonthlyAttendanceSummary.month == month,
+                    MonthlyAttendanceSummary.year == year
+                )
+                .delete(synchronize_session=False))
+
+            # Best-effort cleanup of daily attendance records in that month
+            (AttendanceRecord.query
+                .filter(
+                    AttendanceRecord.subject_id == subject_id,
+                    AttendanceRecord.lecturer_id == lecturer_id,
+                    extract('month', AttendanceRecord.date) == month,
+                    extract('year', AttendanceRecord.date) == year
+                )
+                .delete(synchronize_session=False))
+
+            db.session.commit()
+            return True, f"Reset attendance for {month}/{year}."
+        except Exception as e:
+            db.session.rollback()
+            return False, f"Error resetting monthly attendance: {str(e)}"

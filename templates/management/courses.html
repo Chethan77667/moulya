@@ -295,7 +295,7 @@
 
                 {% if courses %}
                 <ul class="divide-y divide-gray-200">
-                    {% for course in courses %}
+                    {% for course in courses|sort(attribute='name') %}
                     <li class="px-4 py-4 sm:px-6">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center">

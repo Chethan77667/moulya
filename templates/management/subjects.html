@@ -12,6 +12,8 @@
     function initSubjectForm() {
         return {
             showAddSubjectModal: false,
+            showEditSubjectModal: false,
+            editSubjectId: null,
             errors: {},
             formData: {
                 name: '',
@@ -20,6 +22,10 @@
                 year: '',
                 semester: '',
                 description: ''
+            },
+            editData: {
+                name: '',
+                code: ''
             },
             validateForm() {
                 this.errors = {};
@@ -86,6 +92,40 @@
                     });
                 });
 
+                event.preventDefault();
+            },
+            openEditModal(subject) {
+                this.editSubjectId = subject.id;
+                this.editData = { name: subject.name, code: subject.code };
+                this.errors = {};
+                this.showEditSubjectModal = true;
+            },
+            submitEdit(event) {
+                const form = event.target;
+                const formData = new FormData(form);
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-Token': csrfToken
+                    }
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({title: 'Success!', text: data.message, icon: 'success'}).then(() => {
+                            this.showEditSubjectModal = false;
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({title: 'Error!', text: data.message, icon: 'error'});
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    Swal.fire({title: 'Error!', text: 'An unexpected error occurred. Please try again.', icon: 'error'});
+                });
                 event.preventDefault();
             },
             resetForm() {
@@ -222,7 +262,7 @@
                                         :class="{'border-red-300': errors.course_id}"
                                         class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                                     <option value="">Select Course</option>
-                                    {% for course in courses %}
+                                    {% for course in courses|sort(attribute='name') %}
                                     <option value="{{ course.id }}">{{ course.name }} ({{ course.code }})</option>
                                     {% endfor %}
                                 </select>
@@ -279,6 +319,45 @@
             </div>
         </div>
 
+        <!-- Edit Subject Modal -->
+        <div x-show="showEditSubjectModal" 
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4" 
+             x-cloak
+             @click.away="showEditSubjectModal = false">
+            <div class="bg-white rounded-lg w-full max-w-md">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Edit Subject</h3>
+                    <form :action="`/management/subjects/${editSubjectId}/update`" method="POST" @submit.prevent="submitEdit">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Subject Name *</label>
+                                <input type="text" name="name" required x-model="editData.name"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Subject Code *</nlabel>
+                                <input type="text" name="code" required x-model="editData.code"
+                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
+                            </div>
+                        </div>
+                        <div class="flex space-x-2 mt-6">
+                            <button type="button" @click="showEditSubjectModal = false" 
+                                    class="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                            <button type="submit" 
+                                    class="flex-1 bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Filter -->
         <div class="bg-white shadow rounded-lg mb-6">
             <div class="px-4 py-5 sm:p-6">
@@ -286,7 +365,7 @@
                     <div>
                         <select name="course_id" class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black sm:text-sm">
                             <option value="">All Courses</option>
-                            {% for course in courses %}
+                            {% for course in courses|sort(attribute='name') %}
                             <option value="{{ course.id }}" {% if selected_course == course.id %}selected{% endif %}>{{ course.name }}</option>
                             {% endfor %}
                         </select>
@@ -346,6 +425,8 @@
                                 {{ subject.get_enrolled_students_count() }} students
                             </div>
                             <div class="flex items-center space-x-2">
+                                <button @click='openEditModal({id: {{ subject.id }}, name: "{{ subject.name|e }}", code: "{{ subject.code|e }}"})'
+                                        class="text-sm text-blue-600 hover:text-blue-800">Edit</button>
                                 <button @click="toggleSubjectStatus({{ subject.id }}, '{{ subject.name }}', {{ subject.is_active|lower }})" 
                                         class="text-sm {% if subject.is_active %}text-red-600 hover:text-red-800{% else %}text-green-600 hover:text-green-800{% endif %}">
                                     {% if subject.is_active %}Deactivate{% else %}Activate{% endif %}

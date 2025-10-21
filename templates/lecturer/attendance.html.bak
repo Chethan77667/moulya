@@ -71,27 +71,8 @@
             </div>
         </div>
 
-        <!-- Reset Monthly Attendance -->
-        <div class="mb-4 sm:mb-6">
-            <form method="POST" action="{{ url_for('lecturer.reset_month_attendance', subject_id=subject.id) }}" onsubmit="return handleResetAttendanceSubmit(this);" class="bg-white shadow rounded-lg p-4 flex flex-col sm:flex-row gap-3 sm:items-end">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div>
-                    <label for="reset_month" class="block text-sm font-medium text-gray-700">Reset Month</label>
-                    <select name="month" id="reset_month" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
-                        {% for i in range(1, 13) %}
-                        <option value="{{ i }}" {% if i == selected_date.month %}selected{% endif %}>
-                            {{ ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][i] }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label for="reset_year" class="block text-sm font-medium text-gray-700">Year</label>
-                    <input type="number" name="year" id="reset_year" value="{{ selected_date.year }}" min="2020" max="2030" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-black focus:border-black text-sm">
-                </div>
-                <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700">Reset Attendance</button>
-            </form>
-        </div>
+        <!-- Quick Actions Sidebar -->
+       
 
         <!-- Monthly Attendance Marking Tab -->
         <div id="monthly-mark-content" class="tab-content hidden">
@@ -167,8 +148,6 @@
                         <div id="prior_totals_map" data-json='{{ prior_totals_map|tojson|safe }}' class="hidden"></div>
                         <div id="prev_present_map" data-json='{{ prev_present_map|tojson|safe }}' class="hidden"></div>
                         <div id="prev_present_by_month_map" data-json='{{ prev_present_by_month_map|tojson|safe }}' class="hidden"></div>
-                        <div id="month_present_by_month_map" data-json='{{ month_present_by_month_map|tojson|safe if month_present_by_month_map else '{}' }}' class="hidden"></div>
-                        <div id="cumulative_totals_by_month" data-json='{{ cumulative_totals_by_month|tojson|safe if cumulative_totals_by_month else '{}' }}' class="hidden"></div>
                         <div id="cumulative_total_classes" data-value="{{ cumulative_total_classes or 0 }}" class="hidden"></div>
                         <div id="deputation_counts_map" data-json='{{ deputation_counts_map|tojson|safe if deputation_counts_map else '{}' }}' class="hidden"></div>
                         <div id="cumulative_present_map" data-json='{{ cumulative_present_map|tojson|safe if cumulative_present_map else '{}' }}' class="hidden"></div>
@@ -380,64 +359,6 @@ function styleDeputationOptions(root) {
     } catch(e) { /* noop */ }
 }
 document.addEventListener('DOMContentLoaded', function(){
-    // Prefill monthly attendance inputs when a saved month exists
-    try {
-        const monthSel = document.getElementById('monthly_month');
-        const yearInp = document.getElementById('monthly_year');
-        const monthMapEl = document.getElementById('month_present_by_month_map');
-        const cumTotalsEl = document.getElementById('cumulative_totals_by_month');
-        const prevMapAllEl = document.getElementById('prev_present_by_month_map');
-        const container = document.getElementById('monthly-students-container');
-        function prefillMonthlyIfAvailable(){
-            if (!monthSel || !yearInp || !monthMapEl || !container) return;
-            const y = parseInt(yearInp.value || '0');
-            const m = monthSel.value;
-            if (!y || !m || m === 'deputation') return;
-            const key = `${y}-${String(m).padStart(2,'0')}`;
-            const monthMap = JSON.parse(monthMapEl.getAttribute('data-json') || '{}');
-            const cumTotals = JSON.parse(cumTotalsEl.getAttribute('data-json') || '{}');
-            // Only prefill if there is a saved monthly summary (i.e., data stored for this month)
-            if (!(key in cumTotals)) {
-                // New month -> clear previous values so stale data isn't shown
-                container.querySelectorAll('.monthly-student-row .monthly-attendance-input').forEach(function(input){
-                    input.value = '';
-                });
-                updatePerStudentConstraints();
-                return;
-            }
-            const perStudent = monthMap[key] || {};
-            // Previous cumulative (till previous month)
-            const prevMap = getPrevPresentForMonth(y, parseInt(m));
-            let any = false;
-            container.querySelectorAll('.monthly-student-row').forEach(function(row){
-                const input = row.querySelector('.monthly-attendance-input');
-                const idMatch = input && (input.name || '').match(/attended_(\d+)/);
-                const sid = idMatch ? parseInt(idMatch[1]) : null;
-                if (sid && perStudent[sid] != null) {
-                    const prev = prevMap && prevMap[String(sid)] != null ? parseInt(prevMap[String(sid)]) : 0;
-                    const monthVal = parseInt(perStudent[sid]) || 0;
-                    // Fill with cumulative till selected month = prev till previous month + this month
-                    input.value = String(prev + monthVal);
-                    any = true;
-                }
-            });
-            // If we have a cumulative total for this month from server summaries, prefill total_classes field too
-            try {
-                const priorMap = JSON.parse(document.getElementById('prior_totals_map').getAttribute('data-json') || '{}');
-                const cum = cumTotals[key];
-                const prior = priorMap[key];
-                if (typeof cum === 'number' && typeof prior === 'number') {
-                    const monthClasses = Math.max(cum - prior, 0);
-                    const ttl = document.getElementById('monthly_total_classes');
-                    if (ttl) ttl.value = String(prior + monthClasses); // keep semantics: cumulative till month
-                }
-            } catch(e) {}
-            if (any) { updatePerStudentConstraints(); }
-        }
-        prefillMonthlyIfAvailable();
-        monthSel && monthSel.addEventListener('change', prefillMonthlyIfAvailable);
-        yearInp && yearInp.addEventListener('input', prefillMonthlyIfAvailable);
-    } catch(e) {}
     styleDeputationOptions(document);
 });
 // Re-apply when month selects change (some browsers re-render options)
@@ -1529,39 +1450,6 @@ function validateDeputationSubmission() {
             form.submit();
         }
     }, function(){});
-}
-</script>
-<script>
-function showAttendanceConfirm(title, message, onConfirm, onCancel){
-  const existing = document.getElementById('attendance-confirm-modal');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'attendance-confirm-modal';
-  overlay.className = 'fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50';
-  overlay.innerHTML = `
-    <div class=\"bg-white rounded-md shadow-xl w-11/12 max-w-md p-5\">\n      <h3 class=\"text-lg font-semibold mb-2\">${title || 'Confirm'}</h3>\n      <div class=\"text-sm text-gray-700 mb-4 whitespace-pre-line\">${message || ''}</div>\n      <div class=\"flex justify-end gap-2\">\n        <button id=\"att-confirm-cancel\" class=\"px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400\">Cancel</button>\n        <button id=\"att-confirm-ok\" class=\"px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700\">OK</button>\n      </div>\n    </div>`;
-  document.body.appendChild(overlay);
-  document.getElementById('att-confirm-cancel').onclick = function(){
-    try { document.getElementById('attendance-confirm-modal')?.remove(); } catch(e) {}
-    if (typeof onCancel === 'function') onCancel();
-  };
-  document.getElementById('att-confirm-ok').onclick = function(){
-    try { document.getElementById('attendance-confirm-modal')?.remove(); } catch(e) {}
-    if (typeof onConfirm === 'function') onConfirm();
-  };
-}
-
-function handleResetAttendanceSubmit(formEl){
-  try {
-    const mSel = document.getElementById('reset_month');
-    const yEl = document.getElementById('reset_year');
-    const label = mSel && mSel.options[mSel.selectedIndex] ? mSel.options[mSel.selectedIndex].text : 'Selected Month';
-    const yr = yEl ? yEl.value : '';
-    showAttendanceConfirm('Reset Attendance', `This will delete attendance for ${label} ${yr}. Continue?`, function(){
-      try { formEl.submit(); } catch(e) {}
-    }, function(){});
-    return false;
-  } catch(e) { return false; }
 }
 </script>
 <script>
