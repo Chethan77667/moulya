@@ -15,7 +15,7 @@ from models.academic import Course, Subject
 from models.student import Student
 from database import db
 from utils.validators import validate_username, validate_password
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
@@ -708,7 +708,7 @@ def export_lecturer_credentials():
     try:
         from flask import make_response
         import openpyxl
-        from openpyxl.styles import Font, PatternFill
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, PatternFill
         from io import BytesIO
         
         # Get all active lecturers with their credentials
@@ -1516,17 +1516,33 @@ def add_student_credential():
         roll_number = data.get('roll_number', '').strip()
         name = data.get('name', '').strip()
         password = data.get('password', '').strip()
+        class_name = data.get('class_name', '').strip()
         
         # Validate required fields
         if not roll_number or not name or not password:
-            return jsonify({'success': False, 'message': 'All fields are required'})
+            return jsonify({'success': False, 'message': 'Roll number, name, and password are required'})
         
-        # Add student to MongoDB
-        result = mongodb_service.add_student_credential(roll_number, name, password)
+        # Add student to MongoDB with class_name if provided
+        result = mongodb_service.add_student_credential(roll_number, name, password, class_name)
         return jsonify(result)
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error adding student: {str(e)}'})
+
+@management_bp.route('/reset_all_passwords', methods=['POST'])
+@login_required('management')
+def reset_all_passwords():
+    """Reset all student passwords to a provided value"""
+    try:
+        data = request.get_json() or {}
+        new_password = (data.get('new_password') or '').strip()
+        if not new_password:
+            return jsonify({'success': False, 'message': 'new_password is required'})
+        result = mongodb_service.reset_all_passwords(new_password)
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error resetting passwords: {str(e)}'})
 
 @management_bp.route('/bulk_upload_students', methods=['POST'])
 @login_required('management')
@@ -1547,7 +1563,7 @@ def bulk_upload_students():
         excel_data = pd.read_excel(file)
         
         # Validate required columns
-        required_columns = ['Roll Number', 'Name', 'Password']
+        required_columns = ['Roll Number', 'Student Name', 'Password']
         missing_columns = [col for col in required_columns if col not in excel_data.columns]
         
         if missing_columns:
@@ -1614,8 +1630,10 @@ def update_student_credential(student_id):
         roll_number = data.get('roll_number', '').strip()
         name = data.get('name', '').strip()
         password = data.get('password', '').strip()
+        class_name = data.get('class_name', '').strip()
         
-        print(f"DEBUG: Received data - roll_number: '{roll_number}', name: '{name}', password: '{password}'")
+        print(f"DEBUG: Received data - roll_number: '{roll_number}', name: '{name}', password: '{password}', class_name: '{class_name}'")
+        print(f"DEBUG: Raw request data: {data}")
         
         if not roll_number:
             return jsonify({'success': False, 'message': 'Roll number is required'}), 400
@@ -1633,7 +1651,24 @@ def update_student_credential(student_id):
             'updatedAt': datetime.now()
         }
         
-        print(f"DEBUG: Update data prepared: {update_data}")
+        # Always update class_name if provided in the request
+        if 'class_name' in data:
+            if class_name and class_name.strip():
+                update_data['class_name'] = class_name.strip()
+                # Auto-generate course_code from class_name by replacing spaces with underscores
+                course_code = class_name.strip().replace(' ', '_')
+                update_data['course_code'] = course_code
+                print(f"DEBUG: Added class_name to update_data: '{class_name.strip()}'")
+                print(f"DEBUG: Auto-generated course_code: '{course_code}'")
+            else:
+                # If class_name is explicitly set to empty, we'll handle this in MongoDB service
+                update_data['class_name'] = ''
+                update_data['course_code'] = ''
+                print(f"DEBUG: Setting class_name and course_code to empty string")
+        else:
+            print(f"DEBUG: class_name not provided in request, not modifying it")
+        
+        print(f"DEBUG: Final update data prepared: {update_data}")
         
         result = mongodb_service.update_student(student_id, update_data)
         print(f"DEBUG: MongoDB result: {result}")
@@ -1647,7 +1682,7 @@ def update_student_credential(student_id):
 @management_bp.route('/export_students_credentials')
 @login_required('management')
 def export_students_credentials():
-    """Export students credentials to Excel"""
+    """Export students credentials to Excel with proper formatting"""
     try:
         result = mongodb_service.get_all_students()
         
@@ -1656,24 +1691,79 @@ def export_students_credentials():
         
         students = result['data']
         
-        # Create DataFrame
-        df = pd.DataFrame(students)
+        # Create DataFrame with only add student fields
+        export_data = []
+        for student in students:
+            export_data.append({
+                'Roll Number': student.get('roll_number', ''),
+                'Student Name': student.get('name', ''),
+                'Class Name': student.get('class_name', ''),
+                'Password': student.get('password', '')
+            })
         
-        # Remove MongoDB specific fields
-        df = df.drop(['_id', 'createdAt', 'updatedAt'], axis=1, errors='ignore')
+        df = pd.DataFrame(export_data)
         
-        # Rename columns for better readability
-        df = df.rename(columns={
-            'rollNumber': 'Roll Number',
-            'name': 'Name',
-            'username': 'Username',
-            'status': 'Status'
-        })
-        
-        # Create Excel file in memory
+        # Create Excel file in memory with proper formatting
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, sheet_name='Students Credentials', index=False)
+            
+            # Get the workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['Students Credentials']
+            
+            # Define styles
+            header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+            header_fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid')
+            header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            
+            # White border for header row
+            header_border = Border(
+                left=Side(style='thin', color='FFFFFF'),
+                right=Side(style='thin', color='FFFFFF'),
+                top=Side(style='thin', color='FFFFFF'),
+                bottom=Side(style='thin', color='FFFFFF')
+            )
+            
+            data_font = Font(name='Calibri', size=11)
+            data_alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            
+            # Regular border for data rows
+            data_border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            # Apply header formatting with white borders
+            for cell in worksheet[1]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = header_border
+            
+            # Apply data formatting
+            for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row):
+                for cell in row:
+                    cell.font = data_font
+                    cell.alignment = data_alignment
+                    cell.border = data_border
+            
+            # Set column widths
+            column_widths = {
+                'A': 15,  # Roll Number
+                'B': 30,  # Student Name (increased for long names)
+                'C': 20,  # Class Name
+                'D': 15   # Password
+            }
+            
+            for col, width in column_widths.items():
+                worksheet.column_dimensions[col].width = width
+            
+            # Set row heights
+            for row in range(1, worksheet.max_row + 1):
+                worksheet.row_dimensions[row].height = 25
         
         output.seek(0)
         

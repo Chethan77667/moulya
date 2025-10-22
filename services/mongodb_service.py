@@ -27,7 +27,7 @@ class MongoDBService:
         """Get a collection from the moulya database"""
         return self.db[collection_name]
     
-    def add_student_credential(self, roll_number, name, password):
+    def add_student_credential(self, roll_number, name, password, class_name=None):
         """Add a new student credential to login_credentials collection"""
         try:
             collection = self.get_collection('login_credentials')
@@ -51,6 +51,13 @@ class MongoDBService:
                 'source_database': 'web_interface'
             }
             
+            # Add class_name if provided
+            if class_name and class_name.strip():
+                student_doc['class_name'] = class_name.strip()
+                # Auto-generate course_code from class_name
+                course_code = class_name.strip().replace(' ', '_')
+                student_doc['course_code'] = course_code
+            
             result = collection.insert_one(student_doc)
             
             if result.inserted_id:
@@ -61,55 +68,136 @@ class MongoDBService:
         except Exception as e:
             return {'success': False, 'message': f'Error adding student: {str(e)}'}
     
-    def bulk_upload_students(self, excel_data):
-        """Bulk upload students from Excel data"""
+    def reset_all_passwords(self, new_password: str):
+        """Reset all student passwords to the provided value"""
         try:
             collection = self.get_collection('login_credentials')
+            
+            # Update all student passwords to provided value
+            result = collection.update_many(
+                {},  # Empty filter to match all documents
+                {
+                    '$set': {
+                        'password': new_password,
+                        'updatedAt': datetime.now()
+                    }
+                }
+            )
+            
+            return {
+                'success': True,
+                'message': f'Successfully reset passwords for {result.modified_count} students',
+                'modified_count': result.modified_count
+            }
+            
+        except Exception as e:
+            return {'success': False, 'message': f'Error resetting passwords: {str(e)}'}
+    
+    def bulk_upload_students(self, excel_data):
+        """Bulk upload students from Excel data with update support"""
+        try:
+            collection = self.get_collection('login_credentials')
+            
             added_count = 0
+            updated_count = 0
+            error_count = 0
             errors = []
             
             for index, row in excel_data.iterrows():
                 try:
-                    roll_number = str(row['Roll Number']).strip()
-                    name = str(row['Name']).strip()
-                    password = str(row['Password']).strip()
+                    # Extract data from Excel row with proper column mapping
+                    roll_number = str(row.get('Roll Number', '')).strip()
+                    name = str(row.get('Student Name', '')).strip()
+                    class_name = str(row.get('Class Name', '')).strip()
+                    password = str(row.get('Password', '')).strip()
                     
                     # Validate required fields
                     if not roll_number or not name or not password:
-                        errors.append(f"Row {index + 1}: Missing required fields")
+                        error_count += 1
+                        errors.append(f"Row {index + 1}: Missing required fields (Roll Number, Student Name, Password)")
                         continue
                     
-                    # Check if roll number already exists
+                    # Validate password format (DD-MM-YYYY)
+                    try:
+                        from datetime import datetime
+                        datetime.strptime(password, '%d-%m-%Y')
+                    except ValueError:
+                        error_count += 1
+                        errors.append(f"Row {index + 1}: Invalid password format '{password}'. Use DD-MM-YYYY format")
+                        continue
+                    
+                    # Check if student already exists
                     existing = collection.find_one({'roll_number': roll_number})
-                    if existing:
-                        errors.append(f"Row {index + 1}: Roll number {roll_number} already exists")
-                        continue
                     
-                    # Store password as plain text (as per existing data structure)
-                    # Create student document
+                    # Prepare student document
                     student_doc = {
                         'roll_number': roll_number,
                         'name': name,
                         'username': roll_number.lower(),
-                        'password': password,  # Store as plain text to match existing data
-                        'createdAt': datetime.now(),
+                        'password': password,  # Store DOB as password
                         'updatedAt': datetime.now(),
                         'status': 'active',
-                        'migrated_at': datetime.now().isoformat(),
-                        'source_database': 'bulk_upload'
+                        'source_database': 'excel_upload'
                     }
                     
+                    # Add class_name if provided
+                    if class_name and class_name.strip():
+                        student_doc['class_name'] = class_name.strip()
+                        # Auto-generate course_code from class_name
+                        course_code = class_name.strip().replace(' ', '_')
+                        student_doc['course_code'] = course_code
+                    
+                    if existing:
+                        # Check if there are actual changes
+                        has_changes = False
+                        changes = {}
+                        
+                        # Compare each field to see if there are changes
+                        if existing.get('name') != student_doc['name']:
+                            changes['name'] = student_doc['name']
+                            has_changes = True
+                        
+                        if existing.get('password') != student_doc['password']:
+                            changes['password'] = student_doc['password']
+                            has_changes = True
+                        
+                        if existing.get('class_name') != student_doc.get('class_name'):
+                            changes['class_name'] = student_doc.get('class_name')
+                            has_changes = True
+                        
+                        if existing.get('course_code') != student_doc.get('course_code'):
+                            changes['course_code'] = student_doc.get('course_code')
+                            has_changes = True
+                        
+                        if has_changes:
+                            # Only update if there are actual changes
+                            changes['updatedAt'] = datetime.now()
+                            result = collection.update_one(
+                                {'roll_number': roll_number},
+                                {'$set': changes}
+                            )
+                            if result.modified_count > 0:
+                                updated_count += 1
+                        else:
+                            # No changes needed, but still count as processed
+                            pass
+                    else:
+                        # Add new student
+                        student_doc['createdAt'] = datetime.now()
                     collection.insert_one(student_doc)
                     added_count += 1
                     
                 except Exception as e:
+                    error_count += 1
                     errors.append(f"Row {index + 1}: {str(e)}")
             
             return {
                 'success': True, 
-                'count': added_count, 
+                'added_count': added_count,
+                'updated_count': updated_count,
+                'error_count': error_count,
                 'errors': errors,
-                'message': f'Successfully added {added_count} students'
+                'message': f'Bulk upload completed. {added_count} students added, {updated_count} students updated, {error_count} errors.'
             }
             
         except Exception as e:
@@ -124,6 +212,11 @@ class MongoDBService:
             # Convert ObjectId to string for JSON serialization
             for student in students:
                 student['_id'] = str(student['_id'])
+            
+            # Debug: Check specific student
+            debug_student = next((s for s in students if s.get('roll_number') == 'BBA23101'), None)
+            if debug_student:
+                print(f"DEBUG: Retrieved student BBA23101: class_name='{debug_student.get('class_name')}', course_code='{debug_student.get('course_code')}'")
             
             return {'success': True, 'data': students}
             
@@ -170,6 +263,12 @@ class MongoDBService:
             )
             
             print(f"DEBUG: Update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            
+            # Verify the update by fetching the updated document
+            updated_doc = collection.find_one({'_id': ObjectId(student_id)})
+            if updated_doc:
+                print(f"DEBUG: Updated document after save: {updated_doc}")
+                print(f"DEBUG: Class name in updated doc: {updated_doc.get('class_name', 'NOT_FOUND')}")
             
             if result.modified_count > 0:
                 return {'success': True, 'message': 'Student updated successfully'}

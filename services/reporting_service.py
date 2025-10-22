@@ -92,6 +92,22 @@ class ReportingService:
             leading=11,
             spaceAfter=0,
             spaceBefore=0,
+            # No alignment specified, let TableStyle control it
+        )
+
+    @staticmethod
+    def _get_centered_paragraph_style():
+        """Return a compact cell Paragraph style with center alignment for table cells."""
+        styles = getSampleStyleSheet()
+        from reportlab.lib.styles import ParagraphStyle
+        return ParagraphStyle(
+            'CenteredCell',
+            parent=styles['Normal'],
+            fontSize=9,
+            leading=11,
+            spaceAfter=0,
+            spaceBefore=0,
+            alignment=1,  # Center alignment
         )
 
     @staticmethod
@@ -122,7 +138,20 @@ class ReportingService:
             return Paragraph(xml_escape(str(value)), ReportingService._get_paragraph_style())
 
     @staticmethod
-    def _wrap_table_data(rows, skip_header=True, header_text_white=False, no_wrap_cols=None):
+    def _to_centered_paragraph(value):
+        """Convert any value to a centered Paragraph so ReportLab wraps text within cell width."""
+        try:
+            if value is None:
+                return Paragraph('', ReportingService._get_centered_paragraph_style())
+            # Keep numbers as plain strings too; Paragraph will handle fine
+            # Escape text but preserve explicit line breaks by converting \n -> <br/>
+            text = xml_escape(str(value)).replace('\n', '<br/>')
+            return Paragraph(text, ReportingService._get_centered_paragraph_style())
+        except Exception:
+            return Paragraph(xml_escape(str(value)), ReportingService._get_centered_paragraph_style())
+
+    @staticmethod
+    def _wrap_table_data(rows, skip_header=True, header_text_white=False, no_wrap_cols=None, center_cols=None):
         """Map table cells to Paragraphs for word-wrap.
         If skip_header=True, the first row is left as-is so TableStyle header
         text color/background rules still apply.
@@ -130,6 +159,7 @@ class ReportingService:
         if not rows:
             return rows
         no_wrap_set = set(no_wrap_cols or [])
+        center_set = set(center_cols or [])
         start_idx = 1 if skip_header and len(rows) > 0 else 0
         wrapped_rows = []
         # Keep header as-is if requested
@@ -143,6 +173,8 @@ class ReportingService:
             for idx, cell in enumerate(row):
                 if idx in no_wrap_set:
                     wrapped.append(xml_escape(str(cell)) if cell is not None else '')
+                elif idx in center_set:
+                    wrapped.append(ReportingService._to_centered_paragraph(cell))
                 else:
                     wrapped.append(ReportingService._to_paragraph(cell))
             wrapped_rows.append(wrapped)
@@ -986,6 +1018,7 @@ class ReportingService:
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             # no header row now
             ('ALIGN', (0,0), (0,-1), 'LEFT'),
+            ('ALIGN', (1,0), (1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 6), table, Spacer(1, 12)])
@@ -1123,6 +1156,7 @@ class ReportingService:
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 10), Paragraph('Marks Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
@@ -1199,7 +1233,9 @@ class ReportingService:
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
         ]))
         elements.append(table)
 
@@ -1272,6 +1308,7 @@ class ReportingService:
         subj_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 10), Paragraph('Attendance Report', styles['Heading2']), Spacer(1, 6), subj_table, Spacer(1, 10)])
@@ -1302,7 +1339,9 @@ class ReportingService:
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ('BACKGROUND', (0,0), (-1,0), colors.black),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
         ]))
         elements.append(table)
 
@@ -1644,6 +1683,8 @@ class ReportingService:
         meta_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
 
@@ -1661,6 +1702,8 @@ class ReportingService:
         stats_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Paragraph('Statistics', styles['Heading2']), stats_table, Spacer(1, 8)])
 
@@ -1788,6 +1831,8 @@ class ReportingService:
         meta_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
 
@@ -1803,6 +1848,8 @@ class ReportingService:
         stats_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Paragraph('Statistics', styles['Heading2']), stats_table, Spacer(1, 8)])
 
@@ -1885,6 +1932,8 @@ class ReportingService:
         meta_table.setStyle(TableStyle([
             ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         elements.extend([Spacer(1, 6), meta_table, Spacer(1, 8)])
 
@@ -1982,6 +2031,8 @@ class ReportingService:
                 info_table.setStyle(TableStyle([
                     ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
                     ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ]))
                 elements.extend([info_table, Spacer(1, 8)])
             else:
@@ -1998,6 +2049,8 @@ class ReportingService:
                 subject_table.setStyle(TableStyle([
                     ('BOX', (0,0), (-1,-1), 0.5, colors.grey),
                     ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ]))
                 elements.extend([subject_table, Spacer(1, 8)])
 
@@ -2045,7 +2098,9 @@ class ReportingService:
                 ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
                 ('BACKGROUND', (0,0), (-1,0), colors.black),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
             ]))
             elements.append(tbl)
 
@@ -2119,6 +2174,7 @@ class ReportingService:
                 ('RIGHTPADDING', (0,0), (-1,-1), 4),
                 ('TOPPADDING', (0,0), (-1,-1), 2),
                 ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ]))
             elements.extend([info_table, Spacer(1, 8)])
@@ -2149,6 +2205,7 @@ class ReportingService:
                     ('RIGHTPADDING', (0,0), (-1,-1), 4),
                     ('TOPPADDING', (0,0), (-1,-1), 2),
                     ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ]))
                 elements.extend([subject_table, Spacer(1, 8)])
@@ -2234,7 +2291,9 @@ class ReportingService:
                 ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
                 ('BACKGROUND', (0,0), (-1,0), colors.black),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold')
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
             ]))
             elements.append(tbl)
 
@@ -2687,7 +2746,7 @@ class ReportingService:
         - center_cols: set of indices to center-align in body
         - col_font_sizes: dict of {col_index: font_size} for custom font sizes
         """
-        wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols=no_wrap_cols or set())
+        wrapped = ReportingService._wrap_table_data(rows, skip_header=True, header_text_white=True, no_wrap_cols=no_wrap_cols or set(), center_cols=center_cols)
         colwidths = ReportingService._calc_colwidths_from_fracs(page_width, col_fracs)
         tbl = Table(wrapped, repeatRows=1, colWidths=colwidths)
         center_cols = center_cols or set()
@@ -2713,11 +2772,7 @@ class ReportingService:
             for col_idx, font_size in col_font_sizes.items():
                 base_style.append(('FONTSIZE', (col_idx, 0), (col_idx, -1), font_size))
         
-        # Center specified columns in body
-        if center_cols:
-            min_idx = min(center_cols)
-            max_idx = max(center_cols)
-            base_style.append(('ALIGN', (min_idx,1), (max_idx,-1), 'CENTER'))
+        # Center alignment is now handled by Paragraph styles in _wrap_table_data
         tbl.setStyle(TableStyle(base_style))
         return tbl
 

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-SQLite to MongoDB Migration Script - Roll Number, Name and Password
-=================================================================
+SQLite to MongoDB Migration Script - Roll Number, Name, Password, Class Name and Course Code
+==========================================================================================
 
-This script reads roll_number, name and password from the SQLite database
+This script reads roll_number, name, password, class_name and course_code from the SQLite database
 and transfers them to MongoDB. The password is stored as a STRING to
 match the portal's authentication logic.
 
 Database Details:
 - Source: SQLite database at instance/moulya_college.db
 - Target: MongoDB database 'moulya' with collection 'login_credentials'
-- Fields: roll_number, name and password (123456)
+- Fields: roll_number, name, password (123456), class_name, course_code
+- Formatting: class_name as "II BCA A", course_code as "II_BCA_A"
 
 Requirements:
 - pymongo
@@ -40,7 +41,7 @@ except ImportError:
 
 
 class RollNoDOBMigrator:
-    """Handles migration of roll_number, name and password from SQLite to MongoDB"""
+    """Handles migration of roll_number, name, password, class_name and course_code from SQLite to MongoDB"""
     
     def __init__(self, sqlite_path: str, mongodb_uri: str = "mongodb://localhost:27017/"):
         """
@@ -87,29 +88,34 @@ class RollNoDOBMigrator:
     
     def read_rollno_dob_data(self) -> List[Dict]:
         """
-        Read roll_number, name and password from SQLite database.
+        Read roll_number, name, password, class_name and course_code from SQLite database.
         Ensures password is coerced to a STRING for consistent auth.
         
         Returns:
-            List[Dict]: List of student records with roll_number, name and password
+            List[Dict]: List of student records with roll_number, name, password, class_name and course_code
         """
         if not os.path.exists(self.sqlite_path):
             print(f"✗ SQLite database not found at: {self.sqlite_path}")
             return []
         
         try:
-            print(f"Reading roll_number and name from SQLite database: {self.sqlite_path}")
+            print(f"Reading roll_number, name, class_name and course_code from SQLite database: {self.sqlite_path}")
             conn = sqlite3.connect(self.sqlite_path)
             cursor = conn.cursor()
             
-            # Query to get roll_number and name from student table
+            # Query to get roll_number, name, academic_year, current_semester and course_code from student table
             query = """
             SELECT 
-                roll_number,
-                name
-            FROM student 
-            WHERE is_active = 1
-            ORDER BY roll_number
+                s.roll_number,
+                s.name,
+                s.academic_year,
+                s.current_semester,
+                c.code as course_code,
+                c.name as course_name
+            FROM student s
+            LEFT JOIN course c ON s.course_id = c.id
+            WHERE s.is_active = 1
+            ORDER BY s.roll_number
             """
             
             cursor.execute(query)
@@ -117,18 +123,35 @@ class RollNoDOBMigrator:
             
             print(f"✓ Raw SQLite query returned {len(rows)} rows")
             
-            # Convert to list of dictionaries with roll_number, name and default password
+            # Convert to list of dictionaries with roll_number, name, class_name, course_code and default password
             students = []
             for i, row in enumerate(rows):
                 try:
                     roll_number = str(row[0]).strip() if row[0] else f"EMPTY_{i}"
                     name = str(row[1]).strip() if row[1] else f"UNKNOWN_{i}"
+                    academic_year = row[2] if row[2] else None
+                    current_semester = row[3] if row[3] else None
+                    course_code_raw = str(row[4]).strip() if row[4] else None
+                    course_name = str(row[5]).strip() if row[5] else None
+                    
+                    # Format course_code: "II_BCA_A" (underscores between parts)
+                    course_code = course_code_raw
+                    if course_code and ' ' in course_code:
+                        course_code = course_code.replace(' ', '_')
+                    
+                    # Create class_name by replacing underscores with spaces in course_code
+                    # Format: "II BCA A" (spaces between parts)
+                    class_name = None
+                    if course_code:
+                        class_name = course_code.replace('_', ' ')
                     
                     # Always set password to default '123456' (string)
                     password_str = "123456"
                     student_data = {
                         'roll_number': roll_number,  # Use roll_number to match existing collection
                         'name': name,
+                        'class_name': class_name,
+                        'course_code': course_code,
                         'username': roll_number.lower(),
                         'password': password_str,
                         'status': 'active',
@@ -141,14 +164,14 @@ class RollNoDOBMigrator:
                     
                     # Show first few records for debugging
                     if i < 3:
-                        print(f"  Sample record {i+1}: {roll_number} - {name}")
+                        print(f"  Sample record {i+1}: {roll_number} - {name} - {class_name} - {course_code}")
                         
                 except Exception as e:
                     print(f"✗ Error processing row {i}: {e}")
                     continue
             
             conn.close()
-            print(f"✓ Successfully processed {len(students)} student records (roll_number, name and password)")
+            print(f"✓ Successfully processed {len(students)} student records (roll_number, name, class_name, course_code and password)")
             return students
             
         except sqlite3.Error as e:
@@ -322,13 +345,15 @@ class RollNoDOBMigrator:
             limit: Number of sample records to show
         """
         try:
-            print(f"\n=== SAMPLE DATA FROM MONGODB (ROLL NUMBER, NAME & PASSWORD) ===")
+            print(f"\n=== SAMPLE DATA FROM MONGODB (ROLL NUMBER, NAME, CLASS NAME, COURSE CODE & PASSWORD) ===")
             sample_docs = list(self.collection.find().limit(limit))
             
             for i, doc in enumerate(sample_docs, 1):
                 print(f"\nRecord {i}:")
                 print(f"  Roll Number: {doc.get('roll_number', 'N/A')}")
                 print(f"  Name: {doc.get('name', 'N/A')}")
+                print(f"  Class Name: {doc.get('class_name', 'N/A')}")
+                print(f"  Course Code: {doc.get('course_code', 'N/A')}")
                 print(f"  Username: {doc.get('username', 'N/A')}")
                 print(f"  Password: {doc.get('password', 'N/A')}")
                 print(f"  Status: {doc.get('status', 'N/A')}")
@@ -347,7 +372,7 @@ class RollNoDOBMigrator:
 def main():
     """Main function to run the migration"""
     print("=" * 70)
-    print("SQLite to MongoDB Migration Script - ROLL NUMBER, NAME & PASSWORD")
+    print("SQLite to MongoDB Migration Script - ROLL NUMBER, NAME, CLASS NAME, COURSE CODE & PASSWORD")
     print("Moulya College Student Data Migration (Complete Fields)")
     print("=" * 70)
     
@@ -367,7 +392,7 @@ def main():
         if not migrator.clear_existing_data():
             return False
         
-        # Step 3: Read data from SQLite (roll_number, name and password as STRING)
+        # Step 3: Read data from SQLite (roll_number, name, class_name, course_code and password as STRING)
         students = migrator.read_rollno_dob_data()
         if not students:
             print("No data to migrate. Exiting.")
@@ -378,7 +403,7 @@ def main():
         print(f"Total students to migrate: {len(students)}")
         
         # Check for empty roll numbers
-        empty_rolls = [s for s in students if not s.get('rollNumber') or s.get('rollNumber').startswith('EMPTY_')]
+        empty_rolls = [s for s in students if not s.get('roll_number') or s.get('roll_number').startswith('EMPTY_')]
         if empty_rolls:
             print(f"⚠ Found {len(empty_rolls)} students with empty roll numbers")
         
@@ -387,14 +412,24 @@ def main():
         if empty_names:
             print(f"⚠ Found {len(empty_names)} students with empty names")
         
+        # Check for empty class names
+        empty_classes = [s for s in students if not s.get('class_name')]
+        if empty_classes:
+            print(f"⚠ Found {len(empty_classes)} students with empty class names")
+        
+        # Check for empty course codes
+        empty_courses = [s for s in students if not s.get('course_code')]
+        if empty_courses:
+            print(f"⚠ Found {len(empty_courses)} students with empty course codes")
+        
         # Show sample data
         print(f"\nFirst 3 records:")
         for i, student in enumerate(students[:3]):
-            print(f"  {i+1}. Roll: {student.get('rollNumber')} | Name: {student.get('name')}")
+            print(f"  {i+1}. Roll: {student.get('roll_number')} | Name: {student.get('name')} | Class: {student.get('class_name')} | Course: {student.get('course_code')}")
         
         print(f"Last 3 records:")
         for i, student in enumerate(students[-3:]):
-            print(f"  {len(students)-2+i}. Roll: {student.get('rollNumber')} | Name: {student.get('name')}")
+            print(f"  {len(students)-2+i}. Roll: {student.get('roll_number')} | Name: {student.get('name')} | Class: {student.get('class_name')} | Course: {student.get('course_code')}")
         
         # Step 4: Migrate to MongoDB
         if not migrator.migrate_to_mongodb(students):
@@ -408,7 +443,7 @@ def main():
         
         print("\n" + "=" * 70)
         print("Migration completed successfully!")
-        print("Roll number, name and password fields migrated.")
+        print("Roll number, name, class name, course code and password fields migrated.")
         print("=" * 70)
         
         return True

@@ -58,13 +58,13 @@
                             </svg>
                         </div>
                         <div class="ml-3 sm:ml-5 min-w-0 flex-1">
-                            <h3 class="text-base sm:text-lg font-medium text-gray-900 truncate">{{ subject.name }}</h3>
+                            <h3 class="text-base sm:text-lg font-medium text-gray-900 break-words">{{ subject.name }}</h3>
                             <p class="text-sm text-gray-500">{{ subject.code }}</p>
                         </div>
                     </div>
                     
                     <div class="mt-3 sm:mt-4 space-y-1">
-                        <p class="text-xs sm:text-sm text-gray-600 truncate">Course: {{ subject.course.name if subject.course else 'N/A' }}</p>
+                        <p class="text-xs sm:text-sm text-gray-600 break-words">Course: {{ subject.course.name if subject.course else 'N/A' }}</p>
                         <p class="text-xs sm:text-sm text-gray-600">Year {{ subject.year }}, Semester {{ subject.semester }}</p>
                         <div class="flex justify-between text-xs sm:text-sm text-gray-600">
                             <span>Credits: {{ subject.credits }}</span>

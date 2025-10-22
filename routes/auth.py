@@ -91,7 +91,7 @@ def lecturer_login():
     
     return render_template('auth/lecturer_login.html', hide_header=True)
 
-@auth_bp.route('/logout', methods=['POST'])
+@auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
     """Logout handler for both user types"""
     user_type = session.get('user_type')

@@ -7,27 +7,21 @@
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <!-- Header -->
         <div class="mb-8">
-            <nav class="flex" aria-label="Breadcrumb">
-                <ol class="flex items-center space-x-4">
-                    <li>
-                        <a href="{{ url_for('management.dashboard') }}" class="text-gray-400 hover:text-gray-500">
-                            <svg class="flex-shrink-0 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"></path>
+            <nav class="flex items-center justify-between border-b border-gray-200 pb-4">
+                <div class="flex items-center space-x-2">
+                    <a href="{{ url_for('management.dashboard') }}" class="text-gray-500 hover:text-gray-700 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                             </svg>
-                            <span class="sr-only">Dashboard</span>
-                        </a>
-                    </li>
-                    <li>
-                        <div class="flex items-center">
-                            <svg class="flex-shrink-0 h-5 w-5 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
-                            </svg>
-                            <span class="ml-4 text-sm font-medium text-gray-500">Manage Students Credentials</span>
+                        <span class="text-sm text-gray-500">Dashboard</span>
+                    </a>
+                    <h1 class="text-xl font-bold text-gray-900">Manage Students Credentials</h1>
                         </div>
-                    </li>
-                </ol>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-500">admin</span>
+                    <a href="{{ url_for('auth.logout') }}" class="text-sm text-gray-500 hover:text-gray-700">Logout</a>
+                </div>
             </nav>
-            <h1 class="mt-2 text-3xl font-bold text-gray-900">Manage Students Credentials</h1>
         </div>
 
         <!-- Action Buttons -->
@@ -40,6 +34,12 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                         </svg>
                         Add Student
+                    </button>
+                    <button onclick="openResetPasswordModal()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                        Reset All Passwords
                     </button>
                     <button onclick="openBulkUploadModal()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -57,13 +57,18 @@
             </div>
         </div>
 
-        <!-- Search Bar -->
+        <!-- Search and Filter Bar -->
         <div class="bg-white shadow rounded-lg p-6 mb-6">
-            <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex flex-col lg:flex-row gap-4">
                 <div class="flex-1">
                     <input type="text" id="searchInput" placeholder="Search by roll number, name, or username..." 
                            class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm">
                 </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select id="classFilter" onchange="filterByClass()" 
+                            class="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm">
+                        <option value="">All Classes</option>
+                    </select>
                 <button onclick="searchStudents()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -73,6 +78,7 @@
                 <button onclick="clearSearch()" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                     Clear
                 </button>
+                </div>
             </div>
         </div>
 
@@ -96,6 +102,57 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination Controls -->
+            <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="flex-1 flex justify-between sm:hidden">
+                    <button onclick="previousPage()" id="prevBtnMobile" 
+                            class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Previous
+                    </button>
+                    <button onclick="nextPage()" id="nextBtnMobile" 
+                            class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Next
+                    </button>
+                </div>
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div class="flex items-center">
+                        <p class="text-sm text-gray-700">
+                            Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="showingTotal">0</span> results
+                        </p>
+                        <div class="ml-4">
+                            <label for="recordsPerPage" class="text-sm text-gray-700">Show:</label>
+                            <select id="recordsPerPage" onchange="changeRecordsPerPage()" 
+                                    class="ml-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            <button onclick="previousPage()" id="prevBtn" 
+                                    class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span class="sr-only">Previous</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="pageNumbers" class="flex">
+                                <!-- Page numbers will be generated here -->
+                            </div>
+                            <button onclick="nextPage()" id="nextBtn" 
+                                    class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span class="sr-only">Next</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -114,20 +171,29 @@
             </div>
             <form id="addStudentForm">
                 <div class="mb-4">
-                    <label for="rollNumber" class="block text-sm font-medium text-gray-700 mb-2">Roll Number *</label>
-                    <input type="text" id="rollNumber" name="rollNumber" required placeholder="ROLL NUMBER"
+                    <label for="rollNumber" class="block text-sm font-medium text-gray-700 mb-1">Roll Number *</label>
+                    <input type="text" id="rollNumber" name="rollNumber" required
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
                 </div>
+                
                 <div class="mb-4">
-                    <label for="studentName" class="block text-sm font-medium text-gray-700 mb-2">Student Name *</label>
-                    <input type="text" id="studentName" name="studentName" required placeholder="STUDENT NAME"
+                    <label for="studentName" class="block text-sm font-medium text-gray-700 mb-1">Student Name *</label>
+                    <input type="text" id="studentName" name="studentName" required
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
                 </div>
+                
+                <div class="mb-4">
+                    <label for="className" class="block text-sm font-medium text-gray-700 mb-1">Class Name</label>
+                    <input type="text" id="className" name="className"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
+                </div>
+                
                 <div class="mb-6">
-                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password *</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter secure password"
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                    <input type="password" id="password" name="password" required
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
                 </div>
+                
                 <div class="flex justify-end space-x-3">
                     <button type="button" onclick="closeAddStudentModal()" 
                             class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
@@ -145,29 +211,68 @@
 
 <!-- Bulk Upload Modal -->
 <div id="bulkUploadModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3">
+    <div class="relative top-20 mx-auto p-5 border w-[420px] shadow-xl rounded-lg bg-white">
+        <div class="mt-2">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-gray-900">Bulk Upload Students</h3>
-                <button onclick="closeBulkUploadModal()" class="text-gray-400 hover:text-gray-600">
+                <h3 class="text-lg font-semibold text-gray-900">Bulk Upload Students</h3>
+                <button onclick="closeBulkUploadModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
+            
+            <!-- File Upload Section -->
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Excel File *</label>
-                <input type="file" id="excelFile" accept=".xlsx,.xls" required
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500">
-                <p class="text-xs text-gray-500 mt-1">Upload Excel file with columns: Roll Number, Name, Password</p>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload Excel File</label>
+                <div class="flex items-center space-x-3">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" class="hidden" />
+                    <button onclick="document.getElementById('excelFile').click()" 
+                            class="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        Choose File
+                    </button>
+                    <span id="fileName" class="text-sm text-gray-500">No file chosen</span>
             </div>
+            </div>
+            
+            <!-- Instructions Section -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <h4 class="text-sm font-medium text-blue-900 mb-1">Excel Requirements</h4>
+                <div class="text-xs text-blue-800 space-y-1">
+                    <p><strong>Columns:</strong> Roll Number, Student Name, Class Name, Password</p>
+                    <p><strong>Password:</strong> DOB in DD-MM-YYYY format (e.g., 15-03-2005)</p>
+                    <div class="bg-white border rounded p-2 mt-1 font-mono text-xs">
+                        BBA23101 | John Doe | III BBA | 15-03-2005<br/>
+                        BBA23102 | Jane Smith | III BBA | 22-07-2004
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Important Notes -->
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-3 w-3 text-yellow-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-2">
+                        <h3 class="text-xs font-medium text-yellow-800">Notes</h3>
+                        <div class="mt-0.5 text-xs text-yellow-700">
+                            <p>• Existing students updated • New students added • Password: DD-MM-YYYY</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="closeBulkUploadModal()" 
-                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
                     Cancel
                 </button>
                 <button type="button" onclick="uploadExcel()" 
-                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800">
+                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
                     Upload
                 </button>
             </div>
@@ -189,19 +294,32 @@
             </div>
             <form id="editStudentForm">
                 <input type="hidden" id="editStudentId" name="studentId">
+                
                 <div class="mb-4">
-                    <input type="text" id="editRollNumber" name="rollNumber" required placeholder="ROLL NUMBER"
+                    <label for="editRollNumber" class="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
+                    <input type="text" id="editRollNumber" name="rollNumber" required
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                            style="cursor: text !important; pointer-events: auto !important;">
                 </div>
+                
                 <div class="mb-4">
-                    <input type="text" id="editStudentName" name="studentName" required placeholder="STUDENT NAME"
+                    <label for="editStudentName" class="block text-sm font-medium text-gray-700 mb-1">Student Name</label>
+                    <input type="text" id="editStudentName" name="studentName" required
                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                            style="cursor: text !important; pointer-events: auto !important;">
                 </div>
+                
+                <div class="mb-4">
+                    <label for="editClassName" class="block text-sm font-medium text-gray-700 mb-1">Class Name</label>
+                    <input type="text" id="editClassName" name="className"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500"
+                           style="cursor: text !important; pointer-events: auto !important;">
+                </div>
+                
                 <div class="mb-6">
+                    <label for="editPassword" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
                     <div class="relative">
-                        <input type="password" id="editPassword" name="password" required placeholder="Enter secure password"
+                        <input type="password" id="editPassword" name="password" required
                                class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                                style="cursor: text !important; pointer-events: auto !important;">
                         <button type="button" onclick="toggleEditPasswordVisibility()" 
@@ -216,6 +334,7 @@
                         </button>
                     </div>
                 </div>
+
                 <div class="flex justify-end space-x-3">
                     <button type="button" onclick="closeEditStudentModal()" 
                             class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
@@ -227,6 +346,260 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteStudentModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Delete Student Credentials</h3>
+                <button onclick="closeDeleteStudentModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="mb-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0 h-12 w-12">
+                        <div class="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h4 class="text-lg font-medium text-gray-900" id="deleteStudentName">Student Name</h4>
+                        <p class="text-sm text-gray-500" id="deleteStudentId">ID: Student ID</p>
+                    </div>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-4">
+                    Are you sure you want to delete this student's login credentials? This action will remove the student's access credentials from the system.
+                </p>
+                
+                <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800">Note</h3>
+                            <div class="mt-2 text-sm text-yellow-700">
+                                <p>This will only remove the student's login credentials. Attendance records, marks, and other academic data will remain intact.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeDeleteStudentModal()" 
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                    Cancel
+                </button>
+                <button onclick="confirmDeleteStudent()" 
+                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    Delete Credentials
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Student Success Popup -->
+<div id="addStudentSuccessPopup" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-6 border w-80 shadow-lg rounded-md bg-white">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Student Added Successfully!</h3>
+            <p class="text-sm text-gray-500 mb-4">New student credentials have been created and added to the system.</p>
+            <div class="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-green-800">Ready to Use</h3>
+                        <div class="mt-2 text-sm text-green-700">
+                            <p>The student can now log in using their credentials.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeAddStudentSuccessPopup()" 
+                    class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Password Confirmation Modal -->
+<div id="resetPasswordModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-6 border w-96 shadow-xl rounded-lg bg-white">
+        <div class="mt-2">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-semibold text-gray-900">Reset All Passwords</h3>
+                <button onclick="closeResetPasswordModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Password Input Section -->
+            <div class="mb-6">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-start space-x-3">
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <svg class="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-base font-medium text-gray-900 mb-1">Set New Password</h4>
+                            <p class="text-xs text-gray-600 mb-3">Enter the password for all student accounts.</p>
+                            
+                            <div class="space-y-1">
+                                <label for="resetAllPasswordInput" class="block text-sm font-medium text-gray-700">New Password</label>
+                                <input type="text" id="resetAllPasswordInput" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Enter new password" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Confirmation Section -->
+            <div class="mb-6">
+                <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                        <div class="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <svg class="h-4 w-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-base font-medium text-gray-900 mb-1">Confirm Reset</h4>
+                        <p class="text-xs text-gray-600">This will change all student passwords to the value above.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Warning Section -->
+            <div class="mb-6">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-4 w-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-2">
+                            <h3 class="text-xs font-medium text-yellow-800">Important</h3>
+                            <div class="mt-1 text-xs text-yellow-700">
+                                <p>All students will need the new password to log in.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeResetPasswordModal()" 
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                    Cancel
+                </button>
+                <button onclick="confirmResetPasswords()" 
+                        class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors">
+                    Reset All Passwords
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Upload Success Popup -->
+<div id="bulkUploadSuccessPopup" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-6 border w-96 shadow-lg rounded-md bg-white">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Bulk Upload Successful!</h3>
+            <p class="text-sm text-gray-500 mb-4" id="bulkUploadSuccessMessage">Students have been processed successfully.</p>
+            <div class="bg-green-50 border border-green-200 rounded-md p-3 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-green-800">Upload Summary</h3>
+                        <div class="mt-2 text-sm text-green-700" id="bulkUploadSummary">
+                            <p>Processing completed successfully.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeBulkUploadSuccessPopup()" 
+                    class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Upload Error Popup -->
+<div id="bulkUploadErrorPopup" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-6 border w-96 shadow-lg rounded-md bg-white">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Bulk Upload Failed</h3>
+            <p class="text-sm text-gray-500 mb-4" id="bulkUploadErrorMessage">There was an error processing the upload.</p>
+            <div class="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">Error Details</h3>
+                        <div class="mt-2 text-sm text-red-700" id="bulkUploadErrorDetails">
+                            <p>Please check the file format and try again.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button onclick="closeBulkUploadErrorPopup()" 
+                    class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                OK
+            </button>
         </div>
     </div>
 </div>
@@ -254,6 +627,10 @@
 // Global variables
 let studentsData = [];
 let filteredData = [];
+let currentPage = 1;
+let recordsPerPage = 10;
+let totalPages = 0;
+let selectedClass = '';
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
@@ -261,7 +638,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add click handlers for edit modal inputs
     document.addEventListener('click', function(e) {
-        if (e.target.matches('#editRollNumber, #editStudentName, #editPassword')) {
+        if (e.target.matches('#editRollNumber, #editStudentName, #editClassName, #editPassword')) {
             e.target.focus();
             e.target.select();
         }
@@ -306,8 +683,120 @@ function closeEditStudentModal() {
     document.getElementById('editStudentForm').reset();
 }
 
+// Delete Student Modal Functions
+let studentToDelete = null;
+
+function openDeleteStudentModal() {
+    document.getElementById('deleteStudentModal').classList.remove('hidden');
+}
+
+function closeDeleteStudentModal() {
+    document.getElementById('deleteStudentModal').classList.add('hidden');
+    studentToDelete = null;
+}
+
 function closeSuccessPopup() {
     document.getElementById('successPopup').classList.add('hidden');
+}
+
+// Error Popup Functions
+function showErrorPopup(message) {
+    // Create error popup if it doesn't exist
+    let errorPopup = document.getElementById('errorPopup');
+    if (!errorPopup) {
+        errorPopup = document.createElement('div');
+        errorPopup.id = 'errorPopup';
+        errorPopup.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50';
+        errorPopup.innerHTML = `
+            <div class="relative top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-6 border w-80 shadow-lg rounded-md bg-white">
+                <div class="text-center">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Error</h3>
+                    <p class="text-sm text-gray-500 mb-4" id="errorMessage">${message}</p>
+                    <button onclick="closeErrorPopup()" 
+                            class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        OK
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(errorPopup);
+    } else {
+        // Update the message
+        document.getElementById('errorMessage').textContent = message;
+    }
+    
+    errorPopup.classList.remove('hidden');
+}
+
+function closeErrorPopup() {
+    document.getElementById('errorPopup').classList.add('hidden');
+}
+
+// Add Student Success Popup Functions
+function closeAddStudentSuccessPopup() {
+    document.getElementById('addStudentSuccessPopup').classList.add('hidden');
+}
+
+// Reset Password Modal Functions
+function openResetPasswordModal() {
+    // Clear the password input when opening the modal
+    const passwordInput = document.getElementById('resetAllPasswordInput');
+    if (passwordInput) {
+        passwordInput.value = '';
+    }
+    document.getElementById('resetPasswordModal').classList.remove('hidden');
+}
+
+function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModal').classList.add('hidden');
+}
+
+async function confirmResetPasswords() {
+    try {
+        const passwordInput = document.getElementById('resetAllPasswordInput');
+        const newPassword = passwordInput?.value?.trim();
+        
+        // Debug logging
+        console.log('Password input element:', passwordInput);
+        console.log('Password value:', newPassword);
+        console.log('Password length:', newPassword?.length);
+        
+        if (!newPassword) {
+            showErrorPopup('Please enter a password to reset for all students.');
+            return;
+        }
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+                         '{{ csrf_token() }}';
+        
+        const response = await fetch('/management/reset_all_passwords', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ new_password: newPassword })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeResetPasswordModal();
+            showSuccessPopup('All student passwords have been reset successfully!');
+            loadStudents(); // Refresh the student list
+        } else {
+            showErrorPopup(result.message || 'Failed to reset passwords');
+        }
+    } catch (error) {
+        console.error('Error resetting passwords:', error);
+        showErrorPopup('An error occurred while resetting passwords');
+    }
 }
 
 // Add Student Form Submission
@@ -320,6 +809,12 @@ document.getElementById('addStudentForm').addEventListener('submit', async funct
         name: formData.get('studentName'),
         password: formData.get('password')
     };
+    
+    // Add class_name if provided
+    const className = formData.get('className');
+    if (className && className.trim() !== '') {
+        studentData.class_name = className.trim();
+    }
     
     try {
         // Get CSRF token
@@ -338,24 +833,65 @@ document.getElementById('addStudentForm').addEventListener('submit', async funct
         const result = await response.json();
         
         if (result.success) {
-            alert('Student added successfully!');
             closeAddStudentModal();
+            document.getElementById('addStudentSuccessPopup').classList.remove('hidden');
             loadStudents();
         } else {
-            alert('Error: ' + result.message);
+            showErrorPopup(result.message || 'Failed to add student');
         }
     } catch (error) {
-        alert('Error adding student: ' + error.message);
+        console.error('Error adding student:', error);
+        showErrorPopup('An error occurred while adding the student');
     }
 });
 
 // Bulk Upload Function
+// Bulk Upload Functions
+function openBulkUploadModal() {
+    document.getElementById('bulkUploadModal').classList.remove('hidden');
+}
+
+function closeBulkUploadModal() {
+    document.getElementById('bulkUploadModal').classList.add('hidden');
+    // Reset file input
+    document.getElementById('excelFile').value = '';
+    document.getElementById('fileName').textContent = 'No file chosen';
+}
+
+function closeBulkUploadSuccessPopup() {
+    document.getElementById('bulkUploadSuccessPopup').classList.add('hidden');
+}
+
+function closeBulkUploadErrorPopup() {
+    document.getElementById('bulkUploadErrorPopup').classList.add('hidden');
+}
+
+// File selection handler
+document.getElementById('excelFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const fileNameSpan = document.getElementById('fileName');
+    
+    if (file) {
+        fileNameSpan.textContent = file.name;
+    } else {
+        fileNameSpan.textContent = 'No file chosen';
+    }
+});
+
+// Search input Enter key handler
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchStudents();
+    }
+});
+
 async function uploadExcel() {
     const fileInput = document.getElementById('excelFile');
     const file = fileInput.files[0];
     
     if (!file) {
-        alert('Please select an Excel file');
+        showErrorPopup('Please select an Excel file');
         return;
     }
     
@@ -378,14 +914,78 @@ async function uploadExcel() {
         const result = await response.json();
         
         if (result.success) {
-            alert(`Successfully uploaded ${result.count} students!`);
             closeBulkUploadModal();
+            
+            // Show success popup with detailed information
+            const successMessage = document.getElementById('bulkUploadSuccessMessage');
+            const summaryDiv = document.getElementById('bulkUploadSummary');
+            
+            successMessage.textContent = 'Students have been processed successfully!';
+            
+            let summaryHTML = '';
+            if (result.added_count > 0) {
+                summaryHTML += `<p>• ${result.added_count} new students added</p>`;
+            }
+            if (result.updated_count > 0) {
+                summaryHTML += `<p>• ${result.updated_count} existing students updated</p>`;
+            } else {
+                summaryHTML += `<p>• 0 existing students updated</p>`;
+            }
+            if (result.error_count > 0) {
+                summaryHTML += `<p>• ${result.error_count} rows had errors</p>`;
+                
+                // Show error details if available
+                if (result.errors && result.errors.length > 0) {
+                    summaryHTML += `<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">`;
+                    summaryHTML += `<p class="font-medium text-red-800 mb-1">Error Details:</p>`;
+                    summaryHTML += `<ul class="text-red-700 space-y-1">`;
+                    result.errors.slice(0, 10).forEach(error => {
+                        summaryHTML += `<li>• ${error}</li>`;
+                    });
+                    if (result.errors.length > 10) {
+                        summaryHTML += `<li>• ... and ${result.errors.length - 10} more errors</li>`;
+                    }
+                    summaryHTML += `</ul></div>`;
+                }
+            }
+            
+            summaryDiv.innerHTML = summaryHTML || '<p>Processing completed successfully.</p>';
+            
+            document.getElementById('bulkUploadSuccessPopup').classList.remove('hidden');
             loadStudents();
         } else {
-            alert('Error: ' + result.message);
+            // Show error popup
+            const errorMessage = document.getElementById('bulkUploadErrorMessage');
+            const errorDetails = document.getElementById('bulkUploadErrorDetails');
+            
+            errorMessage.textContent = result.message || 'Upload failed';
+            
+            if (result.errors && result.errors.length > 0) {
+                let errorHTML = '<ul class="text-left space-y-1">';
+                result.errors.slice(0, 5).forEach(error => {
+                    errorHTML += `<li>• ${error}</li>`;
+                });
+                if (result.errors.length > 5) {
+                    errorHTML += `<li>• ... and ${result.errors.length - 5} more errors</li>`;
+                }
+                errorHTML += '</ul>';
+                errorDetails.innerHTML = errorHTML;
+            } else {
+                errorDetails.innerHTML = '<p>Please check the file format and try again.</p>';
+            }
+            
+            document.getElementById('bulkUploadErrorPopup').classList.remove('hidden');
         }
     } catch (error) {
-        alert('Error uploading file: ' + error.message);
+        console.error('Error uploading file:', error);
+        
+        const errorMessage = document.getElementById('bulkUploadErrorMessage');
+        const errorDetails = document.getElementById('bulkUploadErrorDetails');
+        
+        errorMessage.textContent = 'Network error occurred';
+        errorDetails.innerHTML = '<p>Please check your connection and try again.</p>';
+        
+        document.getElementById('bulkUploadErrorPopup').classList.remove('hidden');
     }
 }
 
@@ -400,11 +1000,37 @@ async function loadStudents() {
         
         if (result.success) {
             studentsData = result.data;
+            
+            // Sort students by class name first, then by roll number within each class
+            studentsData.sort((a, b) => {
+                // First sort by class name
+                const classA = a.class_name || '';
+                const classB = b.class_name || '';
+                
+                if (classA !== classB) {
+                    return classA.localeCompare(classB);
+                }
+                
+                // If same class, sort by roll number
+                const rollA = a.roll_number || '';
+                const rollB = b.roll_number || '';
+                
+                return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
+            });
+            
             filteredData = [...studentsData];
             console.log('Loaded students:', studentsData.length);
             if (studentsData.length > 0) {
                 console.log('Sample student data:', studentsData[0]);
+                // Debug: Find the specific student we just updated
+                const updatedStudent = studentsData.find(s => s.roll_number === 'BBA23101');
+                if (updatedStudent) {
+                    console.log('Updated student data:', updatedStudent);
+                    console.log('Class name:', updatedStudent.class_name);
             }
+            }
+            populateClassFilter();
+            updatePagination();
             renderStudentsTable();
         } else {
             console.error('Error loading students:', result.message);
@@ -427,10 +1053,16 @@ function renderStudentsTable() {
                 <td colspan="4" class="px-6 py-4 text-center text-gray-500">No students found</td>
             </tr>
         `;
+        updatePagination();
         return;
     }
     
-    tbody.innerHTML = filteredData.map(student => `
+    // Calculate pagination
+    const startIndex = (currentPage - 1) * recordsPerPage;
+    const endIndex = startIndex + recordsPerPage;
+    const paginatedData = filteredData.slice(startIndex, endIndex);
+    
+    tbody.innerHTML = paginatedData.map(student => `
         <tr>
             <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center">
@@ -442,6 +1074,7 @@ function renderStudentsTable() {
                     <div class="ml-4">
                         <div class="text-sm font-medium text-gray-900">${student.name ? student.name.toUpperCase() : 'N/A'}</div>
                         <div class="text-sm text-gray-500">ID: ${student.roll_number || 'N/A'}</div>
+                        <div class="text-sm text-gray-500">${student.class_name || 'N/A'}</div>
                     </div>
                 </div>
             </td>
@@ -465,29 +1098,168 @@ function renderStudentsTable() {
             </td>
         </tr>
     `).join('');
+    
+    updatePagination();
 }
 
 // Search Function
 function searchStudents() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    
-    if (searchTerm === '') {
-        filteredData = [...studentsData];
-    } else {
-        filteredData = studentsData.filter(student => 
-            (student.roll_number && student.roll_number.toLowerCase().includes(searchTerm)) ||
-            (student.name && student.name.toLowerCase().includes(searchTerm)) ||
-            (student.username && student.username.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    renderStudentsTable();
+    applyFilters();
 }
 
 // Clear Search
 function clearSearch() {
     document.getElementById('searchInput').value = '';
+    document.getElementById('classFilter').value = '';
+    selectedClass = '';
     filteredData = [...studentsData];
+    currentPage = 1;
+    renderStudentsTable();
+}
+
+// Populate Class Filter
+function populateClassFilter() {
+    const classFilter = document.getElementById('classFilter');
+    const uniqueClasses = [...new Set(studentsData.map(student => student.class_name).filter(Boolean))];
+    
+    // Clear existing options except "All Classes"
+    classFilter.innerHTML = '<option value="">All Classes</option>';
+    
+    // Add unique classes
+    uniqueClasses.sort().forEach(className => {
+        const option = document.createElement('option');
+        option.value = className;
+        option.textContent = className;
+        classFilter.appendChild(option);
+    });
+}
+
+// Filter by Class
+function filterByClass() {
+    const classFilter = document.getElementById('classFilter');
+    selectedClass = classFilter.value;
+    applyFilters();
+}
+
+// Apply All Filters
+function applyFilters() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    
+    filteredData = studentsData.filter(student => {
+        const matchesSearch = !searchTerm || 
+            (student.roll_number && student.roll_number.toLowerCase().includes(searchTerm)) ||
+            (student.name && student.name.toLowerCase().includes(searchTerm)) ||
+            (student.username && student.username.toLowerCase().includes(searchTerm));
+        
+        const matchesClass = !selectedClass || student.class_name === selectedClass;
+        
+        return matchesSearch && matchesClass;
+    });
+    
+    // Sort students by class name first, then by roll number within each class
+    filteredData.sort((a, b) => {
+        // First sort by class name
+        const classA = a.class_name || '';
+        const classB = b.class_name || '';
+        
+        if (classA !== classB) {
+            return classA.localeCompare(classB);
+        }
+        
+        // If same class, sort by roll number
+        const rollA = a.roll_number || '';
+        const rollB = b.roll_number || '';
+        
+        return rollA.localeCompare(rollB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+    
+    currentPage = 1;
+    renderStudentsTable();
+}
+
+// Update Pagination
+function updatePagination() {
+    totalPages = Math.ceil(filteredData.length / recordsPerPage);
+    
+    // Update showing info
+    const startIndex = (currentPage - 1) * recordsPerPage + 1;
+    const endIndex = Math.min(currentPage * recordsPerPage, filteredData.length);
+    
+    document.getElementById('showingStart').textContent = filteredData.length > 0 ? startIndex : 0;
+    document.getElementById('showingEnd').textContent = endIndex;
+    document.getElementById('showingTotal').textContent = filteredData.length;
+    
+    // Update page numbers
+    const pageNumbers = document.getElementById('pageNumbers');
+    pageNumbers.innerHTML = '';
+    
+    // Show max 5 page numbers
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.textContent = i;
+        pageBtn.onclick = () => goToPage(i);
+        pageBtn.className = `relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+            i === currentPage 
+                ? 'z-10 bg-gray-50 border-gray-500 text-gray-600' 
+                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+        }`;
+        pageNumbers.appendChild(pageBtn);
+    }
+    
+    // Update prev/next buttons
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const prevBtnMobile = document.getElementById('prevBtnMobile');
+    const nextBtnMobile = document.getElementById('nextBtnMobile');
+    
+    const isFirstPage = currentPage === 1;
+    const isLastPage = currentPage === totalPages || totalPages === 0;
+    
+    [prevBtn, prevBtnMobile].forEach(btn => {
+        btn.disabled = isFirstPage;
+    });
+    
+    [nextBtn, nextBtnMobile].forEach(btn => {
+        btn.disabled = isLastPage;
+    });
+}
+
+// Go to specific page
+function goToPage(page) {
+    if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+    renderStudentsTable();
+    }
+}
+
+// Previous page
+function previousPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        renderStudentsTable();
+    }
+}
+
+// Next page
+function nextPage() {
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderStudentsTable();
+    }
+}
+
+// Change records per page
+function changeRecordsPerPage() {
+    recordsPerPage = parseInt(document.getElementById('recordsPerPage').value);
+    currentPage = 1;
     renderStudentsTable();
 }
 
@@ -511,12 +1283,27 @@ document.getElementById('editStudentForm').addEventListener('submit', async func
         password: formData.get('password')
     };
     
+    // Always include class_name in the request, even if empty
+    const className = formData.get('className');
+    studentData.class_name = className ? className.trim() : '';
+    console.log('DEBUG: Class name from form:', className);
+    console.log('DEBUG: Class name after processing:', studentData.class_name);
+    
     console.log('Student data to update:', studentData);
     console.log('Student ID:', studentId);
     console.log('Form data entries:');
     for (let [key, value] of formData.entries()) {
         console.log(`${key}: ${value}`);
     }
+    
+    // Debug: Check if className field exists in form
+    console.log('DEBUG: Form has className field:', formData.has('className'));
+    console.log('DEBUG: All form field names:', Array.from(formData.keys()));
+    
+    // Debug class name specifically
+    const classNameField = document.getElementById('editClassName');
+    console.log('Class name field value:', classNameField.value);
+    console.log('Class name field name:', classNameField.name);
     
     try {
         // Get CSRF token from meta tag
@@ -546,10 +1333,12 @@ document.getElementById('editStudentForm').addEventListener('submit', async func
         console.log('Update result:', result);
         
         if (result.success) {
+            console.log('Update successful, refreshing data...');
             closeEditStudentModal();
             showSuccessPopup();
             loadStudents();
         } else {
+            console.log('Update failed:', result.message);
             alert('Error: ' + result.message);
         }
     } catch (error) {
@@ -568,6 +1357,7 @@ function editStudent(studentId) {
         document.getElementById('editStudentId').value = studentId;
         document.getElementById('editRollNumber').value = student.roll_number || '';
         document.getElementById('editStudentName').value = student.name || '';
+        document.getElementById('editClassName').value = student.class_name || '';
         document.getElementById('editPassword').value = student.password || '';
         openEditStudentModal();
     } else {
@@ -577,7 +1367,11 @@ function editStudent(studentId) {
 }
 
 // Show Success Popup
-function showSuccessPopup() {
+function showSuccessPopup(message = 'Changes saved successfully!') {
+    const messageElement = document.querySelector('#successPopup p');
+    if (messageElement) {
+        messageElement.textContent = message;
+    }
     document.getElementById('successPopup').classList.remove('hidden');
 }
 
@@ -600,15 +1394,35 @@ function toggleEditPasswordVisibility() {
 
 // Delete Student
 async function deleteStudent(studentId) {
-    if (confirm('Are you sure you want to delete this student?')) {
-        try {
-            console.log('Attempting to delete student:', studentId);
+    console.log('Delete student called with ID:', studentId);
+    const student = studentsData.find(s => s._id === studentId);
+    
+    if (student) {
+        studentToDelete = studentId;
+        document.getElementById('deleteStudentName').textContent = student.name || 'Unknown Student';
+        document.getElementById('deleteStudentId').textContent = `ID: ${student.roll_number || 'Unknown'}`;
+        openDeleteStudentModal();
+    } else {
+        console.error('Student not found with ID:', studentId);
+        alert('Student not found');
+    }
+}
+
+// Confirm Delete Student
+async function confirmDeleteStudent() {
+    if (!studentToDelete) {
+        console.error('No student selected for deletion');
+        return;
+    }
+    
+    try {
+        console.log('Confirming deletion of student:', studentToDelete);
             
             // Get CSRF token
             const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
                              '{{ csrf_token() }}';
             
-            const response = await fetch(`/management/delete_student_credential/${studentId}`, {
+        const response = await fetch(`/management/delete_student_credential/${studentToDelete}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -627,7 +1441,8 @@ async function deleteStudent(studentId) {
             console.log('Delete result:', result);
             
             if (result.success) {
-                alert('Student deleted successfully!');
+            closeDeleteStudentModal();
+            showSuccessPopup('Student credentials deleted successfully!');
                 loadStudents();
             } else {
                 alert('Error: ' + result.message);
@@ -635,7 +1450,6 @@ async function deleteStudent(studentId) {
         } catch (error) {
             console.error('Delete error:', error);
             alert('Error deleting student: ' + error.message);
-        }
     }
 }
 
@@ -644,4 +1458,549 @@ function exportToExcel() {
     window.location.href = '/management/export_students_credentials';
 }
 </script>
+
+
+// Bulk Upload Function
+
+async function uploadExcel() {
+
+    const fileInput = document.getElementById('excelFile');
+
+    const file = fileInput.files[0];
+
+    
+    
+    if (!file) {
+
+        alert('Please select an Excel file');
+
+        return;
+
+    }
+
+    
+    
+    const formData = new FormData();
+
+    formData.append('file', file);
+
+    
+    
+    try {
+
+        // Get CSRF token
+
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+
+                         '{{ csrf_token() }}';
+        
+        
+        
+        const response = await fetch('/management/bulk_upload_students', {
+
+            method: 'POST',
+
+            headers: {
+
+                'X-CSRFToken': csrfToken
+
+            },
+
+            body: formData
+
+        });
+
+        
+        
+        const result = await response.json();
+
+        
+        
+        if (result.success) {
+
+            alert(`Successfully uploaded ${result.count} students!`);
+
+            closeBulkUploadModal();
+
+            loadStudents();
+
+        } else {
+
+            alert('Error: ' + result.message);
+
+        }
+
+    } catch (error) {
+
+        alert('Error uploading file: ' + error.message);
+
+    }
+
+}
+
+
+
+
+// Render Students Table
+
+function renderStudentsTable() {
+
+    const tbody = document.getElementById('studentsTableBody');
+
+    const totalCount = document.getElementById('totalCount');
+
+    
+    
+    totalCount.textContent = filteredData.length;
+
+    
+    
+    if (filteredData.length === 0) {
+
+        tbody.innerHTML = `
+
+            <tr>
+
+                <td colspan="4" class="px-6 py-4 text-center text-gray-500">No students found</td>
+
+            </tr>
+
+        `;
+
+        return;
+
+    }
+
+    
+    
+    tbody.innerHTML = filteredData.map(student => `
+
+        <tr>
+
+            <td class="px-6 py-4 whitespace-nowrap">
+
+                <div class="flex items-center">
+
+                    <div class="flex-shrink-0 h-10 w-10">
+
+                        <div class="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+
+                            <span class="text-sm font-medium text-gray-700">${student.name ? student.name.charAt(0).toUpperCase() : 'N'}</span>
+
+                        </div>
+
+                    </div>
+
+                    <div class="ml-4">
+
+                        <div class="text-sm font-medium text-gray-900">${student.name ? student.name.toUpperCase() : 'N/A'}</div>
+
+                        <div class="text-sm text-gray-500">ID: ${student.roll_number || 'N/A'}</div>
+
+                    </div>
+
+                </div>
+
+            </td>
+
+            <td class="px-6 py-4 whitespace-nowrap">
+
+                <div class="text-sm text-gray-900 font-medium">${(student.username || student.roll_number || 'N/A').toUpperCase()}</div>
+
+                <button onclick="togglePassword('${student._id}')" class="text-sm text-blue-600 hover:text-blue-800 mt-1">
+
+                    Show Password
+
+                </button>
+
+                <div id="password-${student._id}" class="text-sm text-gray-500 hidden mt-1">
+
+                    ${student.password || 'N/A'}
+
+                </div>
+
+            </td>
+
+            <td class="px-6 py-4 whitespace-nowrap">
+
+                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+
+                    ${student.status ? student.status.charAt(0).toUpperCase() + student.status.slice(1).toLowerCase() : 'Active'}
+
+                </span>
+
+            </td>
+
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+
+                <button onclick="editStudent('${student._id}')" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+
+                <button onclick="deleteStudent('${student._id}')" class="text-red-600 hover:text-red-900">Delete</button>
+
+            </td>
+
+        </tr>
+
+    `).join('');
+
+}
+
+
+
+// Search Function
+
+function searchStudents() {
+
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+    
+    
+    if (searchTerm === '') {
+
+        filteredData = [...studentsData];
+
+    } else {
+
+        filteredData = studentsData.filter(student => 
+
+            (student.roll_number && student.roll_number.toLowerCase().includes(searchTerm)) ||
+
+            (student.name && student.name.toLowerCase().includes(searchTerm)) ||
+
+            (student.username && student.username.toLowerCase().includes(searchTerm))
+
+        );
+
+    }
+
+    
+    
+    renderStudentsTable();
+
+}
+
+
+
+// Clear Search
+
+function clearSearch() {
+
+    document.getElementById('searchInput').value = '';
+
+    filteredData = [...studentsData];
+
+    renderStudentsTable();
+
+}
+
+
+
+// Toggle Password Visibility
+
+function togglePassword(studentId) {
+
+    const passwordDiv = document.getElementById(`password-${studentId}`);
+
+    passwordDiv.classList.toggle('hidden');
+
+}
+
+
+
+// Edit Student Form Submission
+
+document.getElementById('editStudentForm').addEventListener('submit', async function(e) {
+
+    e.preventDefault();
+
+    
+    
+    console.log('Edit form submitted');
+
+    
+    
+    const formData = new FormData(this);
+
+    const studentId = formData.get('studentId');
+
+    const studentData = {
+
+        roll_number: formData.get('rollNumber'),
+
+        name: formData.get('studentName'),
+
+        password: formData.get('password')
+
+    };
+
+    
+    
+    console.log('Student data to update:', studentData);
+
+    console.log('Student ID:', studentId);
+
+    console.log('Form data entries:');
+
+    for (let [key, value] of formData.entries()) {
+
+        console.log(`${key}: ${value}`);
+
+    }
+
+    
+    
+    try {
+
+        // Get CSRF token from meta tag
+
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+
+                         document.querySelector('input[name=csrf_token]')?.value ||
+
+                         '{{ csrf_token() }}';
+        
+        
+        
+        const response = await fetch(`/management/update_student_credential/${studentId}`, {
+
+            method: 'PUT',
+
+            headers: {
+
+                'Content-Type': 'application/json',
+
+                'X-CSRFToken': csrfToken
+
+            },
+
+            body: JSON.stringify(studentData)
+
+        });
+
+        
+        
+        console.log('Response status:', response.status);
+
+        console.log('Response headers:', response.headers);
+
+        
+        
+        if (!response.ok) {
+
+            const errorText = await response.text();
+
+            console.log('Error response body:', errorText);
+
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+
+        }
+
+        
+        
+        const result = await response.json();
+
+        console.log('Update result:', result);
+
+        
+        
+        if (result.success) {
+
+            closeEditStudentModal();
+
+            showSuccessPopup();
+
+            loadStudents();
+
+        } else {
+
+            alert('Error: ' + result.message);
+
+        }
+
+    } catch (error) {
+
+        console.error('Update error:', error);
+
+        alert('Error updating student: ' + error.message);
+
+    }
+
+});
+
+
+
+// Edit Student
+
+function editStudent(studentId) {
+
+    console.log('Edit student called with ID:', studentId);
+
+    const student = studentsData.find(s => s._id === studentId);
+
+    console.log('Found student:', student);
+
+    
+    
+    if (student) {
+
+        document.getElementById('editStudentId').value = studentId;
+
+        document.getElementById('editRollNumber').value = student.roll_number || '';
+
+        document.getElementById('editStudentName').value = student.name || '';
+
+        document.getElementById('editPassword').value = student.password || '';
+
+        openEditStudentModal();
+
+    } else {
+
+        console.error('Student not found with ID:', studentId);
+
+        alert('Student not found');
+
+    }
+
+}
+
+
+
+// Show Success Popup
+
+function showSuccessPopup() {
+
+    document.getElementById('successPopup').classList.remove('hidden');
+
+}
+
+
+
+// Toggle Edit Password Visibility
+
+function toggleEditPasswordVisibility() {
+
+    const passwordInput = document.getElementById('editPassword');
+
+    const eyeOpen = document.getElementById('editPasswordEyeOpen');
+
+    const eyeClosed = document.getElementById('editPasswordEyeClosed');
+
+    
+    
+    if (passwordInput.type === 'password') {
+
+        passwordInput.type = 'text';
+
+        eyeOpen.classList.add('hidden');
+
+        eyeClosed.classList.remove('hidden');
+
+    } else {
+
+        passwordInput.type = 'password';
+
+        eyeOpen.classList.remove('hidden');
+
+        eyeClosed.classList.add('hidden');
+
+    }
+
+}
+
+
+
+// Delete Student
+
+async function deleteStudent(studentId) {
+
+    if (confirm('Are you sure you want to delete this student?')) {
+
+        try {
+
+            console.log('Attempting to delete student:', studentId);
+
+            
+            
+            // Get CSRF token
+
+            const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+
+                             '{{ csrf_token() }}';
+            
+            
+            
+            const response = await fetch(`/management/delete_student_credential/${studentId}`, {
+
+                method: 'DELETE',
+
+                headers: {
+
+                    'Content-Type': 'application/json',
+
+                    'X-CSRFToken': csrfToken
+
+                }
+
+            });
+
+            
+            
+            console.log('Response status:', response.status);
+
+            console.log('Response headers:', response.headers);
+
+            
+            
+            if (!response.ok) {
+
+                throw new Error(`HTTP error! status: ${response.status}`);
+
+            }
+
+            
+            
+            const result = await response.json();
+
+            console.log('Delete result:', result);
+
+            
+            
+            if (result.success) {
+
+                alert('Student deleted successfully!');
+
+                loadStudents();
+
+            } else {
+
+                alert('Error: ' + result.message);
+
+            }
+
+        } catch (error) {
+
+            console.error('Delete error:', error);
+
+            alert('Error deleting student: ' + error.message);
+
+        }
+
+    }
+
+}
+
+
+
+// Export to Excel
+
+function exportToExcel() {
+
+    window.location.href = '/management/export_students_credentials';
+
+}
+
+</script>
+
 {% endblock %}
+
+

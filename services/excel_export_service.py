@@ -219,20 +219,27 @@ class ExcelExportService:
             ws.cell(row=3, column=2, value=subject.get('course_display') or subject.get('course'))
             ws.cell(row=4, column=1, value="Year/Semester")
             ws.cell(row=4, column=2, value=f"{subject['year']}/{subject['semester']}")
-            # Optional section line
-            if subject.get('section'):
-                ws.cell(row=5, column=1, value="Section")
-                ws.cell(row=5, column=2, value=str(subject.get('section')).upper())
-                next_row = 6
-            else:
-                next_row = 5
-            if subject.get('lecturers'):
-                ws.cell(row=next_row, column=1, value="Faculty")
-                ws.cell(row=next_row, column=2, value=", ".join(subject.get('lecturers') or []))
             
-            if report_data['assessment_type']:
-                ws.cell(row=5, column=1, value="Assessment Type")
-                ws.cell(row=5, column=2, value=report_data['assessment_type'])
+            # Include section information only if the class has a section
+            current_row = 5
+            if subject.get('section'):
+                ws.cell(row=current_row, column=1, value="Section")
+                ws.cell(row=current_row, column=2, value=str(subject.get('section')).upper())
+                current_row += 1
+            
+            # Add assessment type if present
+            if report_data.get('assessment_type'):
+                ws.cell(row=current_row, column=1, value="Assessment Type")
+                ws.cell(row=current_row, column=2, value=report_data['assessment_type'])
+                current_row += 1
+            
+            # Add faculty information
+            if subject.get('lecturers'):
+                ws.cell(row=current_row, column=1, value="Faculty")
+                ws.cell(row=current_row, column=2, value=", ".join(subject.get('lecturers') or []))
+                current_row += 1
+            
+            next_row = current_row
             
             # Clean statistics table
             stats = report_data['statistics']
@@ -892,4 +899,897 @@ class ExcelExportService:
             
         except Exception as e:
             print(f"Error in export_comprehensive_class_report: {e}")
+            return None
+            # Lecturer and threshold info
+
+            meta_row = 2
+
+            if lecturer_name:
+
+                ws['A2'] = 'Lecturer'
+
+                ws['B2'] = lecturer_name
+
+                meta_row = 3
+
+            ws[f'A{meta_row}'] = 'Threshold'
+
+            ws[f'B{meta_row}'] = f"{threshold}%"
+
+
+
+            # Start row for first subject section
+
+            row = (meta_row + 1)
+
+            # Build a section (header + table) for EACH subject block
+
+            for idx, block in enumerate(shortage_data or []):
+
+                subj = block.get('subject')
+
+                course_name = subj.course.name if getattr(subj, 'course', None) else ''
+
+
+
+                # Subject header: Subject, Code, Course (stacked)
+
+                ws[f'A{row}'] = 'Subject'
+
+                ws[f'B{row}'] = subj.name if subj else ''
+
+                row += 1
+
+                ws[f'A{row}'] = 'Code'
+
+                ws[f'B{row}'] = getattr(subj, 'code', '')
+
+                row += 1
+
+                ws[f'A{row}'] = 'Course'
+
+                ws[f'B{row}'] = course_name
+
+                row += 1
+
+
+
+                # Section table header (no Subject/Code/Course columns in table)
+
+                headers = ['Student', 'Roll Number', 'Present', 'Total', 'Percent']
+
+                ExcelExportService.style_header_row(ws, row, headers)
+
+                row += 1
+
+
+
+                # Sort students by roll number (last 3 digits)
+
+                shortage_students = block.get('shortage_students') or []
+
+                def get_roll_sort_key(rec):
+
+                    roll_number = rec['student'].roll_number
+
+                    if len(roll_number) >= 3:
+
+                        last_three = roll_number[-3:]
+
+                        try:
+
+                            return int(last_three)
+
+                        except ValueError:
+
+                            return 999
+
+                    return 999
+
+                
+
+                sorted_students = sorted(shortage_students, key=get_roll_sort_key)
+
+                
+
+                # Section rows
+
+                for rec in sorted_students:
+
+                    ws.cell(row=row, column=1, value=rec['student'].name)
+
+                    ws.cell(row=row, column=2, value=rec['student'].roll_number)
+
+                    ExcelExportService.set_number(ws.cell(row=row, column=3), rec.get('present_classes') or 0, align_right=True)
+
+                    ExcelExportService.set_number(ws.cell(row=row, column=4), rec.get('total_classes') or 0, align_right=True)
+
+                    ExcelExportService.set_percentage(ws.cell(row=row, column=5), rec.get('attendance_percentage') or 0, align_left=True)
+
+                    row += 1
+
+
+
+                # Blank row between sections
+
+                row += 1
+
+
+
+            ExcelExportService.center_all_cells(ws)
+
+            ExcelExportService.auto_adjust_columns(ws)
+
+
+
+            # Wrap and left-align Student column in each section so long names stay within the cell
+
+            from openpyxl.styles import Alignment
+
+            last_row = ws.max_row or row - 1
+
+            # Student col is the 1st column in our section tables
+
+            for r in range(1, last_row + 1):
+
+                cell = ws.cell(row=r, column=1)
+
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+
+
+            return ExcelExportService.workbook_to_bytes(wb)
+
+        except Exception as e:
+
+            print(f"Error exporting attendance shortage: {e}")
+
+            return None
+
+
+
+    @staticmethod
+
+    def export_marks_deficiency(threshold, deficiency_data, lecturer_name=None, selected_subject_id=None):
+
+        """Export Marks Deficiency (lecturer view) to Excel.
+
+        deficiency_data: [{ 'subject': Subject, 'deficient_students': [ {student, overall_percentage, marks_summary}, ... ] }]
+
+        Returns workbook bytes.
+
+        """
+
+        try:
+
+            wb = ExcelExportService.create_workbook()
+
+            ws = wb.active
+
+            ws.title = "Marks Deficiency"
+
+
+
+            # Title and meta rows
+
+            ws['A1'] = 'Marks Deficiency Report'
+
+            ws['A1'].font = Font(size=16, bold=True)
+
+            ws.merge_cells('A1:G1')
+
+            
+
+            # Lecturer and threshold info
+
+            meta_row = 2
+
+            if lecturer_name:
+
+                ws['A2'] = 'Lecturer'
+
+                ws['B2'] = lecturer_name
+
+                meta_row = 3
+
+            ws[f'A{meta_row}'] = 'Threshold'
+
+            ws[f'B{meta_row}'] = f"{threshold}%"
+
+
+
+            # Create separate tables for each subject
+
+            current_row = meta_row + 1
+
+            
+
+            # Sort deficiency_data by subject name for consistent ordering
+
+            sorted_deficiency_data = sorted(deficiency_data or [], key=lambda x: getattr(x.get('subject'), 'name', '') if x.get('subject') else '')
+
+            
+
+            for block_idx, block in enumerate(sorted_deficiency_data):
+
+                subj = block.get('subject')
+
+                if not subj:
+
+                    continue
+
+                    
+
+                course_name = subj.course.name if getattr(subj, 'course', None) else ''
+
+                
+
+                # Subject details above each table
+
+                if block_idx > 0:
+
+                    current_row += 2  # Add spacing between tables
+
+                
+
+                ws[f'A{current_row}'] = 'Subject'
+
+                ws[f'B{current_row}'] = subj.name
+
+                current_row += 1
+
+                ws[f'A{current_row}'] = 'Code'
+
+                ws[f'B{current_row}'] = subj.code
+
+                current_row += 1
+
+                ws[f'A{current_row}'] = 'Course'
+
+                ws[f'B{current_row}'] = course_name
+
+                current_row += 1
+
+                
+
+                # Decide which mark components to include based on actual data present
+
+                deficient_students = block.get('deficient_students') or []
+
+                include = { 'internal1': False, 'internal2': False, 'assignment': False, 'project': False }
+
+                def _is_updated(val):
+
+                    try:
+
+                        if isinstance(val, dict):
+
+                            obt = val.get('obtained')
+
+                            mx = val.get('max')
+
+                        else:
+
+                            obt = getattr(val, 'obtained', None)
+
+                            mx = getattr(val, 'max', None)
+
+                        # Consider updated only if any value is numeric and > 0
+
+                        obt_num = float(obt) if obt is not None else 0.0
+
+                        mx_num = float(mx) if mx is not None else 0.0
+
+                        return (obt_num > 0.0) or (mx_num > 0.0)
+
+                    except Exception:
+
+                        return False
+
+                for rec in deficient_students:
+
+                    ms = rec.get('marks_summary') or {}
+
+                    for k in include.keys():
+
+                        if _is_updated(ms.get(k)):
+
+                            include[k] = True
+
+
+
+                headers = ['Student', 'Roll Number', 'Overall %']
+
+                component_to_header = {
+
+                    'internal1': 'Internal 1',
+
+                    'internal2': 'Internal 2',
+
+                    'assignment': 'Assignment',
+
+                    'project': 'Project',
+
+                }
+
+                ordered_components = [k for k in ['internal1','internal2','assignment','project'] if include.get(k)]
+
+                headers.extend([component_to_header[k] for k in ordered_components])
+
+                ExcelExportService.style_header_row(ws, current_row, headers)
+
+                current_row += 1
+
+                
+
+                # Sort students by roll number (last 3 digits)
+
+                def get_roll_sort_key(rec):
+
+                    roll_number = rec['student'].roll_number
+
+                    if len(roll_number) >= 3:
+
+                        last_three = roll_number[-3:]
+
+                        try:
+
+                            return int(last_three)
+
+                        except ValueError:
+
+                            return 999
+
+                    return 999
+
+                
+
+                sorted_students = sorted(deficient_students, key=get_roll_sort_key)
+
+                
+
+                # Data rows for this subject
+
+                for rec in sorted_students:
+
+                    ms = rec.get('marks_summary') or {}
+
+                    def _fmt(a):
+
+                        try:
+
+                            if isinstance(a, dict):
+
+                                obt = a.get('obtained')
+
+                                mx = a.get('max')
+
+                            else:
+
+                                obt = getattr(a, 'obtained', None)
+
+                                mx = getattr(a, 'max', None)
+
+                            if obt is None and mx is None:
+
+                                return ''
+
+                            f_obt = ExcelExportService.format_number(obt)
+
+                            f_max = ExcelExportService.format_number(mx)
+
+                            if f_obt is None and f_max is None:
+
+                                return ''
+
+                            if f_obt is None:
+
+                                f_obt = ''
+
+                            if f_max is None:
+
+                                f_max = ''
+
+                            return f"{f_obt}/{f_max}"
+
+                        except Exception:
+
+                            return ''
+
+
+
+                    col = 1
+
+                    ws.cell(row=current_row, column=col, value=rec['student'].name); col += 1
+
+                    ws.cell(row=current_row, column=col, value=rec['student'].roll_number); col += 1
+
+                    overall_percentage = rec.get('overall_percentage')
+
+                    if overall_percentage is not None:
+
+                        ExcelExportService.set_percentage(ws.cell(row=current_row, column=col), overall_percentage, align_left=True)
+
+                    else:
+
+                        ws.cell(row=current_row, column=col, value="-")
+
+                    col += 1
+
+                    for comp in ordered_components:
+
+                        ws.cell(row=current_row, column=col, value=_fmt(ms.get(comp))); col += 1
+
+                    current_row += 1
+
+
+
+            ExcelExportService.center_all_cells(ws)
+
+            ExcelExportService.auto_adjust_columns(ws)
+
+
+
+            return ExcelExportService.workbook_to_bytes(wb)
+
+        except Exception as e:
+
+            print(f"Error exporting marks deficiency: {e}")
+
+            return None
+
+    
+
+    @staticmethod
+
+    def workbook_to_bytes(workbook):
+
+        """Convert workbook to bytes for download"""
+
+        try:
+
+            output = BytesIO()
+
+            workbook.save(output)
+
+            output.seek(0)
+
+            return output.getvalue()
+
+        except Exception as e:
+
+            print(f"Error converting workbook to bytes: {e}")
+
+            return None
+
+
+
+    @staticmethod
+
+    def export_comprehensive_class_report(report):
+
+        """Export comprehensive class report to Excel with full width utilization"""
+
+        try:
+
+            from openpyxl import Workbook
+
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+            from openpyxl.utils import get_column_letter
+
+            from io import BytesIO
+
+            
+
+            workbook = Workbook()
+
+            ws = workbook.active
+
+            
+
+            # Set title
+
+            course_name = report['course']['name']
+
+            report_type = report['report_type'].title()
+
+            ws.title = f"{report_type} Report - {course_name}"
+
+            
+
+            # Header
+
+            ws.merge_cells('A1:Z1')
+
+            ws['A1'] = f"Comprehensive {report_type} Report - {course_name}"
+
+            ws['A1'].font = Font(name='Arial', size=16, bold=True)
+
+            ws['A1'].alignment = Alignment(horizontal='center')
+
+            
+
+            # Course info
+
+            ws['A2'] = f"Course: {course_name} ({report['course']['code']})"
+
+            ws['A3'] = f"Total Students: {len(report['students'])}"
+
+            ws['A4'] = f"Total Subjects: {len(report['subjects'])}"
+
+            
+
+            # Add Assessment Type for marks reports
+
+            if report['report_type'] == 'marks' and report.get('assessment_type'):
+
+                assessment_display = report['assessment_type'].title().replace('1', ' 1').replace('2', ' 2')
+
+                ws['A5'] = f"Assessment Type: {assessment_display}"
+
+                header_rows = 5
+
+            else:
+
+                header_rows = 4
+
+            
+
+            # Set header styles
+
+            for row in range(1, header_rows + 1):
+
+                ws[f'A{row}'].font = Font(name='Arial', size=12, bold=True)
+
+            
+
+            # Start data from row after headers
+
+            current_row = header_rows + 2
+
+            
+
+            if report['report_type'] == 'attendance':
+
+                # Create attendance report
+
+                headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in report['subjects']]
+
+                
+
+                # Add headers to the worksheet
+
+                for col, header in enumerate(headers, 1):
+
+                    cell = ws.cell(row=current_row, column=col, value=header)
+
+                
+
+                # Style headers with blue background and center alignment
+
+                for col in range(1, len(headers) + 1):
+
+                    cell = ws.cell(row=current_row, column=col)
+
+                    cell.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+
+                    cell.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                    cell.border = Border(
+
+                        left=Side(style='thin'),
+
+                        right=Side(style='thin'),
+
+                        top=Side(style='thin'),
+
+                        bottom=Side(style='thin')
+
+                    )
+
+                
+
+                current_row += 1
+
+                
+
+                # Add student data
+
+                for student in report['students']:
+
+                    row_data = [student['roll_number'], student['name']]
+
+                    
+
+                    for subject in report['subjects']:
+
+                        subject_data = report['data'].get(subject['id'], {})
+
+                        student_attendance = subject_data.get('student_attendance', {}).get(student['id'], {})
+
+                        
+
+                        # Check if student is enrolled in this subject
+
+                        is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+
+                        
+
+                        if not is_enrolled:
+
+                            row_data.append("NA")
+
+                        elif student_attendance and student_attendance.get('total_classes', 0) > 0:
+
+                            percentage = student_attendance.get('percentage', 0)
+
+                            row_data.append(f"{percentage}%")
+
+                        else:
+
+                            row_data.append("-")
+
+                    
+
+                    ws.append(row_data)
+
+                    
+
+                    # Style data rows
+
+                    for col in range(1, len(row_data) + 1):
+
+                        cell = ws.cell(row=current_row, column=col)
+
+                        cell.font = Font(name='Arial', size=10)
+
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                        cell.border = Border(
+
+                            left=Side(style='thin'),
+
+                            right=Side(style='thin'),
+
+                            top=Side(style='thin'),
+
+                            bottom=Side(style='thin')
+
+                        )
+
+                        
+
+                        # Color code attendance percentages
+
+                        if col > 2 and row_data[col-1] not in ["N/A", "NA", "-"]:
+
+                            try:
+
+                                # Parse percentage from format like "75%" or "75.5%"
+
+                                percentage_text = row_data[col-1]
+
+                                if percentage_text.endswith('%'):
+
+                                    percentage = float(percentage_text[:-1])  # Remove the % sign
+
+                                    if percentage >= 75:
+
+                                        cell.fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+
+                                    elif percentage >= 60:
+
+                                        cell.fill = PatternFill(start_color='FFEB9C', end_color='FFEB9C', fill_type='solid')
+
+                                    else:
+
+                                        cell.fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+
+                            except:
+
+                                pass
+
+                    
+
+                    current_row += 1
+
+            
+
+            elif report['report_type'] == 'marks':
+
+                # Create marks report
+
+                headers = ['Roll No', 'Student Name'] + [subj['name'] for subj in report['subjects']]
+
+                
+
+                # Add headers to the worksheet
+
+                for col, header in enumerate(headers, 1):
+
+                    cell = ws.cell(row=current_row, column=col, value=header)
+
+                
+
+                # Style headers with blue background and center alignment
+
+                for col in range(1, len(headers) + 1):
+
+                    cell = ws.cell(row=current_row, column=col)
+
+                    cell.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+
+                    cell.fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                    cell.border = Border(
+
+                        left=Side(style='thin'),
+
+                        right=Side(style='thin'),
+
+                        top=Side(style='thin'),
+
+                        bottom=Side(style='thin')
+
+                    )
+
+                
+
+                current_row += 1
+
+                
+
+                # Add student data
+
+                for student in report['students']:
+
+                    row_data = [student['roll_number'], student['name']]
+
+                    
+
+                    for subject in report['subjects']:
+
+                        subject_data = report['data'].get(subject['id'], {})
+
+                        student_marks = subject_data.get('student_marks', {}).get(student['id'], {})
+
+                        
+
+                        # Check if student is enrolled in this subject
+
+                        is_enrolled = subject_data.get('enrolled_students', {}).get(student['id'], False)
+
+                        
+
+                        if not is_enrolled:
+
+                            row_data.append("NA")
+
+                        elif student_marks and report.get('assessment_type'):
+
+                            # Specific assessment type selected
+
+                            assessment_data = student_marks.get(report['assessment_type'], {})
+
+                            if assessment_data and assessment_data.get('recorded', False) and assessment_data.get('max', 0) > 0:
+
+                                obtained = assessment_data.get('obtained', 0)
+
+                                max_marks = assessment_data.get('max', 0)
+
+                                # Format marks: remove .0 from whole numbers
+
+                                obtained_str = str(int(obtained)) if obtained == int(obtained) else str(obtained)
+
+                                max_str = str(int(max_marks)) if max_marks == int(max_marks) else str(max_marks)
+
+                                row_data.append(f"{obtained_str}/{max_str}")
+
+                            else:
+
+                                row_data.append("-")
+
+                        else:
+
+                            row_data.append("-")
+
+                    
+
+                    ws.append(row_data)
+
+                    
+
+                    # Style data rows
+
+                    for col in range(1, len(row_data) + 1):
+
+                        cell = ws.cell(row=current_row, column=col)
+
+                        cell.font = Font(name='Arial', size=10)
+
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                        cell.border = Border(
+
+                            left=Side(style='thin'),
+
+                            right=Side(style='thin'),
+
+                            top=Side(style='thin'),
+
+                            bottom=Side(style='thin')
+
+                        )
+
+                        
+
+                        # Color code marks based on obtained/max format
+
+                        if col > 2 and row_data[col-1] not in ["N/A", "NA", "-"]:
+
+                            try:
+
+                                # Parse "obtained/max" format
+
+                                if '/' in row_data[col-1]:
+
+                                    obtained, max_marks = row_data[col-1].split('/')
+
+                                    obtained = float(obtained)
+
+                                    max_marks = float(max_marks)
+
+                                    if max_marks > 0:
+
+                                        percentage = (obtained / max_marks) * 100
+
+                                        if percentage >= 60:
+
+                                            cell.fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+
+                                        elif percentage >= 40:
+
+                                            cell.fill = PatternFill(start_color='FFEB9C', end_color='FFEB9C', fill_type='solid')
+
+                                        else:
+
+                                            cell.fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+
+                            except:
+
+                                pass
+
+                    
+
+                    current_row += 1
+
+            
+
+            # Auto-adjust column widths for full screen utilization
+
+            ExcelExportService.auto_adjust_columns(ws)
+
+            
+
+            # Convert to bytes
+
+            output = BytesIO()
+
+            workbook.save(output)
+
+            output.seek(0)
+
+            return output.getvalue()
+
+            
+
+        except Exception as e:
+
+            print(f"Error in export_comprehensive_class_report: {e}")
+
             return None
