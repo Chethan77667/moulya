@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard - Moulya College Student Portal{% endblock %}
+
+{% block content %}
+<!-- Full-page skeleton overlay (covers header + content) -->
+<div id="skeleton-full" class="fixed inset-0 z-50 bg-white" aria-busy="true" aria-live="polite">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Brand/Title placeholder -->
+        <div class="flex items-center space-x-3 mb-6">
+            <div class="h-10 w-10 rounded-full skeleton-block"></div>
+            <div class="h-7 w-72 rounded skeleton-block"></div>
+        </div>
+
+        <!-- Progress bar with shimmer -->
+        <div class="h-2 w-full max-w-xl rounded overflow-hidden bg-gray-200 mb-8">
+            <div class="h-full w-1/3 shimmer"></div>
+        </div>
+
+        <!-- Card placeholders -->
+        <div class="space-y-4 sm:space-y-6">
+            <!-- Stats card placeholder -->
+            <div class="w-full max-w-xl rounded-lg border border-gray-200 p-5">
+                <div class="h-4 w-1/3 rounded skeleton-block mb-3"></div>
+                <div class="h-6 w-1/5 rounded skeleton-block"></div>
+            </div>
+
+            <!-- Subjects grid placeholders -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div class="rounded-lg border border-gray-200 p-5 space-y-3">
+                    <div class="h-5 w-3/5 rounded skeleton-block"></div>
+                    <div class="h-3 w-2/5 rounded skeleton-block"></div>
+                    <div class="h-10 w-full rounded skeleton-block"></div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-5 space-y-3 hidden sm:block">
+                    <div class="h-5 w-3/5 rounded skeleton-block"></div>
+                    <div class="h-3 w-2/5 rounded skeleton-block"></div>
+                    <div class="h-10 w-full rounded skeleton-block"></div>
+                </div>
+                <div class="rounded-lg border border-gray-200 p-5 space-y-3 hidden lg:block">
+                    <div class="h-5 w-3/5 rounded skeleton-block"></div>
+                    <div class="h-3 w-2/5 rounded skeleton-block"></div>
+                    <div class="h-10 w-full rounded skeleton-block"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="sr-only">Loading your dashboard…</div>
+</div>
+
+<!-- Actual app hidden until data fetched -->
+<div id="app" class="min-h-screen bg-gray-50 hidden">
+    <!-- Mobile-Friendly Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="text-center">
+                        <h1 class="text-lg sm:text-xl font-semibold text-gray-900">Student Portal</h1>
+                    </div>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden">
+                    <button onclick="toggleMobileMenu()" class="text-gray-600 hover:text-black focus:outline-none">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Desktop menu -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <span class="text-sm text-gray-700">{{ (stats.student.name if stats.student else student.roll_number).upper() }}</span>
+                    <a href="{{ url_for('reset_password') }}" class="text-sm text-gray-600 hover:text-black">Reset Password</a>
+                    <a href="{{ url_for('logout') }}" class="text-sm text-gray-600 hover:text-black">Logout</a>
+                </div>
+            </div>
+            
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 py-4">
+                <div class="space-y-2">
+                    <div class="text-sm text-gray-700 px-2">{{ (stats.student.name if stats.student else student.roll_number).upper() }}</div>
+                    <a href="{{ url_for('reset_password') }}" class="block px-2 py-2 text-sm text-gray-600 hover:text-black hover:bg-gray-50 rounded">Reset Password</a>
+                    <a href="{{ url_for('logout') }}" class="block px-2 py-2 text-sm text-gray-600 hover:text-black hover:bg-gray-50 rounded">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto py-6 px-3 sm:px-6 lg:px-8">
+        <!-- Real content -->
+        <div id="content">
+        <!-- Stats Overview -->
+        <div class="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <!-- Name Card -->
+            {% if stats.student %}
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-2xl transition-shadow transform hover:-translate-y-0.5 active:translate-y-0 duration-200 card-animate max-w-md w-full">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fa-solid fa-id-card text-gray-400 text-xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Name</dt>
+                                <dd class="text-lg font-medium text-gray-900" data-stat="student_name_upper">{{ (stats.student.name if stats.student else student.roll_number).upper() }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Class Information Card -->
+            {% if stats.student and stats.student.course_name %}
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-2xl transition-shadow transform hover:-translate-y-0.5 active:translate-y-0 duration-200 card-animate max-w-md w-full">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Class</dt>
+                                <dd class="text-lg font-medium text-gray-900" data-stat="class_name">{{ stats.student.course_name }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Enrolled Subjects Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-2xl transition-shadow transform hover:-translate-y-0.5 active:translate-y-0 duration-200 card-animate max-w-md w-full">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Enrolled Subjects</dt>
+                                <dd class="text-lg font-medium text-gray-900" data-stat="total_subjects">{{ stats.total_subjects or 0 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enrolled Subjects - Individual Subject Cards -->
+        <div class="mb-8">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Your Enrolled Subjects</h3>
+            <div id="subjects" class="card-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 justify-center mx-auto">
+                {% for subject in stats.enrolled_subjects or [] %}
+                <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-2xl transition-all transform hover:-translate-y-1 active:translate-y-0 duration-200 card-animate touch-manipulation max-w-md w-full mx-auto">
+                    <div class="p-4 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex-shrink-0">
+                                <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                                </svg>
+                            </div>
+                            
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h4 class="text-lg font-medium text-gray-900">{{ subject.name }}</h4>
+                            <p class="text-sm text-gray-500">{{ subject.code }} | Year {{ subject.year }}, Sem {{ subject.semester }}</p>
+                            <p class="text-xs text-gray-400">{{ subject.course_name or 'N/A' }}</p>
+                        </div>
+                        
+                        
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex space-x-2">
+                            <a href="{{ url_for('attendance') }}?subject_id={{ subject.id }}" 
+                               class="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transform hover:scale-105 hover:shadow-lg transition-all duration-200 ease-in-out">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Attendance
+                            </a>
+                            <a href="{{ url_for('marks') }}?subject_id={{ subject.id }}" 
+                               class="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transform hover:scale-105 hover:shadow-lg transition-all duration-200 ease-in-out">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                                </svg>
+                                Marks
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div id="no-data" class="bg-white shadow overflow-hidden sm:rounded-md mb-2 {% if stats.enrolled_subjects %}hidden{% endif %}">
+                <div class="px-4 py-5 sm:px-6 text-center">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">No Enrolled Subjects</h3>
+                    <p class="mt-2 text-sm text-gray-500">You are not currently enrolled in any subjects.</p>
+                </div>
+            </div>
+        </div>
+        
+
+       
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    menu.classList.toggle('hidden');
+}
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', function(event) {
+    const menu = document.getElementById('mobile-menu');
+    const button = event.target.closest('button[onclick="toggleMobileMenu()"]');
+    
+    if (!button && !menu.contains(event.target)) {
+        menu.classList.add('hidden');
+    }
+});
+
+// Client-side hydrate: show skeleton, fetch data, then reveal content
+window.addEventListener('DOMContentLoaded', async () => {
+    const app = document.getElementById('app');
+    const content = document.getElementById('content');
+    const overlay = document.getElementById('skeleton-full');
+    try {
+        let json = null;
+        // Retry until data is available (bounded attempts to avoid infinite lock)
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const res = await fetch("{{ url_for('api_student_dashboard') }}", { credentials: 'same-origin' });
+            json = await res.json();
+            if (json && json.ok && json.data) {
+                // Treat as ready when we at least have 'student' or a subjects array (even empty)
+                if (json.data.student || Array.isArray(json.data.enrolled_subjects)) {
+                    break;
+                }
+            }
+            // small backoff 250ms..1.75s
+            await new Promise(r => setTimeout(r, 250 + attempt * 250));
+        }
+        if (json && json.ok) {
+            // Print fetched data to console
+            console.log('Student dashboard data (from SQL, cache-first):', json.data);
+            // Update simple stats
+            document.querySelectorAll('[data-stat="total_subjects"]').forEach(el => {
+                el.textContent = json.data.total_subjects || 0;
+            });
+            
+            // Update class information card
+            if (json.data.student && json.data.student.course_name) {
+                const classElement = document.querySelector('[data-stat="class_name"]');
+                if (classElement) {
+                    classElement.textContent = json.data.student.course_name;
+                }
+            }
+            
+            // Update student name display with uppercase
+            if (json.data.student) {
+                const studentName = (json.data.student.name || json.data.student.roll_number).toUpperCase();
+                
+                // Update desktop student name display
+                const desktopName = document.querySelector('.hidden.md\\:flex .text-sm.text-gray-700');
+                if (desktopName) {
+                    desktopName.textContent = studentName;
+                }
+                
+                // Update mobile student name display
+                const mobileName = document.querySelector('#mobile-menu .text-sm.text-gray-700');
+                if (mobileName) {
+                    mobileName.textContent = studentName;
+                }
+            }
+            // If no subjects were server-rendered, inject
+            const subjectsWrap = document.getElementById('subjects');
+            if (subjectsWrap && subjectsWrap.children.length === 0 && Array.isArray(json.data.enrolled_subjects)) {
+                subjectsWrap.innerHTML = json.data.enrolled_subjects.map(s => `
+                    <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-2xl transition-all transform hover:-translate-y-1 active:translate-y-0 duration-200 card-animate touch-manipulation max-w-md w-full mx-auto">
+                        <div class="p-4 sm:p-6">
+                            <div class=\"flex items-center justify-between mb-4\"> 
+                                <div class=\"flex-shrink-0\">
+                                    <svg class=\"h-8 w-8 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">
+                                        <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253\"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class=\"mb-4\">
+                                <h4 class=\"text-lg font-medium text-gray-900\">${s.name}</h4>
+                                <p class=\"text-sm text-gray-500\">${s.code} | Year ${s.year}, Sem ${s.semester}</p>
+                                <p class=\"text-xs text-gray-400\">${s.course_name || 'N/A'}</p>
+                            </div>
+                            <div class=\"flex space-x-2\">
+                                <a href=\"{{ url_for('attendance') }}?subject_id=\" + s.id + \"\" class=\"flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transform hover:scale-105 hover:shadow-lg transition-all duration-200 ease-in-out\">
+                                    <svg class=\"w-3 h-3 mr-1\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">
+                                        <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z\"></path>
+                                    </svg>
+                                    Attendance
+                                </a>
+                                <a href=\"{{ url_for('marks') }}?subject_id=\" + s.id + \"\" class=\"flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium text-white bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transform hover:scale-105 hover:shadow-lg transition-all duration-200 ease-in-out\">
+                                    <svg class=\"w-3 h-3 mr-1\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\">
+                                        <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2\"></path>
+                                    </svg>
+                                    Marks
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            // Toggle the no-data placeholder
+            const noData = document.getElementById('no-data');
+            if (noData) {
+                if (json.data.enrolled_subjects && json.data.enrolled_subjects.length > 0) {
+                    noData.classList.add('hidden');
+                } else {
+                    noData.classList.remove('hidden');
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Dashboard fetch failed, showing server-rendered content:', e);
+    } finally {
+        // Reveal app and remove full overlay in any case to avoid lock
+        if (overlay) overlay.classList.add('hidden');
+        if (app) app.classList.remove('hidden');
+        if (content) content.classList.remove('hidden');
+    }
+});
+</script>
+
+<style>
+
+/* Mobile-friendly card entrance and interaction */
+@keyframes fade-up {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.card-animate { opacity: 0; animation: fade-up 420ms ease-out both; will-change: transform, opacity; }
+.card-grid > div:nth-child(1) { animation-delay: 40ms; }
+.card-grid > div:nth-child(2) { animation-delay: 90ms; }
+.card-grid > div:nth-child(3) { animation-delay: 140ms; }
+.card-grid > div:nth-child(4) { animation-delay: 190ms; }
+.card-grid > div:nth-child(5) { animation-delay: 240ms; }
+.card-grid > div:nth-child(6) { animation-delay: 290ms; }
+
+/* Performance: avoid layout/paint cost for off-screen cards */
+.card-animate { content-visibility: auto; contain-intrinsic-size: 300px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .card-animate { animation: none; opacity: 1; }
+}
+
+/* Improved skeleton shimmer */
+.skeleton-block {
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+}
+.shimmer {
+    background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.12) 50%, rgba(0,0,0,0) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-block, .shimmer { animation: none; }
+}
+</style>
+{% endblock %}

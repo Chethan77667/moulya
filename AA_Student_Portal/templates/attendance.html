@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance - Student Portal{% endblock %}
+
+{% block content %}
+<style>
+/* Hanging percentage indicator styles */
+.percentage-indicator {
+  animation: fadeInDown 0.5s ease-out;
+  z-index: 10;
+  margin-top: 8px; /* Space between progress bar and indicator */
+}
+
+@keyframes fadeInDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+  /* Ensure the percentage indicator can render outside the bar */
+  .progress-container {
+  overflow: visible;
+  margin-bottom: 24px; /* Space for indicator below the bar */
+  }
+</style>
+<div class="min-h-screen bg-gray-50">
+  <!-- Font Awesome for premium icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2Pkfsv9jvS5vZ8B3Z9YQoj2o5B+ZkOqvC4l9H1J7rRZ0F0rYF2YQFh+ICQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <div class="max-w-7xl mx-auto py-6 px-3 sm:px-6 lg:px-8">
+    <!-- Header -->
+    <div class="bg-white shadow rounded-lg p-4 sm:p-6 mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-lg sm:text-xl font-semibold text-gray-900">Attendance</h1>
+          {% if subject %}
+          <p class="text-sm text-gray-500 mt-1">{{ subject.name }} • {{ subject.code }} • Year {{ subject.year }}, Sem {{ subject.semester }}</p>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('dashboard') }}" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-lg hover:shadow-xl transition-all duration-300" aria-label="Back">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <!-- Overall Summary Cards (simplified) -->
+    <div class="bg-white shadow rounded-lg p-4 sm:p-6 mb-6">
+      <h2 class="text-base sm:text-lg font-medium text-gray-900 mb-4">Overall Attendance Summary</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- Total Classes -->
+        <div class="rounded-xl border border-gray-200 p-4 bg-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div>
+              <div class="text-xs text-gray-500">TOTAL CLASSES</div>
+              <div class="text-2xl font-bold text-gray-900">{{ attendance_summary.total_classes }}</div>
+            </div>
+          </div>
+        </div>
+        <!-- Present -->
+        <div class="rounded-xl border border-green-200 p-4 bg-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-green-100 text-green-700 flex items-center justify-center">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div>
+              <div class="text-xs text-green-700/70">PRESENT</div>
+              <div class="text-2xl font-bold text-green-700">{{ attendance_summary.present }}</div>
+            </div>
+          </div>
+        </div>
+        <!-- Deputation -->
+        <div class="rounded-xl border border-indigo-200 p-4 bg-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+              <i class="fa-solid fa-tags"></i>
+            </div>
+            <div>
+              <div class="text-xs text-indigo-700/70">DEPUTATION</div>
+              <div class="text-2xl font-bold text-indigo-700">{{ attendance_summary.deputation or 0 }}</div>
+            </div>
+          </div>
+        </div>
+        <!-- Absent -->
+        <div class="rounded-xl border border-red-200 p-4 bg-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-red-100 text-red-700 flex items-center justify-center">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </div>
+            <div>
+              <div class="text-xs text-red-700/70">ABSENT</div>
+              <div class="text-2xl font-bold text-red-700">{{ attendance_summary.absent }}</div>
+            </div>
+          </div>
+        </div>
+        <!-- Percentage -->
+        <div class="rounded-xl border border-gray-200 p-4 bg-white">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center">
+              <i class="fa-solid fa-percent"></i>
+            </div>
+            <div class="w-full">
+              <div class="flex items-center justify-between">
+                <div class="text-xs text-gray-500">ATTENDANCE %</div>
+                {% set p = (attendance_summary.percentage or 0)|round(2) %}
+                {% if attendance_summary.percentage >= 75 %}
+                  <div class="text-lg font-bold text-green-600">{% if p == p|int %}{{ p|int }}{% else %}{{ "%.2f"|format(p) }}{% endif %}%</div>
+                {% elif attendance_summary.percentage >= 60 %}
+                  <div class="text-lg font-bold text-yellow-600">{% if p == p|int %}{{ p|int }}{% else %}{{ "%.2f"|format(p) }}{% endif %}%</div>
+                {% else %}
+                  <div class="text-lg font-bold text-red-600">{% if p == p|int %}{{ p|int }}{% else %}{{ "%.2f"|format(p) }}{% endif %}%</div>
+                {% endif %}
+              </div>
+              <div class="mt-2 h-2 w-full rounded bg-gray-200 overflow-hidden">
+                {% if attendance_summary.percentage >= 75 %}
+                  <div class="h-2 rounded bg-gradient-to-r from-green-500 to-emerald-500" style="width: {{ attendance_summary.percentage }}%"></div>
+                {% elif attendance_summary.percentage >= 60 %}
+                  <div class="h-2 rounded bg-gradient-to-r from-yellow-500 to-orange-500" style="width: {{ attendance_summary.percentage }}%"></div>
+                {% else %}
+                  <div class="h-2 rounded bg-gradient-to-r from-red-500 to-pink-500" style="width: {{ attendance_summary.percentage }}%"></div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Attendance Cards -->
+    {% if monthly_summary %}
+    <div class="bg-white shadow rounded-lg p-4 sm:p-6 mb-6">
+      <h2 class="text-base sm:text-lg font-medium text-gray-900 mb-4">Monthly Attendance</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for m in monthly_summary %}
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow hover:shadow-md transition-transform duration-150 hover:-translate-y-0.5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold text-gray-900">{{ m.label }}</h3>
+            {% set mp = (m.percentage or 0)|round(2) %}
+            <span class="px-2.5 py-1 rounded-full text-xs font-medium
+              {% if m.percentage >= 75 %} bg-green-100 text-green-700
+              {% elif m.percentage >= 50 %} bg-yellow-100 text-yellow-700
+              {% else %} bg-red-100 text-red-700 {% endif %}">
+              {% if mp == mp|int %}{{ mp|int }}{% else %}{{ "%.2f"|format(mp) }}{% endif %}%
+            </span>
+          </div>
+
+          <!-- Row 1: Total classes (center) -->
+          <div class="grid grid-cols-1 gap-3 text-sm">
+            <div class="rounded-lg bg-gray-50 p-4 text-center">
+              <div class="text-[11px] uppercase tracking-wide text-gray-500">Total Classes</div>
+              <div class="mt-1 text-2xl font-bold text-gray-900">{{ m.total }}</div>
+            </div>
+          </div>
+
+          <!-- Row 2: Present and Absent (center aligned) -->
+          <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div class="rounded-lg bg-green-50 p-4 text-center">
+              <div class="text-[11px] uppercase tracking-wide text-green-700/80">Present</div>
+              <div class="mt-1 text-2xl font-bold text-green-700">{{ m.present_without_deputation if m.present_without_deputation is defined else m.present }}</div>
+            </div>
+            <div class="rounded-lg bg-red-50 p-4 text-center">
+              <div class="text-[11px] uppercase tracking-wide text-red-700/80">Absent</div>
+              <div class="mt-1 text-2xl font-bold text-red-700">{{ m.absent }}</div>
+            </div>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="mt-4">
+            <div class="relative progress-container">
+              <div class="h-2 w-full rounded bg-gray-200 overflow-hidden">
+                {% if m.percentage >= 75 %}
+                  {% set bar_bg = "from-green-500 to-emerald-500" %}
+                  {% set chip_bg = "bg-green-500 text-white" %}
+                {% elif m.percentage >= 60 %}
+                  {% set bar_bg = "from-yellow-500 to-orange-500" %}
+                  {% set chip_bg = "bg-orange-500 text-white" %}
+                {% else %}
+                  {% set bar_bg = "from-red-500 to-pink-500" %}
+                  {% set chip_bg = "bg-red-500 text-white" %}
+                {% endif %}
+                <div class="h-2 rounded bg-gradient-to-r {{ bar_bg }}" style="width: {{ m.percentage }}%"></div>
+              </div>
+
+              <!-- Below-bar arrow + percentage chip aligned to bar end -->
+              <div class="absolute left-0 right-0" style="top: 100%; height: 0;">
+                <div class="absolute" style="left: calc({{ m.percentage }}%); transform: translateX(-50%);">
+                  <div class="flex flex-col items-center mt-1">
+                    <!-- Long thin vertical arrow pointing down to bar end -->
+                    {% if m.percentage >= 75 %}
+                      <div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 14px solid #10b981;"></div>
+                    {% elif m.percentage >= 60 %}
+                      <div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 14px solid #f97316;"></div>
+                    {% else %}
+                      <div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 14px solid #ef4444;"></div>
+                    {% endif %}
+                    <!-- Percentage chip with same color as bar -->
+                    {% set mp2 = (m.percentage or 0)|round(2) %}
+                    <div class="rounded px-2 py-0.5 text-[11px] font-semibold shadow {{ chip_bg }}">
+                      {% if mp2 == mp2|int %}{{ mp2|int }}{% else %}{{ "%.2f"|format(mp2) }}{% endif %}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- <div class="mt-4 flex items-center justify-between text-xs text-gray-500">
+              <span>0%</span>
+              <span>100%</span>
+            </div> -->
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-4 sm:p-6 mb-6">
+      <h2 class="text-base sm:text-lg font-medium text-gray-900 mb-4">Monthly Attendance</h2>
+      <div class="py-6 text-sm text-gray-500 text-center">No monthly data available.</div>
+    </div>
+    {% endif %}
+
+    <!-- Data payload for JS (prevents linter errors in script) -->
+    <div id="attendanceData"
+         data-monthly='{{ monthly_summary|tojson|safe }}'
+         data-summary='{{ attendance_summary|tojson|safe }}'
+         data-subject='{{ (subject or {})|tojson|safe }}'></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Log data to browser console for debugging (read from data attributes)
+    try {
+        const container = document.getElementById('attendanceData');
+        const monthlySummary = JSON.parse(container.dataset.monthly || '[]');
+        const attendanceSummary = JSON.parse(container.dataset.summary || '{}');
+        const subjectInfo = JSON.parse(container.dataset.subject || '{}');
+        
+        console.log('=== ATTENDANCE DATA DEBUG ===');
+        console.log('Subject:', subjectInfo.name || 'Unknown', `(${subjectInfo.code || 'N/A'})`);
+        console.log('Overall Summary:', {
+            total: attendanceSummary.total_classes || 0,
+            present: attendanceSummary.present || 0,
+            deputation: attendanceSummary.deputation || 0,
+            absent: attendanceSummary.absent || 0,
+            percentage: attendanceSummary.percentage || 0
+        });
+        console.log(`Monthly Data: ${monthlySummary.length} months`);
+        monthlySummary.forEach((month, index) => {
+            console.log(`  ${index + 1}. ${month.label}: ${month.present_without_deputation || month.present}/${month.total} (${month.percentage}%)`);
+        });
+        console.log('=== END DEBUG ===');
+    } catch (e) {
+        console.warn('Could not log attendance data to console:', e);
+    }
+});
+</script>
+{% endblock %}
+
+
+
